@@ -59,11 +59,9 @@ npm run parity:check
 
 ```text
 youarememory/
-├── python-implementation/           # Python 实现版入口（Streamlit + parity 命令入口）
-├── apps/
-│   └── memory-ui/                   # TS 插件内嵌的静态面板资源
+├── python-implementation/           # Python 实现版（Streamlit + parity + memory core）
 ├── packages/
-│   └── openclaw-memory-plugin/      # OpenClaw memory slot 插件（core + agent-skills + rules）
+│   └── openclaw-memory-plugin/      # OpenClaw memory slot 插件（core + agent-skills + rules + ui-source）
 ├── docs/
 │   ├── openclaw-beginner-guide.md   # Python 优先 + OpenClaw 接入
 │   └── code-review-guide.md         # 代码审查入口

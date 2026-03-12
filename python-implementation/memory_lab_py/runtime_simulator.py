@@ -115,7 +115,7 @@ class OpenClawLikeRuntimeSimulator:
         self.session_manager.append_message(session_key, "assistant", answer)
         raw_session_messages = self.session_manager.get_messages(session_key)
 
-        end_result = self.agent_end(session_key, raw_session_messages)
+        end_result = self.agent_end(session_key, raw_messages=raw_session_messages)
         return {
             "sessionKey": session_key,
             "beforePromptBuild": before_build,

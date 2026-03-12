@@ -39,5 +39,5 @@ npm run parity:check:strict
 
 ## 说明
 
-- 当前 `python-implementation/*` 入口会调用已验证的 Python 核心实现（位于 `apps/memory-lab-py/`），确保你立即可用、不会因迁移导致流程中断。
-- 后续你可继续只用这个目录工作；根文档与脚本路径已经同步到 `python-implementation/`。
+- `python-implementation/` 现在包含完整 Python 核心与 UI（无需额外目录跳转）。
+- 你可以只在这个目录完成日常开发与验证；根文档与脚本路径已全部对齐。

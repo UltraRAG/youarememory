@@ -1,1 +1,2 @@
--r ../apps/memory-lab-py/requirements.txt
+streamlit>=1.37.0
+requests>=2.32.0

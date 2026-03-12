@@ -4,8 +4,7 @@
   "private": true,
   "description": "OpenClaw multi-level memory plugin with local-first storage and memos-style UI.",
   "workspaces": [
-    "packages/*",
-    "apps/*"
+    "packages/*"
   ],
   "scripts": {
     "build": "npm run build --workspaces",

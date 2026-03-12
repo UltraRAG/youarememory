@@ -11,7 +11,7 @@
 
 对应目录：
 
-- Python 实现版层：`python-implementation/**`（入口） + `apps/memory-lab-py/**`（当前核心实现）
+- Python 实现版层：`python-implementation/**`（入口 + 核心实现）
 - 能力层：`packages/openclaw-memory-plugin/src/**`
 - 编排层：`packages/openclaw-memory-plugin/agent-skills/**`
 - 策略层：`packages/openclaw-memory-plugin/skills/**`
@@ -22,12 +22,12 @@
 
 - `python-implementation/streamlit_app.py`
 - `python-implementation/scripts/parity_check.py`
-- `apps/memory-lab-py/memory_lab_py/repository.py`
-- `apps/memory-lab-py/memory_lab_py/indexer.py`
-- `apps/memory-lab-py/memory_lab_py/retriever.py`
-- `apps/memory-lab-py/memory_lab_py/skills_loader.py`
-- `apps/memory-lab-py/memory_lab_py/runtime_simulator.py`
-- `apps/memory-lab-py/memory_lab_py/tools.py`
+- `python-implementation/memory_lab_py/repository.py`
+- `python-implementation/memory_lab_py/indexer.py`
+- `python-implementation/memory_lab_py/retriever.py`
+- `python-implementation/memory_lab_py/skills_loader.py`
+- `python-implementation/memory_lab_py/runtime_simulator.py`
+- `python-implementation/memory_lab_py/tools.py`
 
 ### B. TS 插件入口与生命周期
 
@@ -47,7 +47,7 @@
 
 - 工具：`packages/openclaw-memory-plugin/src/tools.ts`
 - UI/API：`packages/openclaw-memory-plugin/src/ui-server.ts`
-- UI 静态资源：`apps/memory-ui/index.html`、`apps/memory-ui/app.js`、`apps/memory-ui/app.css`
+- UI 静态资源：`packages/openclaw-memory-plugin/ui-source/index.html`、`packages/openclaw-memory-plugin/ui-source/app.js`、`packages/openclaw-memory-plugin/ui-source/app.css`
 
 ### E. Agent Skills（重点）
 
@@ -75,8 +75,8 @@
 ## 4) 推荐审查顺序（最快抓主链路）
 
 1. `python-implementation/streamlit_app.py`：确认你能用 Python UI 重现问题。
-2. `apps/memory-lab-py/memory_lab_py/retriever.py`：先看检索链路，理解输出结构。
-3. `apps/memory-lab-py/memory_lab_py/indexer.py`：看 `L0 -> L1 -> L2` 构建逻辑。
+2. `python-implementation/memory_lab_py/retriever.py`：先看检索链路，理解输出结构。
+3. `python-implementation/memory_lab_py/indexer.py`：看 `L0 -> L1 -> L2` 构建逻辑。
 4. `packages/openclaw-memory-plugin/src/core/retrieval/reasoning-loop.ts`：对照 Python 实现是否一致。
 5. `packages/openclaw-memory-plugin/scripts/debug-retrieve.mjs` + `python-implementation/scripts/parity_check.py`：验证 Python↔TS 一致性。
 6. `agent-skills/*/SKILL.md`：确认编排策略符合“工具优先、脚本补充”。

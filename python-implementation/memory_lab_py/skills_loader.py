@@ -88,7 +88,7 @@ Only use the above as supporting context; prioritize the user's latest request."
 
 def _resolve_default_skills_dir() -> Path:
     current_file = Path(__file__).resolve()
-    repo_root = current_file.parents[3]
+    repo_root = current_file.parents[2]
     return repo_root / "packages" / "openclaw-memory-plugin" / "skills"
 
 
