@@ -16,6 +16,7 @@
     "build": "tsc -b && node ./scripts/copy-ui.mjs",
     "dev": "tsc -b --watch",
     "typecheck": "tsc -b --pretty false",
+    "debug:retrieve": "node ./scripts/debug-retrieve.mjs",
     "lint": "node -e \"console.log('lint skipped for plugin')\"",
     "test": "node -e \"console.log('test skipped for plugin')\""
   },

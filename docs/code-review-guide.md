@@ -1,28 +1,39 @@
 # YouAreMemory 代码审查指南（面向不熟悉 TS 的同学）
 
-这份指南用于审查新版 **Agent Skills + Memory 插件混合架构**。
+这份指南用于审查新版 **Python 测试版 + TS 插件 + Agent Skills** 混合架构。
 
 ## 1) 架构分层（先看这个）
 
-- **能力层（插件）**：负责 L0/L1/L2、数据库、工具、UI
+- **Python Lab 层（开发优先）**：负责低门槛测试与需求验证
+- **能力层（TS 插件）**：负责 L0/L1/L2、数据库、工具、UI
 - **编排层（Agent Skills）**：负责什么时候调用哪些工具、什么时候跑诊断脚本
 - **策略层（规则配置）**：负责关键词、抽取规则、项目状态规则、上下文模板
 
 对应目录：
 
+- Python Lab 层：`apps/memory-lab-py/**`
 - 能力层：`packages/openclaw-memory-plugin/src/**`
 - 编排层：`packages/openclaw-memory-plugin/agent-skills/**`
 - 策略层：`packages/openclaw-memory-plugin/skills/**`
 
 ## 2) 功能 -> 文件映射
 
-### A. 插件入口与生命周期
+### A. Python 测试核心（优先看）
+
+- `apps/memory-lab-py/memory_lab_py/repository.py`
+- `apps/memory-lab-py/memory_lab_py/indexer.py`
+- `apps/memory-lab-py/memory_lab_py/retriever.py`
+- `apps/memory-lab-py/memory_lab_py/skills_loader.py`
+- `apps/memory-lab-py/streamlit_app.py`
+- `apps/memory-lab-py/scripts/parity_check.py`
+
+### B. TS 插件入口与生命周期
 
 - `packages/openclaw-memory-plugin/src/index.ts`
   - `before_prompt_build` / `before_agent_start`：注入记忆上下文
   - `agent_end`：写入 L0 并触发 heartbeat
 
-### B. 记忆构建与检索核心
+### C. TS 记忆构建与检索核心
 
 - `packages/openclaw-memory-plugin/src/core/pipeline/heartbeat.ts`
 - `packages/openclaw-memory-plugin/src/core/indexers/l1-extractor.ts`
@@ -30,19 +41,19 @@
 - `packages/openclaw-memory-plugin/src/core/retrieval/reasoning-loop.ts`
 - `packages/openclaw-memory-plugin/src/core/storage/sqlite.ts`
 
-### C. 工具与 UI
+### D. TS 工具与 UI
 
 - 工具：`packages/openclaw-memory-plugin/src/tools.ts`
 - UI/API：`packages/openclaw-memory-plugin/src/ui-server.ts`
 - UI 静态资源：`apps/memory-ui/index.html`、`apps/memory-ui/app.js`、`apps/memory-ui/app.css`
 
-### D. Agent Skills（重点）
+### E. Agent Skills（重点）
 
 - `packages/openclaw-memory-plugin/agent-skills/memory-orchestrator/SKILL.md`
 - `packages/openclaw-memory-plugin/agent-skills/memory-maintenance/SKILL.md`
 - `packages/openclaw-memory-plugin/agent-skills/memory-maintenance/scripts/*.mjs`
 
-### E. 插件策略配置（重点）
+### F. 插件策略配置（重点）
 
 - `packages/openclaw-memory-plugin/skills/intent-rules.json`
 - `packages/openclaw-memory-plugin/skills/extraction-rules.json`
@@ -61,13 +72,13 @@
 
 ## 4) 推荐审查顺序（最快抓主链路）
 
-1. `src/index.ts`：事件钩子与总流程是否符合规划。
-2. `src/core/pipeline/heartbeat.ts`：`L0 -> L1 -> L2` 构建是否完整。
-3. `src/core/retrieval/reasoning-loop.ts`：`L2 -> L1 -> L0` 降级检索是否符合预期。
-4. `src/tools.ts`：工具契约是否稳定（名称、入参、输出）。
-5. `agent-skills/*/SKILL.md`：编排策略是否“工具优先、脚本补充”。
-6. `skills/*.json|md`：策略参数是否与业务一致。
-7. `src/core/storage/sqlite.ts` + `src/ui-server.ts`：表结构/API 字段是否一致。
+1. `apps/memory-lab-py/streamlit_app.py`：确认你能用 Python UI 重现问题。
+2. `apps/memory-lab-py/memory_lab_py/retriever.py`：先看检索链路，理解输出结构。
+3. `apps/memory-lab-py/memory_lab_py/indexer.py`：看 `L0 -> L1 -> L2` 构建逻辑。
+4. `packages/openclaw-memory-plugin/src/core/retrieval/reasoning-loop.ts`：对照 Python 实现是否一致。
+5. `packages/openclaw-memory-plugin/scripts/debug-retrieve.mjs` + `apps/memory-lab-py/scripts/parity_check.py`：验证 Python↔TS 一致性。
+6. `agent-skills/*/SKILL.md`：确认编排策略符合“工具优先、脚本补充”。
+7. `skills/*.json|md`：确认规则参数是唯一权威来源。
 
 ## 5) 如何审查 SKILL.md 是否规范
 
@@ -79,45 +90,65 @@
 4. 指令明确“工具优先”，脚本仅用于诊断/维护。
 5. 脚本路径可执行且是只读诊断（不直接改库）。
 
-## 6) 如何验证改动真的生效
+## 6) Python↔TS 同步机制怎么审
 
-### A. 改 Agent Skills 后
+重点看两点：
 
-1. 改 `agent-skills/*/SKILL.md` 或诊断脚本。
-2. 执行：
+- Python 只读取 `packages/openclaw-memory-plugin/skills/`，不复制规则。
+- parity 比对脚本覆盖 `intent`、`enoughAt`、每层 top id。
+
+验证命令：
+
+```bash
+npm run build --workspace @youarememory/openclaw-memory-plugin
+python3 apps/memory-lab-py/scripts/parity_check.py --query "项目进展"
+```
+
+需要严格对比完整 ID 列表时，加 `--strict`。
+
+## 7) 如何验证改动真的生效
+
+### A. 改 Python 核心后
+
+1. 跑 Streamlit：`streamlit run apps/memory-lab-py/streamlit_app.py`
+2. 写入 L0 -> heartbeat -> retrieve
+3. 看输出结构是否符合预期
+
+### B. 改 TS 插件后
+
+1. 执行：
+
+```bash
+npm run build
+npm run typecheck
+```
+
+2. 用 parity 脚本做一致性检查。
+
+### C. 改 Agent Skills 或规则配置后
+
+1. 执行：
 
 ```bash
 npm run build
 openclaw gateway restart
 ```
 
-3. 检查 `~/.openclaw/openclaw.json`：
+2. 检查：
    - `skills.entries.memory-orchestrator.enabled=true`
    - `skills.entries.memory-maintenance.enabled=true`
-4. 用真实任务验证是否按预期走工具/脚本路径。
+3. 在 OpenClaw 实际对话验证行为。
 
-### B. 改策略配置后
-
-1. 改 `skills/*.json|md`。
-2. 执行：
-
-```bash
-npm run build
-openclaw gateway restart
-```
-
-3. 用 `memory_recall` 或 `/youarememory/api/retrieve` 对比结果是否变化。
-
-## 7) 规划书对照（当前实现）
+## 8) 当前实现状态（对照新方案）
 
 ### 已落地
 
-- 插件 manifest 已声明 `agent-skills` 目录。
-- 已提供 `memory-orchestrator` 与 `memory-maintenance` 两个 SKILL 包。
-- 已提供 mixed mode 诊断脚本（索引统计、最近会话快照）。
-- 保留并复用原有 `L0/L1/L2` 与工具链路。
+- Python memory core + Streamlit UI 已提供。
+- TS debug 检索入口已提供。
+- Python↔TS parity 脚本已提供。
+- Agent Skills 与插件能力层已解耦。
 
-### 仍可继续增强
+### 后续可增强
 
-- 将 SKILL 行为验证自动化（回归测试脚本）。
-- 增加更细粒度的诊断脚本（如异常事实聚类、索引一致性 diff）。
+- 为 parity 增加差异白名单配置文件。
+- 增加固定样本库做自动化回归。

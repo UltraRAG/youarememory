@@ -9,6 +9,16 @@
 
 ---
 
+## Python-first 开发建议（推荐）
+
+如果你不熟 TS，建议先用 Python 测试版验证需求，再回到插件联调：
+
+1) 跑 `apps/memory-lab-py/streamlit_app.py` 做注入/索引/检索验证  
+2) 跑 `apps/memory-lab-py/scripts/parity_check.py` 对齐 Python 与 TS  
+3) 最后再装 OpenClaw 插件做真实会话验证
+
+---
+
 ## 0. 两类 skills（先分清）
 
 这个项目里有两种“skills”，职责不同：
@@ -51,6 +61,12 @@ npm install
 npm run build
 openclaw plugins install ./packages/openclaw-memory-plugin
 ```
+
+> 如果你只想快速调检索结果，不想进 OpenClaw 会话，可用 debug 入口：
+>
+> ```bash
+> npm run debug:retrieve --workspace @youarememory/openclaw-memory-plugin -- --query "项目最近进展"
+> ```
 
 ### 1.3 配置 `~/.openclaw/openclaw.json`
 

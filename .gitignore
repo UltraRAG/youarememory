@@ -9,3 +9,6 @@ coverage/
 *.log
 packages/openclaw-memory-plugin/tmp/
 *.tsbuildinfo
+__pycache__/
+*.pyc
+.venv/
