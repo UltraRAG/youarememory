@@ -4,6 +4,7 @@ import { join } from "node:path";
 export interface PluginRuntimeConfig {
   dataDir: string;
   dbPath: string;
+  skillsDir?: string;
   captureStrategy: "last_turn" | "full_session";
   includeAssistant: boolean;
   maxMessageChars: number;
@@ -43,9 +44,10 @@ export function buildPluginConfig(raw: unknown): PluginRuntimeConfig {
   const dbPath = typeof cfg.dbPath === "string" && cfg.dbPath.trim()
     ? cfg.dbPath
     : join(dataDir, "memory.sqlite");
+  const skillsDir = typeof cfg.skillsDir === "string" && cfg.skillsDir.trim() ? cfg.skillsDir : undefined;
 
   const captureStrategy = cfg.captureStrategy === "full_session" ? "full_session" : "last_turn";
-  return {
+  const runtime: PluginRuntimeConfig = {
     dataDir,
     dbPath,
     captureStrategy,
@@ -59,4 +61,8 @@ export function buildPluginConfig(raw: unknown): PluginRuntimeConfig {
     uiPort: Math.max(1024, toInteger(cfg.uiPort, 39393)),
     uiPathPrefix: typeof cfg.uiPathPrefix === "string" && cfg.uiPathPrefix.trim() ? cfg.uiPathPrefix : "/youarememory",
   };
+  if (skillsDir) {
+    runtime.skillsDir = skillsDir;
+  }
+  return runtime;
 }

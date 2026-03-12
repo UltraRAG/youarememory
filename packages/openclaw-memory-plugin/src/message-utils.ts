@@ -1,4 +1,4 @@
-import type { MemoryMessage } from "@youarememory/memory-core";
+import type { MemoryMessage } from "./core/types.js";
 
 function truncate(text: string, maxLength: number): string {
   if (maxLength <= 0 || text.length <= maxLength) return text;

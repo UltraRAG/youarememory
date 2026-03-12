@@ -1,4 +1,10 @@
-import { HeartbeatIndexer, MemoryRepository, ReasoningRetriever, nowIso } from "@youarememory/memory-core";
+import {
+  HeartbeatIndexer,
+  MemoryRepository,
+  ReasoningRetriever,
+  loadSkillsRuntime,
+  nowIso,
+} from "./core/index.js";
 import { buildPluginConfig } from "./config.js";
 import { normalizeMessages } from "./message-utils.js";
 import type { OpenClawPluginApi, PluginLogger } from "./plugin-api.js";
@@ -30,9 +36,16 @@ const plugin = {
   register(api: OpenClawPluginApi): void {
     const logger = safeLog(api.logger);
     const config = buildPluginConfig(api.pluginConfig);
+    const skills = config.skillsDir
+      ? loadSkillsRuntime({ skillsDir: config.skillsDir, logger })
+      : loadSkillsRuntime({ logger });
     const repository = new MemoryRepository(config.dbPath);
-    const indexer = new HeartbeatIndexer(repository, { batchSize: config.heartbeatBatchSize, source: "openclaw" });
-    const retriever = new ReasoningRetriever(repository);
+    const indexer = new HeartbeatIndexer(
+      repository,
+      skills,
+      { batchSize: config.heartbeatBatchSize, source: "openclaw" },
+    );
+    const retriever = new ReasoningRetriever(repository, skills);
 
     const tools = buildPluginTools(repository, retriever);
     api.registerTool?.(() => tools, { names: tools.map((tool) => tool.name) });

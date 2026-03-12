@@ -1,29 +1,26 @@
 # OpenClaw 小白接入教程（YouAreMemory）
 
-这份文档面向第一次接触插件配置的用户。你不需要懂 TypeScript，只需要按步骤复制命令即可。
+这份文档给第一次使用 OpenClaw 插件的同学。你不需要会 TypeScript，照步骤执行即可。
 
-## 1. 你会得到什么
+## 1. 这次改造后的核心思路
 
-完成后你将得到：
+现在是**混合架构**：
 
-- 自动记录对话（L0）
-- 自动抽取结构化记忆（L1）
-- 自动生成时间/项目索引（L2）
-- 检索时自动走 `L2 -> L1 -> L0`
-- 一个可视化页面查看记忆效果
+- 插件层：负责记忆能力（L0/L1/L2、工具、SQLite、UI）
+- Agent Skills 层：负责模型编排（`SKILL.md`）
 
-## 2. 前置条件
+这两层都启用，效果最好。
 
-执行以下命令确认环境：
+## 2. 前置检查
 
 ```bash
 node -v
 openclaw --version
 ```
 
-建议 Node.js 版本 >= 24。
+建议 Node.js >= 24。
 
-## 3. 一次性安装
+## 3. 安装插件
 
 在仓库根目录执行：
 
@@ -33,13 +30,16 @@ npm run build
 openclaw plugins install ./packages/openclaw-memory-plugin
 ```
 
-## 4. 修改 OpenClaw 配置
+如果你之前遇到 `Installing plugin dependencies... npm install failed`，当前版本已做单包自包含修复；也可额外自检：
 
-编辑文件：
+```bash
+cd packages/openclaw-memory-plugin
+npm install --ignore-scripts
+```
 
-- `~/.openclaw/openclaw.json`
+## 4. 配置 `~/.openclaw/openclaw.json`
 
-把以下内容加入或合并进去：
+把下面配置合并到你现有文件：
 
 ```json
 {
@@ -55,18 +55,42 @@ openclaw plugins install ./packages/openclaw-memory-plugin
         },
         "config": {
           "captureStrategy": "last_turn",
+          "includeAssistant": true,
+          "maxMessageChars": 6000,
+          "heartbeatBatchSize": 30,
+          "recallEnabled": true,
+          "addEnabled": true,
+          "skillsDir": "",
           "uiEnabled": true,
           "uiPort": 39393
         }
       }
     }
+  },
+  "skills": {
+    "entries": {
+      "memory-orchestrator": {
+        "enabled": true
+      },
+      "memory-maintenance": {
+        "enabled": true
+      }
+    },
+    "load": {
+      "extraDirs": []
+    }
   }
 }
 ```
 
-> 如果你原来已经有 `plugins` 配置，不要整段覆盖，合并键值即可。
+说明：
 
-## 5. 重启并验证
+- `plugins.entries.youarememory-openclaw.enabled=true` 是 Agent Skills 的门控条件。
+- `skills.entries` 控制这两个 skill 是否启用。
+- `skills.load.extraDirs` 可选，你要加载自定义 skill 时再填写目录。
+- `config.skillsDir` 是插件内部策略配置目录（不是 Agent Skills 目录）。
+
+## 5. 重启与验证
 
 ```bash
 openclaw gateway restart
@@ -74,33 +98,43 @@ openclaw plugins list
 openclaw plugins info youarememory-openclaw
 ```
 
-然后在 OpenClaw 里聊几轮，打开浏览器：
+再做两步验证：
 
-- `http://127.0.0.1:39393/youarememory/`
+1) 在 OpenClaw 里对话几轮（制造可检索数据）  
+2) 打开 `http://127.0.0.1:39393/youarememory/`
 
-如果页面有数据，说明已经成功接入。
+能看到时间/项目/事实/会话数据即表示接入成功。
 
-## 6. 常见报错处理
+## 6. 常见问题
 
-### 报错：插件没找到
+### 6.1 插件找不到
 
-- 再执行一次安装命令：
+- 重新执行：`openclaw plugins install ./packages/openclaw-memory-plugin`
+
+### 6.2 安装时报 npm install failed
+
+- 重新执行：
+  - `npm run build`
   - `openclaw plugins install ./packages/openclaw-memory-plugin`
+- 仍失败则执行：
+  - `cd packages/openclaw-memory-plugin && npm install --ignore-scripts`
+  - 保留完整报错文本用于排查。
 
-### 报错：端口被占用
+### 6.3 插件启用了但技能不触发
 
-- 在 `openclaw.json` 里把 `uiPort` 换成别的，比如 `39400`
-- 重启 gateway
+检查：
 
-### 报错：没有注入记忆
+- `plugins.entries.youarememory-openclaw.enabled` 是否为 `true`
+- `skills.entries.memory-orchestrator.enabled` 是否为 `true`
+- `skills.entries.memory-maintenance.enabled` 是否为 `true`
 
-- 确认配置里 `hooks.allowPromptInjection` 为 `true`
-- 确认 `recallEnabled` 为 `true`
-- 多对话几轮后再测，首次对话数据较少
+然后重启 gateway。
 
-## 7. 回滚（恢复默认 memory-core）
+### 6.4 UI 打不开
 
-把 `plugins.slots.memory` 改回：
+- 换端口（例如 `39400`），并重启 gateway。
+
+### 6.5 回滚到默认 memory
 
 ```json
 {
@@ -112,8 +146,27 @@ openclaw plugins info youarememory-openclaw
 }
 ```
 
-然后重启：
+## 7. 两类技能如何改（不改 TS 代码）
+
+### A. 改 Agent Skills（编排行为）
+
+- `packages/openclaw-memory-plugin/agent-skills/memory-orchestrator/SKILL.md`
+- `packages/openclaw-memory-plugin/agent-skills/memory-maintenance/SKILL.md`
+
+用于改“何时调用工具、何时诊断脚本”。
+
+### B. 改插件策略配置（抽取/检索细节）
+
+- `packages/openclaw-memory-plugin/skills/intent-rules.json`
+- `packages/openclaw-memory-plugin/skills/extraction-rules.json`
+- `packages/openclaw-memory-plugin/skills/project-status-rules.json`
+- `packages/openclaw-memory-plugin/skills/context-template.md`
+
+用于改关键词、正则、状态规则、上下文模板。
+
+改完统一执行：
 
 ```bash
+npm run build
 openclaw gateway restart
 ```

@@ -7,6 +7,8 @@
   "types": "dist/index.d.ts",
   "files": [
     "dist",
+    "agent-skills",
+    "skills",
     "openclaw.plugin.json",
     "README.md"
   ],
@@ -16,9 +18,6 @@
     "typecheck": "tsc -b --pretty false",
     "lint": "node -e \"console.log('lint skipped for plugin')\"",
     "test": "node -e \"console.log('test skipped for plugin')\""
-  },
-  "dependencies": {
-    "@youarememory/memory-core": "0.1.0"
   },
   "openclaw": {
     "extensions": [

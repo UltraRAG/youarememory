@@ -2,7 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { MemoryRepository, ReasoningRetriever } from "@youarememory/memory-core";
+import { MemoryRepository, ReasoningRetriever } from "./core/index.js";
 import type { PluginLogger } from "./plugin-api.js";
 
 export interface UiServerOptions {

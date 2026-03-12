@@ -1,5 +1,5 @@
-import type { FactCandidate } from "@youarememory/memory-core";
-import { MemoryRepository, ReasoningRetriever } from "@youarememory/memory-core";
+import type { FactCandidate } from "./core/types.js";
+import { MemoryRepository, ReasoningRetriever } from "./core/index.js";
 import type { PluginTool } from "./plugin-api.js";
 
 function jsonResult(payload: unknown): string {

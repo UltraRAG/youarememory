@@ -1,147 +1,123 @@
 # YouAreMemory 代码审查指南（面向不熟悉 TS 的同学）
 
-这份文档的目标是：你不需要熟悉 TypeScript，也能快速看懂这个项目每个功能在哪里实现，以及改动时该看哪些文件。
+这份指南用于审查新版 **Agent Skills + Memory 插件混合架构**。
 
-## 1) 先看“功能 -> 文件”总览
+## 1) 架构分层（先看这个）
 
-### L0 对话日志层
+- **能力层（插件）**：负责 L0/L1/L2、数据库、工具、UI
+- **编排层（Agent Skills）**：负责什么时候调用哪些工具、什么时候跑诊断脚本
+- **策略层（规则配置）**：负责关键词、抽取规则、项目状态规则、上下文模板
 
-- 插件捕获入口：`packages/openclaw-memory-plugin/src/index.ts`
-  - `api.on("agent_end", ...)`
-- 消息标准化：`packages/openclaw-memory-plugin/src/message-utils.ts`
-  - `normalizeMessages()`
-- 落库：`packages/memory-core/src/pipeline/heartbeat.ts`
-  - `captureL0Session()`
-- SQLite 写入：`packages/memory-core/src/storage/sqlite.ts`
-  - `insertL0Session()`
+对应目录：
 
-### L1 结构化会话抽取层
+- 能力层：`packages/openclaw-memory-plugin/src/**`
+- 编排层：`packages/openclaw-memory-plugin/agent-skills/**`
+- 策略层：`packages/openclaw-memory-plugin/skills/**`
 
-- heartbeat 主流程：`packages/memory-core/src/pipeline/heartbeat.ts`
-  - `runHeartbeat()`
-- L1 抽取：`packages/memory-core/src/indexers/l1-extractor.ts`
-  - `extractL1FromL0()`
-- 摘要/事实/项目标签提取：`packages/memory-core/src/skills/extraction-skill.ts`
-  - `buildSessionSummary()`
-  - `extractFactCandidates()`
-  - `extractProjectTags()`
+## 2) 功能 -> 文件映射
 
-### L2 维度索引层（时间 / 项目）
+### A. 插件入口与生命周期
 
-- L2 构建：`packages/memory-core/src/indexers/l2-builder.ts`
-  - `buildL2TimeFromL1()`
-  - `buildL2ProjectsFromL1()`
-- L2 写库：`packages/memory-core/src/storage/sqlite.ts`
-  - `upsertL2TimeIndex()`
-  - `upsertL2ProjectIndex()`
+- `packages/openclaw-memory-plugin/src/index.ts`
+  - `before_prompt_build` / `before_agent_start`：注入记忆上下文
+  - `agent_end`：写入 L0 并触发 heartbeat
 
-### 全局事实画像
+### B. 记忆构建与检索核心
 
-- 从 L1 更新画像：`packages/memory-core/src/pipeline/heartbeat.ts`
-  - `upsertGlobalFacts(...)`
-- 事实表：`packages/memory-core/src/storage/sqlite.ts`
-  - `global_facts` 表
-  - `upsertGlobalFacts()`
+- `packages/openclaw-memory-plugin/src/core/pipeline/heartbeat.ts`
+- `packages/openclaw-memory-plugin/src/core/indexers/l1-extractor.ts`
+- `packages/openclaw-memory-plugin/src/core/indexers/l2-builder.ts`
+- `packages/openclaw-memory-plugin/src/core/retrieval/reasoning-loop.ts`
+- `packages/openclaw-memory-plugin/src/core/storage/sqlite.ts`
 
-### 推理检索闭环（L2 -> L1 -> L0）
+### C. 工具与 UI
 
-- 主逻辑：`packages/memory-core/src/retrieval/reasoning-loop.ts`
-  - `retrieve()`
-  - `searchL2()` / `searchL1()` / `searchL0()`
-  - `isEnoughAtL2()` / `isEnoughAtL1()`
-- 意图识别：`packages/memory-core/src/skills/intent-skill.ts`
-  - `classifyIntent()`
+- 工具：`packages/openclaw-memory-plugin/src/tools.ts`
+- UI/API：`packages/openclaw-memory-plugin/src/ui-server.ts`
+- UI 静态资源：`apps/memory-ui/index.html`、`apps/memory-ui/app.js`、`apps/memory-ui/app.css`
 
-### OpenClaw 工具注册
+### D. Agent Skills（重点）
 
-- 工具定义：`packages/openclaw-memory-plugin/src/tools.ts`
-  - `memory_recall`
-  - `memory_store`
-  - `memory_search`（兼容别名）
-  - `search_l2` / `search_l1` / `search_l0`
-- 注册位置：`packages/openclaw-memory-plugin/src/index.ts`
-  - `api.registerTool(...)`
+- `packages/openclaw-memory-plugin/agent-skills/memory-orchestrator/SKILL.md`
+- `packages/openclaw-memory-plugin/agent-skills/memory-maintenance/SKILL.md`
+- `packages/openclaw-memory-plugin/agent-skills/memory-maintenance/scripts/*.mjs`
 
-### UI（Memos 风格）
+### E. 插件策略配置（重点）
 
-- 本地 API 与静态服务：`packages/openclaw-memory-plugin/src/ui-server.ts`
-- 前端页面：`apps/memory-ui/`
-  - `index.html`
-  - `app.js`
-  - `app.css`
+- `packages/openclaw-memory-plugin/skills/intent-rules.json`
+- `packages/openclaw-memory-plugin/skills/extraction-rules.json`
+- `packages/openclaw-memory-plugin/skills/project-status-rules.json`
+- `packages/openclaw-memory-plugin/skills/context-template.md`
+- 加载器：`packages/openclaw-memory-plugin/src/core/skills/loader.ts`
 
----
+## 3) 不会 TS 也够用的 4 个概念
 
-## 2) 不懂 TypeScript 也能看的最少知识
+- `interface`：数据结构约束
+- `type`：类型别名（常见 `A | B`）
+- `class`：状态和方法封装
+- `import/export`：模块引用
 
-- `interface`：可以理解为“数据结构定义”，类似 JSON 的字段说明。
-- `type`：类型别名，常用于联合类型（例如 `A | B`）。
-- `class`：带状态和方法的对象封装。
-- `export`：对外暴露；`import`：从别处引入。
+审查时优先看：函数名 -> 入参 -> 返回值 -> 分支逻辑。
 
-你可以先忽略类型声明，先看函数名和注释，再看函数入参/返回值。
+## 4) 推荐审查顺序（最快抓主链路）
 
----
+1. `src/index.ts`：事件钩子与总流程是否符合规划。
+2. `src/core/pipeline/heartbeat.ts`：`L0 -> L1 -> L2` 构建是否完整。
+3. `src/core/retrieval/reasoning-loop.ts`：`L2 -> L1 -> L0` 降级检索是否符合预期。
+4. `src/tools.ts`：工具契约是否稳定（名称、入参、输出）。
+5. `agent-skills/*/SKILL.md`：编排策略是否“工具优先、脚本补充”。
+6. `skills/*.json|md`：策略参数是否与业务一致。
+7. `src/core/storage/sqlite.ts` + `src/ui-server.ts`：表结构/API 字段是否一致。
 
-## 3) 推荐 code review 顺序（最快）
+## 5) 如何审查 SKILL.md 是否规范
 
-1. `packages/openclaw-memory-plugin/src/index.ts`
-   - 先确认插件生命周期钩子接了哪些事件。
-2. `packages/memory-core/src/pipeline/heartbeat.ts`
-   - 看写入和索引构建顺序是否符合规划。
-3. `packages/memory-core/src/indexers/*.ts` + `skills/*.ts`
-   - 看 L1/L2 生成规则是否符合你的业务预期。
-4. `packages/memory-core/src/retrieval/reasoning-loop.ts`
-   - 看“enough 判定”和降级检索逻辑。
-5. `packages/memory-core/src/storage/sqlite.ts`
-   - 对照表结构是否满足 L0/L1/L2/事实画像需求。
-6. `packages/openclaw-memory-plugin/src/tools.ts`
-   - 验证对外工具名、入参、返回格式。
-7. `packages/openclaw-memory-plugin/src/ui-server.ts` + `apps/memory-ui`
-   - 看 UI 接口和页面字段是否一致。
+每个 `SKILL.md` 至少检查这 5 点：
 
----
+1. frontmatter 的 `name` 与目录名一致（例如 `memory-orchestrator`）。
+2. `description` 包含能触发该 skill 的任务关键词。
+3. `metadata` 包含门控：`plugins.entries.youarememory-openclaw.enabled`。
+4. 指令明确“工具优先”，脚本仅用于诊断/维护。
+5. 脚本路径可执行且是只读诊断（不直接改库）。
 
-## 4) 规划书功能对照（当前实现状态）
+## 6) 如何验证改动真的生效
 
-### 已完成
+### A. 改 Agent Skills 后
 
-- L0/L1/L2（时间、项目）三层主链路已实现并落库。
-- heartbeat 驱动的索引更新已实现（在每次 `agent_end` 后触发）。
-- 意图识别 + `search_l2 -> search_l1 -> search_l0` 降级检索已实现。
-- 全局事实画像（动态事实表）已实现并参与上下文注入。
-- memory slot 插件化接入、工具暴露、UI 可视化已实现。
-
-### 当前为 MVP 的部分（可继续增强）
-
-- L1 抽取目前是规则/正则驱动（`skills/extraction-skill.ts`），不是 LLM 抽取链路。
-- heartbeat 当前是“每轮结束触发”，不是严格“session 结束后单次触发”。
-- 事实维度使用 `global_facts` 画像表，而不是独立 `l2_fact_indexes` 表。
-- `search_l2` 目前以模糊检索为主，未单独提供“按 ID 精确拉取”的独立接口。
-
----
-
-## 5) 你要改某个需求时，应该改哪里
-
-- **改摘要质量**：`packages/memory-core/src/skills/extraction-skill.ts`
-- **改时间窗口规则**：`packages/memory-core/src/indexers/l1-extractor.ts`
-- **改项目状态判定**：`packages/memory-core/src/indexers/l2-builder.ts`
-- **改 enough 阈值**：`packages/memory-core/src/retrieval/reasoning-loop.ts`
-- **改检索打分**：`packages/memory-core/src/utils/text.ts` + `storage/sqlite.ts`
-- **改工具入参/返回**：`packages/openclaw-memory-plugin/src/tools.ts`
-- **改 UI 页面显示**：`apps/memory-ui/app.js` + `app.css`
-
----
-
-## 6) 每次 review 后建议跑的命令
+1. 改 `agent-skills/*/SKILL.md` 或诊断脚本。
+2. 执行：
 
 ```bash
 npm run build
-npm run typecheck
+openclaw gateway restart
 ```
 
-如果你改了索引或检索逻辑，再做一次最小验证：
+3. 检查 `~/.openclaw/openclaw.json`：
+   - `skills.entries.memory-orchestrator.enabled=true`
+   - `skills.entries.memory-maintenance.enabled=true`
+4. 用真实任务验证是否按预期走工具/脚本路径。
 
-1. 在 OpenClaw 里聊 2-3 轮。
-2. 打开 `http://127.0.0.1:39393/youarememory/` 看是否有新增索引。
-3. 用 `memory_recall` 或 UI 的 `/api/retrieve` 验证是否走了 L2/L1/L0 降级。
+### B. 改策略配置后
+
+1. 改 `skills/*.json|md`。
+2. 执行：
+
+```bash
+npm run build
+openclaw gateway restart
+```
+
+3. 用 `memory_recall` 或 `/youarememory/api/retrieve` 对比结果是否变化。
+
+## 7) 规划书对照（当前实现）
+
+### 已落地
+
+- 插件 manifest 已声明 `agent-skills` 目录。
+- 已提供 `memory-orchestrator` 与 `memory-maintenance` 两个 SKILL 包。
+- 已提供 mixed mode 诊断脚本（索引统计、最近会话快照）。
+- 保留并复用原有 `L0/L1/L2` 与工具链路。
+
+### 仍可继续增强
+
+- 将 SKILL 行为验证自动化（回归测试脚本）。
+- 增加更细粒度的诊断脚本（如异常事实聚类、索引一致性 diff）。

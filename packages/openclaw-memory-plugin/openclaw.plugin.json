@@ -5,6 +5,9 @@
   "version": "0.1.0",
   "kind": "memory",
   "main": "./dist/index.js",
+  "skills": [
+    "agent-skills"
+  ],
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
@@ -16,6 +19,10 @@
       "dbPath": {
         "type": "string",
         "description": "Absolute path to sqlite file. Overrides dataDir."
+      },
+      "skillsDir": {
+        "type": "string",
+        "description": "Optional custom path for skills JSON/MD files."
       },
       "captureStrategy": {
         "type": "string",
@@ -67,6 +74,10 @@
     "dbPath": {
       "label": "SQLite Path",
       "placeholder": "~/.openclaw/youarememory/memory.sqlite"
+    },
+    "skillsDir": {
+      "label": "Skills Directory",
+      "placeholder": "~/.openclaw/youarememory/skills"
     },
     "captureStrategy": {
       "label": "Capture Strategy",
