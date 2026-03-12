@@ -2,7 +2,7 @@
 
 这份文档给第一次使用 OpenClaw 插件的同学。你不需要会 TypeScript，照步骤执行即可。
 
-## 1. 推荐流程（Python-first）
+## 1. 推荐流程（Python 优先）
 
 先用 Python 版把 memory 功能测通，再安装 OpenClaw 插件：
 
@@ -32,12 +32,12 @@ python3 --version
 
 建议 Node.js >= 24。
 
-## 4. 先跑 Python 测试版（推荐）
+## 4. 先跑 Python 测试版（推荐，Conda 方式）
 
 ```bash
+conda create -n youarememory-lab python=3.11 -y
+conda activate youarememory-lab
 cd apps/memory-lab-py
-python3 -m venv .venv
-source .venv/bin/activate
 pip install -r requirements.txt
 streamlit run streamlit_app.py
 ```
@@ -136,18 +136,16 @@ openclaw plugins info youarememory-openclaw
 
 ## 8. 做 Python↔TS 一致性校验（强烈建议）
 
-先构建插件（确保 TS debug 入口可用）：
+普通校验（一键，含插件构建）：
 
 ```bash
-npm run build --workspace @youarememory/openclaw-memory-plugin
+npm run parity:check
 ```
 
-再执行：
+严格校验（完整 ID 列表）：
 
 ```bash
-python3 apps/memory-lab-py/scripts/parity_check.py \
-  --query "我这个项目最近进展到哪里了？" \
-  --db ~/.openclaw/youarememory/memory.sqlite
+npm run parity:check:strict
 ```
 
 默认会对比：
@@ -156,7 +154,14 @@ python3 apps/memory-lab-py/scripts/parity_check.py \
 - `enoughAt`
 - 每层 top id（L2/L1/L0）
 
-如果你要严格对比完整 ID 列表，加 `--strict`。
+如果你要手动运行对齐脚本，也可以用：
+
+```bash
+python3 apps/memory-lab-py/scripts/parity_check.py \
+  --query "项目进展" \
+  --db ~/.openclaw/youarememory/memory.sqlite \
+  --skills-dir ./packages/openclaw-memory-plugin/skills
+```
 
 ## 9. 常见问题
 
@@ -232,4 +237,18 @@ python3 apps/memory-lab-py/scripts/parity_check.py \
 ```bash
 npm run build
 openclaw gateway restart
+```
+
+## 11. 日常开发命令清单（可直接照抄）
+
+```bash
+# A) 我只改 Python，先本地测功能
+conda activate youarememory-lab
+streamlit run apps/memory-lab-py/streamlit_app.py
+
+# B) 改完后一键做 TS 对齐检查
+npm run parity:check
+
+# C) 要求严格一致时
+npm run parity:check:strict
 ```

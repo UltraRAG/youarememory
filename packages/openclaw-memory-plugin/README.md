@@ -1,4 +1,4 @@
-# YouAreMemory OpenClaw Plugin
+# YouAreMemory OpenClaw 插件说明
 
 `@youarememory/openclaw-memory-plugin` 是一个 `kind: "memory"` 的 OpenClaw 插件，采用**混合架构**：
 
@@ -9,7 +9,7 @@
 
 ---
 
-## Python-first 开发建议（推荐）
+## Python 优先开发建议（推荐）
 
 如果你不熟 TS，建议先用 Python 测试版验证需求，再回到插件联调：
 
@@ -19,9 +19,9 @@
 
 ---
 
-## 0. 两类 skills（先分清）
+## 0. 两类技能（先分清）
 
-这个项目里有两种“skills”，职责不同：
+这个项目里有两种“技能”，职责不同：
 
 1) **Agent Skills（给大模型）**
 - 目录：`agent-skills/*/SKILL.md`
@@ -119,7 +119,7 @@ openclaw plugins install ./packages/openclaw-memory-plugin
 说明：
 
 - `plugins.entries.youarememory-openclaw.enabled=true` 是这两个 Agent Skill 的门控条件。
-- `skills.entries` 用于显式开关 skill。
+- `skills.entries` 用于显式开关技能。
 - `skills.load.extraDirs` 可选，用来加载你自己的外部 skill 目录。
 
 ### 1.4 重启与验证
@@ -158,7 +158,7 @@ openclaw plugins info youarememory-openclaw
 ### `memory-maintenance`
 
 - 目标：安装异常、索引异常、质量排查
-- mixed mode：先工具验证，再脚本诊断
+- 混合模式：先工具验证，再脚本诊断
 - 诊断脚本：
   - `agent-skills/memory-maintenance/scripts/inspect-indexes.mjs`
   - `agent-skills/memory-maintenance/scripts/recent-sessions.mjs`
@@ -183,7 +183,7 @@ openclaw plugins info youarememory-openclaw
 
 ## 5. 插件配置项（全部可选）
 
-| Key | 默认值 | 说明 |
+| 配置项 | 默认值 | 说明 |
 | --- | --- | --- |
 | `dataDir` | `~/.openclaw/youarememory` | 数据目录 |
 | `dbPath` | `<dataDir>/memory.sqlite` | SQLite 路径（优先级高于 `dataDir`） |
@@ -254,4 +254,20 @@ openclaw plugins info youarememory-openclaw
 ```bash
 npm run build
 openclaw gateway restart
+```
+
+---
+
+## 8. 日常开发命令清单
+
+```bash
+# 我只改 Python，先本地验证
+conda activate youarememory-lab
+streamlit run apps/memory-lab-py/streamlit_app.py
+
+# 一键做 TS 对齐检查
+npm run parity:check
+
+# 严格对齐
+npm run parity:check:strict
 ```
