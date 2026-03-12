@@ -13,8 +13,8 @@
 
 如果你不熟 TS，建议先用 Python 测试版验证需求，再回到插件联调：
 
-1) 跑 `apps/memory-lab-py/streamlit_app.py` 做注入/索引/检索验证  
-2) 跑 `apps/memory-lab-py/scripts/parity_check.py` 对齐 Python 与 TS  
+1) 跑 `python-implementation/streamlit_app.py` 做注入/索引/检索验证  
+2) 跑 `python-implementation/scripts/parity_check.py` 对齐 Python 与 TS  
 3) 最后再装 OpenClaw 插件做真实会话验证
 
 ---
@@ -262,8 +262,10 @@ openclaw gateway restart
 
 ```bash
 # 我只改 Python，先本地验证
+conda create -n youarememory-lab python=3.11 -y
 conda activate youarememory-lab
-streamlit run apps/memory-lab-py/streamlit_app.py
+pip install -r python-implementation/requirements.txt
+streamlit run python-implementation/streamlit_app.py
 
 # 一键做 TS 对齐检查
 npm run parity:check

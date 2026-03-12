@@ -1,17 +1,17 @@
 # YouAreMemory 代码审查指南（面向不熟悉 TS 的同学）
 
-这份指南用于审查新版 **Python 测试版 + TS 插件 + Agent Skills** 混合架构。
+这份指南用于审查新版 **Python 实现版 + TS 插件 + Agent Skills** 混合架构。
 
 ## 1) 架构分层（先看这个）
 
-- **Python Lab 层（开发优先）**：负责低门槛测试与需求验证
+- **Python 实现版层（开发优先）**：负责低门槛测试与需求验证
 - **能力层（TS 插件）**：负责 L0/L1/L2、数据库、工具、UI
 - **编排层（Agent Skills）**：负责什么时候调用哪些工具、什么时候跑诊断脚本
 - **策略层（规则配置）**：负责关键词、抽取规则、项目状态规则、上下文模板
 
 对应目录：
 
-- Python Lab 层：`apps/memory-lab-py/**`
+- Python 实现版层：`python-implementation/**`（入口） + `apps/memory-lab-py/**`（当前核心实现）
 - 能力层：`packages/openclaw-memory-plugin/src/**`
 - 编排层：`packages/openclaw-memory-plugin/agent-skills/**`
 - 策略层：`packages/openclaw-memory-plugin/skills/**`
@@ -20,12 +20,14 @@
 
 ### A. Python 测试核心（优先看）
 
+- `python-implementation/streamlit_app.py`
+- `python-implementation/scripts/parity_check.py`
 - `apps/memory-lab-py/memory_lab_py/repository.py`
 - `apps/memory-lab-py/memory_lab_py/indexer.py`
 - `apps/memory-lab-py/memory_lab_py/retriever.py`
 - `apps/memory-lab-py/memory_lab_py/skills_loader.py`
-- `apps/memory-lab-py/streamlit_app.py`
-- `apps/memory-lab-py/scripts/parity_check.py`
+- `apps/memory-lab-py/memory_lab_py/runtime_simulator.py`
+- `apps/memory-lab-py/memory_lab_py/tools.py`
 
 ### B. TS 插件入口与生命周期
 
@@ -72,11 +74,11 @@
 
 ## 4) 推荐审查顺序（最快抓主链路）
 
-1. `apps/memory-lab-py/streamlit_app.py`：确认你能用 Python UI 重现问题。
+1. `python-implementation/streamlit_app.py`：确认你能用 Python UI 重现问题。
 2. `apps/memory-lab-py/memory_lab_py/retriever.py`：先看检索链路，理解输出结构。
 3. `apps/memory-lab-py/memory_lab_py/indexer.py`：看 `L0 -> L1 -> L2` 构建逻辑。
 4. `packages/openclaw-memory-plugin/src/core/retrieval/reasoning-loop.ts`：对照 Python 实现是否一致。
-5. `packages/openclaw-memory-plugin/scripts/debug-retrieve.mjs` + `apps/memory-lab-py/scripts/parity_check.py`：验证 Python↔TS 一致性。
+5. `packages/openclaw-memory-plugin/scripts/debug-retrieve.mjs` + `python-implementation/scripts/parity_check.py`：验证 Python↔TS 一致性。
 6. `agent-skills/*/SKILL.md`：确认编排策略符合“工具优先、脚本补充”。
 7. `skills/*.json|md`：确认规则参数是唯一权威来源。
 
@@ -101,7 +103,7 @@
 
 ```bash
 npm run build --workspace @youarememory/openclaw-memory-plugin
-python3 apps/memory-lab-py/scripts/parity_check.py --query "项目进展"
+python3 python-implementation/scripts/parity_check.py --query "项目进展"
 ```
 
 需要严格对比完整 ID 列表时，加 `--strict`。
@@ -110,7 +112,7 @@ python3 apps/memory-lab-py/scripts/parity_check.py --query "项目进展"
 
 ### A. 改 Python 核心后
 
-1. 跑 Streamlit：`streamlit run apps/memory-lab-py/streamlit_app.py`
+1. 跑 Streamlit：`streamlit run python-implementation/streamlit_app.py`
 2. 写入 L0 -> heartbeat -> retrieve
 3. 看输出结构是否符合预期
 
@@ -143,7 +145,7 @@ openclaw gateway restart
 
 ### 已落地
 
-- Python memory core + Streamlit UI 已提供。
+- Python memory core + Streamlit 五面板 UI 已提供。
 - TS debug 检索入口已提供。
 - Python↔TS parity 脚本已提供。
 - Agent Skills 与插件能力层已解耦。

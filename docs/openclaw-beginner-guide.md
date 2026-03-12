@@ -18,7 +18,7 @@
 
 - 插件层：负责记忆能力（L0/L1/L2、工具、SQLite、UI）
 - Agent Skills 层：负责模型编排（`SKILL.md`）
-- Python Lab 层：负责低门槛测试与快速回归（同一份 SQLite + 同一份 rules）
+- Python 实现版层：负责低门槛测试与快速回归（同一份 SQLite + 同一份 rules）
 
 这两层都启用，效果最好。
 
@@ -37,17 +37,17 @@ python3 --version
 ```bash
 conda create -n youarememory-lab python=3.11 -y
 conda activate youarememory-lab
-cd apps/memory-lab-py
-pip install -r requirements.txt
-streamlit run streamlit_app.py
+pip install -r python-implementation/requirements.txt
+streamlit run python-implementation/streamlit_app.py
 ```
 
-启动后你可以直接做四件事：
+启动后你可以直接做五件事：
 
 - 写入 L0
 - 执行 heartbeat
 - 输入 query 跑 retrieve
-- 看 snapshot/l2/l1/l0/facts JSON
+- 用工具调用台手动调用 `memory_recall` / `memory_store` / `search_*`
+- 在对话模拟台走完整链路（`before_prompt_build -> 模型 -> agent_end`）
 
 ## 5. 安装 OpenClaw 插件
 
@@ -157,7 +157,7 @@ npm run parity:check:strict
 如果你要手动运行对齐脚本，也可以用：
 
 ```bash
-python3 apps/memory-lab-py/scripts/parity_check.py \
+python3 python-implementation/scripts/parity_check.py \
   --query "项目进展" \
   --db ~/.openclaw/youarememory/memory.sqlite \
   --skills-dir ./packages/openclaw-memory-plugin/skills
@@ -244,7 +244,7 @@ openclaw gateway restart
 ```bash
 # A) 我只改 Python，先本地测功能
 conda activate youarememory-lab
-streamlit run apps/memory-lab-py/streamlit_app.py
+streamlit run python-implementation/streamlit_app.py
 
 # B) 改完后一键做 TS 对齐检查
 npm run parity:check

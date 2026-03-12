@@ -6,6 +6,25 @@ from .intent_skill import classify_intent
 from .utils_text import score_match, truncate
 
 
+def _build_intent_trace(query: str, skills: dict) -> dict:
+    normalized = query.lower()
+    intent_rules = skills["intentRules"]
+    matched = {
+        "time": [word for word in intent_rules["timeKeywords"] if word.lower() in normalized],
+        "project": [word for word in intent_rules["projectKeywords"] if word.lower() in normalized],
+        "fact": [word for word in intent_rules["factKeywords"] if word.lower() in normalized],
+    }
+    scores = {
+        "time": len(matched["time"]),
+        "project": len(matched["project"]),
+        "fact": len(matched["fact"]),
+    }
+    return {
+        "scores": scores,
+        "matchedKeywords": matched,
+    }
+
+
 def _normalize_scored_l1(query: str, items: list[dict]) -> list[dict]:
     return [
         {
@@ -149,32 +168,77 @@ class ReasoningRetriever:
 
     def retrieve(self, query: str, options: dict | None = None) -> dict:
         opts = options or {}
+        with_trace = bool(opts.get("withTrace", False))
         intent = classify_intent(query, self.skills)
         l2_limit = int(opts.get("l2Limit", 6))
         l1_limit = int(opts.get("l1Limit", 6))
         l0_limit = int(opts.get("l0Limit", 4))
+        trace: dict = {}
+        if with_trace:
+            intent_trace = _build_intent_trace(query, self.skills)
+            trace = {
+                "intent": {
+                    "selected": intent,
+                    **intent_trace,
+                },
+                "limits": {
+                    "l2Limit": l2_limit,
+                    "l1Limit": l1_limit,
+                    "l0Limit": l0_limit,
+                },
+            }
 
         l2_results = self.search_l2(query, intent, l2_limit)
         related_l1_ids = _collect_l1_ids_from_l2(l2_results)
         enough_l2 = _is_enough_at_l2(l2_results)
+        if with_trace:
+            trace["l2"] = {
+                "resultCount": len(l2_results),
+                "topScore": l2_results[0]["score"] if l2_results else 0.0,
+                "enough": enough_l2,
+                "relatedL1Ids": related_l1_ids,
+            }
 
         l1_results: list[dict] = []
         l0_results: list[dict] = []
         enough_at = "none"
+        related_l0_ids: list[str] = []
 
         if enough_l2:
             enough_at = "l2"
         else:
             l1_results = self.search_l1(query, related_l1_ids, l1_limit)
             enough_l1 = _is_enough_at_l1(l1_results)
+            if with_trace:
+                trace["l1"] = {
+                    "resultCount": len(l1_results),
+                    "topScore": l1_results[0]["score"] if l1_results else 0.0,
+                    "enough": enough_l1,
+                }
             if enough_l1:
                 enough_at = "l1"
             else:
                 related_l0_ids = _collect_l0_ids_from_l1(l1_results)
                 l0_results = self.search_l0(query, related_l0_ids, l0_limit)
                 enough_at = "l0" if l0_results else "none"
+                if with_trace:
+                    trace["l0"] = {
+                        "resultCount": len(l0_results),
+                        "topScore": l0_results[0]["score"] if l0_results else 0.0,
+                        "relatedL0Ids": related_l0_ids,
+                    }
 
         facts = [] if opts.get("includeFacts") is False else self.repository.search_facts(query, 5)
+        if with_trace:
+            trace["facts"] = {
+                "included": opts.get("includeFacts", True) is not False,
+                "count": len(facts),
+            }
+            trace["decision"] = {
+                "enoughAt": enough_at,
+                "fallbackPath": ["l2"] if enough_at == "l2" else (["l2", "l1"] if enough_at == "l1" else ["l2", "l1", "l0"]),
+            }
+
         context = _render_context_template(
             self.skills["contextTemplate"],
             {
@@ -186,7 +250,7 @@ class ReasoningRetriever:
                 "l0Block": _render_l0(l0_results),
             },
         )
-        return {
+        payload = {
             "query": query,
             "intent": intent,
             "enoughAt": enough_at,
@@ -195,3 +259,6 @@ class ReasoningRetriever:
             "l0Results": l0_results,
             "context": context,
         }
+        if with_trace:
+            payload["trace"] = trace
+        return payload

@@ -135,6 +135,23 @@ class MemoryRepository:
     def close(self) -> None:
         self.conn.close()
 
+    def clear_all_memory(self) -> dict[str, Any]:
+        before = self.get_overview()
+        tables = [
+            "index_links",
+            "global_facts",
+            "l2_project_indexes",
+            "l2_time_indexes",
+            "l1_windows",
+            "l0_sessions",
+            "pipeline_state",
+        ]
+        with self.conn:
+            for table in tables:
+                self.conn.execute(f"DELETE FROM {table}")
+        after = self.get_overview()
+        return {"before": before, "after": after}
+
     def migrate(self) -> None:
         self.conn.executescript(
             """
@@ -247,6 +264,10 @@ class MemoryRepository:
         ).fetchall()
         return [_parse_l0_row(row) for row in rows]
 
+    def count_unindexed_l0_sessions(self) -> int:
+        row = self.conn.execute("SELECT COUNT(1) AS total FROM l0_sessions WHERE indexed = 0").fetchone()
+        return int(row["total"] if row and row["total"] is not None else 0)
+
     def mark_l0_indexed(self, ids: list[str]) -> None:
         if not ids:
             return
@@ -266,6 +287,31 @@ class MemoryRepository:
 
     def list_recent_l0(self, limit: int = 20) -> list[dict[str, Any]]:
         rows = self.conn.execute("SELECT * FROM l0_sessions ORDER BY timestamp DESC LIMIT ?", (limit,)).fetchall()
+        return [_parse_l0_row(row) for row in rows]
+
+    def list_distinct_session_keys(self, limit: int = 200) -> list[str]:
+        rows = self.conn.execute(
+            """
+            SELECT session_key, MAX(timestamp) AS last_ts
+            FROM l0_sessions
+            GROUP BY session_key
+            ORDER BY last_ts DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+        return [str(row["session_key"]) for row in rows if row and row["session_key"]]
+
+    def list_l0_by_session_key(self, session_key: str, limit: int = 500) -> list[dict[str, Any]]:
+        rows = self.conn.execute(
+            """
+            SELECT * FROM l0_sessions
+            WHERE session_key = ?
+            ORDER BY timestamp ASC
+            LIMIT ?
+            """,
+            (session_key, limit),
+        ).fetchall()
         return [_parse_l0_row(row) for row in rows]
 
     def search_l0(self, query: str, limit: int = 8) -> list[dict[str, Any]]:
