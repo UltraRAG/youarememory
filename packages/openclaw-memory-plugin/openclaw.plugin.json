@@ -1,0 +1,84 @@
+{
+  "id": "youarememory-openclaw",
+  "name": "YouAreMemory OpenClaw Plugin",
+  "description": "Multi-level memory plugin (L0/L1/L2) with local-first SQLite and memos-style UI.",
+  "version": "0.1.0",
+  "kind": "memory",
+  "main": "./dist/index.js",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "dataDir": {
+        "type": "string",
+        "description": "Base directory used to persist local memory data."
+      },
+      "dbPath": {
+        "type": "string",
+        "description": "Absolute path to sqlite file. Overrides dataDir."
+      },
+      "captureStrategy": {
+        "type": "string",
+        "enum": [
+          "last_turn",
+          "full_session"
+        ],
+        "default": "last_turn"
+      },
+      "includeAssistant": {
+        "type": "boolean",
+        "default": true
+      },
+      "maxMessageChars": {
+        "type": "integer",
+        "default": 6000
+      },
+      "heartbeatBatchSize": {
+        "type": "integer",
+        "default": 30
+      },
+      "recallEnabled": {
+        "type": "boolean",
+        "default": true
+      },
+      "addEnabled": {
+        "type": "boolean",
+        "default": true
+      },
+      "uiEnabled": {
+        "type": "boolean",
+        "default": true
+      },
+      "uiHost": {
+        "type": "string",
+        "default": "127.0.0.1"
+      },
+      "uiPort": {
+        "type": "integer",
+        "default": 39393
+      },
+      "uiPathPrefix": {
+        "type": "string",
+        "default": "/youarememory"
+      }
+    }
+  },
+  "uiHints": {
+    "dbPath": {
+      "label": "SQLite Path",
+      "placeholder": "~/.openclaw/youarememory/memory.sqlite"
+    },
+    "captureStrategy": {
+      "label": "Capture Strategy",
+      "help": "last_turn captures latest user-assistant exchange, full_session captures all turns."
+    },
+    "uiEnabled": {
+      "label": "Enable Local UI",
+      "help": "Start local read-only dashboard server for timeline/project/facts."
+    },
+    "uiPort": {
+      "label": "UI Port",
+      "placeholder": "39393"
+    }
+  }
+}

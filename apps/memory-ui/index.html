@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>YouAreMemory Dashboard</title>
+    <link rel="stylesheet" href="./app.css" />
+  </head>
+  <body>
+    <div class="page">
+      <header class="topbar">
+        <div>
+          <h1>YouAreMemory</h1>
+          <p>OpenClaw 多级记忆面板（L0 / L1 / L2）</p>
+        </div>
+        <button id="refreshBtn">刷新</button>
+      </header>
+
+      <section class="overview" id="overviewCards"></section>
+
+      <section class="search">
+        <input id="queryInput" type="text" placeholder="输入问题，测试 L2→L1→L0 检索..." />
+        <button id="retrieveBtn">检索</button>
+      </section>
+
+      <section class="retrieve-result">
+        <h2>检索上下文</h2>
+        <pre id="retrieveResult"></pre>
+      </section>
+
+      <section class="grid">
+        <article>
+          <h2>L2 时间索引</h2>
+          <ul id="timeList"></ul>
+        </article>
+        <article>
+          <h2>L2 项目索引</h2>
+          <ul id="projectList"></ul>
+        </article>
+        <article>
+          <h2>动态事实画像</h2>
+          <ul id="factList"></ul>
+        </article>
+        <article>
+          <h2>L0 最近会话</h2>
+          <ul id="sessionList"></ul>
+        </article>
+      </section>
+    </div>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

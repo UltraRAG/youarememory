@@ -1,0 +1,38 @@
+{
+  "name": "@youarememory/openclaw-memory-plugin",
+  "version": "0.1.0",
+  "description": "OpenClaw memory-slot plugin with L0/L1/L2 local indexes and memos-style UI.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "openclaw.plugin.json",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -b && node ./scripts/copy-ui.mjs",
+    "dev": "tsc -b --watch",
+    "typecheck": "tsc -b --pretty false",
+    "lint": "node -e \"console.log('lint skipped for plugin')\"",
+    "test": "node -e \"console.log('test skipped for plugin')\""
+  },
+  "dependencies": {
+    "@youarememory/memory-core": "0.1.0"
+  },
+  "openclaw": {
+    "extensions": [
+      "./dist/index.js"
+    ]
+  },
+  "clawdbot": {
+    "extensions": [
+      "./dist/index.js"
+    ]
+  },
+  "moltbot": {
+    "extensions": [
+      "./dist/index.js"
+    ]
+  }
+}

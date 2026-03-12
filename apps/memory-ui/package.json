@@ -1,0 +1,13 @@
+{
+  "name": "@youarememory/memory-ui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node -e \"console.log('memory-ui static assets ready')\"",
+    "dev": "node -e \"console.log('memory-ui is served by plugin local server')\"",
+    "typecheck": "node -e \"console.log('typecheck skipped for static memory-ui')\"",
+    "lint": "node -e \"console.log('lint skipped for static memory-ui')\"",
+    "test": "node -e \"console.log('test skipped for static memory-ui')\""
+  }
+}

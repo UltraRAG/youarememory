@@ -1,0 +1,8 @@
+{
+  "id": "youarememory-openclaw",
+  "name": "YouAreMemory Plugin",
+  "description": "Multi-level local memory plugin (L0/L1/L2) with dashboard UI.",
+  "version": "0.1.0",
+  "kind": "memory",
+  "main": "./dist/index.js"
+}

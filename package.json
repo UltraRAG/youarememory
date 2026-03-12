@@ -1,0 +1,24 @@
+{
+  "name": "youarememory",
+  "version": "0.1.0",
+  "private": true,
+  "description": "OpenClaw multi-level memory plugin with local-first storage and memos-style UI.",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "dev:plugin": "npm run dev --workspace @youarememory/openclaw-memory-plugin",
+    "typecheck": "npm run typecheck --workspaces",
+    "lint": "npm run lint --workspaces",
+    "test": "npm run test --workspaces"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.4.0",
+    "typescript": "^5.9.3"
+  }
+}
