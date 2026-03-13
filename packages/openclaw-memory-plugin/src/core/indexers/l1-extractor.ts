@@ -1,12 +1,6 @@
 import type { L0SessionRecord, L1WindowRecord } from "../types.js";
 import { buildL1IndexId, nowIso } from "../utils/id.js";
-import {
-  buildSessionSummary,
-  buildSituationTimeInfo,
-  extractFactCandidates,
-  extractProjectTags,
-} from "../skills/extraction-skill.js";
-import type { SkillsRuntime } from "../skills/types.js";
+import { LlmMemoryExtractor } from "../skills/llm-extraction.js";
 
 function buildTimePeriod(timestamp: string): string {
   const date = new Date(timestamp);
@@ -18,18 +12,23 @@ function buildTimePeriod(timestamp: string): string {
   return `${day}:T${hh(startHour)}:00-${hh(Math.min(endHour, 24))}:00`;
 }
 
-export function extractL1FromL0(record: L0SessionRecord, skills: SkillsRuntime): L1WindowRecord {
-  const summary = buildSessionSummary(record.messages, skills);
-  const facts = extractFactCandidates(record.messages, skills);
-  const projectTags = extractProjectTags(record.messages, skills);
+export async function extractL1FromL0(
+  record: L0SessionRecord,
+  extractor: LlmMemoryExtractor,
+): Promise<L1WindowRecord> {
+  const extracted = await extractor.extract({
+    timestamp: record.timestamp,
+    messages: record.messages,
+  });
   const l1IndexId = buildL1IndexId(record.timestamp, [record.l0IndexId]);
   return {
     l1IndexId,
     timePeriod: buildTimePeriod(record.timestamp),
-    summary,
-    facts,
-    situationTimeInfo: buildSituationTimeInfo(record.timestamp, summary),
-    projectTags,
+    summary: extracted.summary,
+    facts: extracted.facts,
+    situationTimeInfo: extracted.situationTimeInfo,
+    projectTags: extracted.projectDetails.map((item) => item.name),
+    projectDetails: extracted.projectDetails,
     l0Source: [record.l0IndexId],
     createdAt: nowIso(),
   };

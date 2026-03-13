@@ -51,6 +51,12 @@ function sendMethodNotAllowed(res: ServerResponse, allow: string): void {
   res.end(JSON.stringify({ error: "Method not allowed" }));
 }
 
+function sendRedirect(res: ServerResponse, location: string): void {
+  res.statusCode = 302;
+  res.setHeader("Location", location);
+  res.end();
+}
+
 function parseLimit(value: string | null, fallback: number): number {
   if (!value) return fallback;
   const parsed = Number.parseInt(value, 10);
@@ -92,6 +98,11 @@ export class LocalUiServer {
   private handle(req: IncomingMessage, res: ServerResponse): void {
     if (!req.url) return sendNotFound(res);
     const url = new URL(req.url, `http://${this.options.host}:${this.options.port}`);
+    if (url.pathname === this.prefix) {
+      const redirectUrl = new URL(`${this.prefix}/`, url);
+      redirectUrl.search = url.search;
+      return sendRedirect(res, redirectUrl.pathname + redirectUrl.search);
+    }
     const relativePath = parsePath(url.pathname, this.prefix);
     if (!relativePath) return sendNotFound(res);
 

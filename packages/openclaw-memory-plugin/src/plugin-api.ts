@@ -4,6 +4,15 @@ export interface PluginLogger {
   error?: (...args: unknown[]) => void;
 }
 
+export interface PluginRuntimeLike {
+  modelAuth?: {
+    resolveApiKeyForProvider?: (params: {
+      provider: string;
+      cfg?: Record<string, unknown>;
+    }) => Promise<{ apiKey?: string }>;
+  };
+}
+
 export interface PluginTool {
   name: string;
   label: string;
@@ -24,10 +33,12 @@ export interface PluginService {
 
 export interface OpenClawPluginApi {
   pluginConfig?: unknown;
+  config?: Record<string, unknown>;
+  runtime?: PluginRuntimeLike;
   logger?: PluginLogger;
   on?: (
     hookName: string,
-    handler: (event: Record<string, unknown>, ctx: Record<string, unknown>) => unknown,
+    handler: (event: Record<string, unknown>, ctx: Record<string, unknown>) => Promise<unknown> | unknown,
     options?: { priority?: number },
   ) => void;
   registerTool?: (

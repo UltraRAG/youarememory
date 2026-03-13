@@ -11,6 +11,7 @@ import type {
   L2ProjectIndexRecord,
   L2SearchResult,
   L2TimeIndexRecord,
+  MemoryMessage,
   MemoryUiSnapshot,
 } from "../types.js";
 import { buildLinkId, nowIso } from "../utils/id.js";
@@ -33,6 +34,13 @@ export interface ClearMemoryResult {
   clearedAt: string;
 }
 
+export interface RepairMemoryResult {
+  inspected: number;
+  updated: number;
+  removed: number;
+  rebuilt: boolean;
+}
+
 function parseL0Row(row: DbRow): L0SessionRecord {
   return {
     l0IndexId: String(row.l0_index_id),
@@ -53,6 +61,7 @@ function parseL1Row(row: DbRow): L1WindowRecord {
     facts: safeJsonParse(String(row.facts_json ?? "[]"), []),
     situationTimeInfo: String(row.situation_time_info ?? ""),
     projectTags: safeJsonParse(String(row.project_tags_json ?? "[]"), []),
+    projectDetails: safeJsonParse(String(row.project_details_json ?? "[]"), []),
     l0Source: safeJsonParse(String(row.l0_source_json ?? "[]"), []),
     createdAt: String(row.created_at),
   };
@@ -72,6 +81,7 @@ function parseL2TimeRow(row: DbRow): L2TimeIndexRecord {
 function parseL2ProjectRow(row: DbRow): L2ProjectIndexRecord {
   return {
     l2IndexId: String(row.l2_index_id),
+    projectKey: String(row.project_key ?? row.project_name),
     projectName: String(row.project_name),
     summary: String(row.summary),
     currentStatus: String(row.current_status),
@@ -173,6 +183,17 @@ export class MemoryRepository {
     stmt.run(record.recordId, JSON.stringify(record.facts), record.createdAt, record.updatedAt);
   }
 
+  private hasColumn(tableName: string, columnName: string): boolean {
+    const stmt = this.db.prepare(`PRAGMA table_info(${tableName})`);
+    const rows = stmt.all() as Array<{ name?: string }>;
+    return rows.some((row) => row.name === columnName);
+  }
+
+  private ensureColumn(tableName: string, columnName: string, definition: string): void {
+    if (this.hasColumn(tableName, columnName)) return;
+    this.db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition};`);
+  }
+
   migrate(): void {
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS l0_sessions (
@@ -192,6 +213,7 @@ export class MemoryRepository {
         facts_json TEXT NOT NULL,
         situation_time_info TEXT NOT NULL,
         project_tags_json TEXT NOT NULL,
+        project_details_json TEXT NOT NULL DEFAULT '[]',
         l0_source_json TEXT NOT NULL,
         created_at TEXT NOT NULL
       );
@@ -207,6 +229,7 @@ export class MemoryRepository {
 
       CREATE TABLE IF NOT EXISTS l2_project_indexes (
         l2_index_id TEXT PRIMARY KEY,
+        project_key TEXT NOT NULL,
         project_name TEXT NOT NULL UNIQUE,
         summary TEXT NOT NULL,
         current_status TEXT NOT NULL,
@@ -256,6 +279,9 @@ export class MemoryRepository {
       CREATE INDEX IF NOT EXISTS idx_l2_project_name ON l2_project_indexes(project_name);
       CREATE INDEX IF NOT EXISTS idx_facts_key ON global_facts(fact_key);
     `);
+    this.ensureColumn("l1_windows", "project_details_json", "TEXT NOT NULL DEFAULT '[]'");
+    this.ensureColumn("l2_project_indexes", "project_key", "TEXT NOT NULL DEFAULT ''");
+    this.db.exec("CREATE INDEX IF NOT EXISTS idx_l2_project_key ON l2_project_indexes(project_key);");
     this.ensureGlobalFactRecord();
   }
 
@@ -322,11 +348,17 @@ export class MemoryRepository {
     return rows.map(parseL0Row);
   }
 
+  listAllL0(): L0SessionRecord[] {
+    const stmt = this.db.prepare("SELECT * FROM l0_sessions ORDER BY timestamp ASC");
+    const rows = stmt.all() as DbRow[];
+    return rows.map(parseL0Row);
+  }
+
   insertL1Window(window: L1WindowRecord): void {
     const stmt = this.db.prepare(`
       INSERT OR IGNORE INTO l1_windows (
-        l1_index_id, time_period, summary, facts_json, situation_time_info, project_tags_json, l0_source_json, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        l1_index_id, time_period, summary, facts_json, situation_time_info, project_tags_json, project_details_json, l0_source_json, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     stmt.run(
       window.l1IndexId,
@@ -335,6 +367,7 @@ export class MemoryRepository {
       JSON.stringify(window.facts),
       window.situationTimeInfo,
       JSON.stringify(window.projectTags),
+      JSON.stringify(window.projectDetails),
       JSON.stringify(window.l0Source),
       window.createdAt,
     );
@@ -356,6 +389,7 @@ export class MemoryRepository {
         item.summary,
         item.situationTimeInfo,
         item.projectTags.join(" "),
+        item.projectDetails.map((project) => `${project.name} ${project.status} ${project.summary} ${project.latestProgress}`).join(" "),
         JSON.stringify(item.facts),
       ]),
     }));
@@ -421,36 +455,60 @@ export class MemoryRepository {
     return rows.map(parseL2TimeRow);
   }
 
-  getL2ProjectByName(projectName: string): L2ProjectIndexRecord | undefined {
+  getL2ProjectByKey(projectKey: string): L2ProjectIndexRecord | undefined {
+    const stmt = this.db.prepare("SELECT * FROM l2_project_indexes WHERE project_key = ?");
+    const row = stmt.get(projectKey) as DbRow | undefined;
+    return row ? parseL2ProjectRow(row) : undefined;
+  }
+
+  private getL2ProjectByName(projectName: string): L2ProjectIndexRecord | undefined {
     const stmt = this.db.prepare("SELECT * FROM l2_project_indexes WHERE project_name = ?");
     const row = stmt.get(projectName) as DbRow | undefined;
     return row ? parseL2ProjectRow(row) : undefined;
   }
 
   upsertL2ProjectIndex(index: L2ProjectIndexRecord): void {
-    const previous = this.getL2ProjectByName(index.projectName);
+    const previous = this.getL2ProjectByKey(index.projectKey) ?? this.getL2ProjectByName(index.projectName);
     const now = nowIso();
     const mergedSources = mergeSourceIds(previous?.l1Source ?? [], index.l1Source);
     const mergedSummary = mergeSummary(previous?.summary ?? "", index.summary);
-    const stmt = this.db.prepare(`
+    const currentStatus = index.currentStatus === "unknown" && previous?.currentStatus
+      ? previous.currentStatus
+      : index.currentStatus;
+    const latestProgress = index.latestProgress.trim() || previous?.latestProgress || "";
+    if (previous) {
+      const updateStmt = this.db.prepare(`
+        UPDATE l2_project_indexes
+        SET project_key = ?, project_name = ?, summary = ?, current_status = ?, latest_progress = ?, l1_source_json = ?, updated_at = ?
+        WHERE l2_index_id = ?
+      `);
+      updateStmt.run(
+        index.projectKey,
+        index.projectName,
+        mergedSummary,
+        currentStatus,
+        latestProgress,
+        JSON.stringify(mergedSources),
+        now,
+        previous.l2IndexId,
+      );
+      return;
+    }
+
+    const insertStmt = this.db.prepare(`
       INSERT INTO l2_project_indexes (
-        l2_index_id, project_name, summary, current_status, latest_progress, l1_source_json, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(project_name) DO UPDATE SET
-        summary = excluded.summary,
-        current_status = excluded.current_status,
-        latest_progress = excluded.latest_progress,
-        l1_source_json = excluded.l1_source_json,
-        updated_at = excluded.updated_at
+        l2_index_id, project_key, project_name, summary, current_status, latest_progress, l1_source_json, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
-    stmt.run(
-      previous?.l2IndexId ?? index.l2IndexId,
+    insertStmt.run(
+      index.l2IndexId,
+      index.projectKey,
       index.projectName,
       mergedSummary,
-      index.currentStatus,
-      index.latestProgress,
+      currentStatus,
+      latestProgress,
       JSON.stringify(mergedSources),
-      previous?.createdAt ?? index.createdAt,
+      index.createdAt,
       now,
     );
   }
@@ -460,7 +518,7 @@ export class MemoryRepository {
     return rows
       .map((item) => ({
         level: "l2_project" as const,
-        score: computeTokenScore(query, [item.projectName, item.summary, item.latestProgress]),
+        score: computeTokenScore(query, [item.projectKey, item.projectName, item.summary, item.latestProgress]),
         item,
       }))
       .filter((hit) => hit.score > 0.2)
@@ -582,6 +640,102 @@ export class MemoryRepository {
     const stmt = this.db.prepare("SELECT state_value FROM pipeline_state WHERE state_key = ?");
     const row = stmt.get(key) as { state_value?: string } | undefined;
     return row?.state_value;
+  }
+
+  resetDerivedIndexes(): void {
+    const current = this.getGlobalFactRecord();
+    this.db.exec("BEGIN");
+    try {
+      this.db.exec(`
+        DELETE FROM index_links;
+        DELETE FROM l2_project_indexes;
+        DELETE FROM l2_time_indexes;
+        DELETE FROM l1_windows;
+        DELETE FROM global_facts;
+        UPDATE l0_sessions SET indexed = 0;
+      `);
+      const clearLastIndexedStmt = this.db.prepare(`DELETE FROM pipeline_state WHERE state_key = ?`);
+      clearLastIndexedStmt.run("lastIndexedAt");
+      this.saveGlobalFactRecord({
+        recordId: GLOBAL_FACT_RECORD_ID,
+        facts: [],
+        createdAt: current.createdAt,
+        updatedAt: nowIso(),
+      });
+      this.db.exec("COMMIT");
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
+  repairL0Sessions(
+    cleaner: (record: L0SessionRecord) => MemoryMessage[],
+  ): RepairMemoryResult {
+    const rows = this.listAllL0();
+    const stats: RepairMemoryResult = {
+      inspected: rows.length,
+      updated: 0,
+      removed: 0,
+      rebuilt: false,
+    };
+    if (rows.length === 0) return stats;
+
+    const updateStmt = this.db.prepare(`
+      UPDATE l0_sessions
+      SET messages_json = ?, indexed = 0
+      WHERE l0_index_id = ?
+    `);
+    const deleteStmt = this.db.prepare(`DELETE FROM l0_sessions WHERE l0_index_id = ?`);
+    const clearLastIndexedStmt = this.db.prepare(`DELETE FROM pipeline_state WHERE state_key = ?`);
+    const resetFactsStmt = this.db.prepare(`
+      INSERT INTO global_fact_record (
+        record_id, facts_json, created_at, updated_at
+      ) VALUES (?, ?, ?, ?)
+      ON CONFLICT(record_id) DO UPDATE SET
+        facts_json = excluded.facts_json,
+        updated_at = excluded.updated_at
+    `);
+
+    this.db.exec("BEGIN");
+    try {
+      for (const row of rows) {
+        const cleaned = cleaner(row);
+        if (cleaned.length === 0) {
+          deleteStmt.run(row.l0IndexId);
+          stats.removed += 1;
+          continue;
+        }
+
+        const previousJson = JSON.stringify(row.messages);
+        const nextJson = JSON.stringify(cleaned);
+        if (previousJson !== nextJson) {
+          updateStmt.run(nextJson, row.l0IndexId);
+          stats.updated += 1;
+        }
+      }
+
+      if (stats.updated > 0 || stats.removed > 0) {
+        this.db.exec(`
+          DELETE FROM index_links;
+          DELETE FROM l2_project_indexes;
+          DELETE FROM l2_time_indexes;
+          DELETE FROM l1_windows;
+          DELETE FROM global_facts;
+          UPDATE l0_sessions SET indexed = 0;
+        `);
+        clearLastIndexedStmt.run("lastIndexedAt");
+        const now = nowIso();
+        resetFactsStmt.run(GLOBAL_FACT_RECORD_ID, "[]", this.getGlobalFactRecord().createdAt, now);
+        stats.rebuilt = true;
+      }
+
+      this.db.exec("COMMIT");
+      return stats;
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
   }
 
   clearAllMemoryData(): ClearMemoryResult {

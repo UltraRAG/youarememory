@@ -4,7 +4,7 @@ export * from "./utils/text.js";
 export * from "./skills/types.js";
 export * from "./skills/defaults.js";
 export * from "./skills/loader.js";
-export * from "./skills/extraction-skill.js";
+export * from "./skills/llm-extraction.js";
 export * from "./skills/intent-skill.js";
 export * from "./indexers/l1-extractor.js";
 export * from "./indexers/l2-builder.js";

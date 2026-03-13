@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   DEFAULT_CONTEXT_TEMPLATE,
@@ -25,8 +25,7 @@ function safeJsonParse<T>(raw: string): T | undefined {
 }
 
 function resolveDefaultSkillsDir(): string {
-  const currentDir = dirname(fileURLToPath(new URL(".", import.meta.url)));
-  return resolve(currentDir, "../../../skills");
+  return fileURLToPath(new URL("../../../skills/", import.meta.url));
 }
 
 function readJsonWithFallback<T>(
@@ -140,9 +139,7 @@ export interface LoadSkillsOptions {
   logger?: SkillLoaderLogger;
 }
 
-export function loadSkillsRuntime(options: LoadSkillsOptions = {}): SkillsRuntime {
-  const logger = options.logger ?? console;
-  const skillsDir = options.skillsDir || resolveDefaultSkillsDir();
+function tryLoadSkillsFromDir(skillsDir: string): SkillsRuntime {
   const errors: string[] = [];
 
   const intentPath = join(skillsDir, "intent-rules.json");
@@ -173,12 +170,37 @@ export function loadSkillsRuntime(options: LoadSkillsOptions = {}): SkillsRuntim
       errors,
     },
   };
+  return runtime;
+}
 
-  if (errors.length > 0) {
-    logger.warn?.(`[youarememory] skills loaded with fallback. errors=${errors.join(" | ")}`);
-  } else {
-    logger.info?.(`[youarememory] skills loaded from ${skillsDir}`);
+export function loadSkillsRuntime(options: LoadSkillsOptions = {}): SkillsRuntime {
+  const logger = options.logger ?? console;
+  const defaultSkillsDir = resolveDefaultSkillsDir();
+  const candidateDirs = options.skillsDir
+    ? [resolve(options.skillsDir), defaultSkillsDir]
+    : [defaultSkillsDir];
+
+  let runtime: SkillsRuntime | undefined;
+  for (const skillsDir of candidateDirs) {
+    const loaded = tryLoadSkillsFromDir(skillsDir);
+    if (loaded.metadata.source === "files") {
+      logger.info?.(`[youarememory] skills loaded from ${skillsDir}`);
+      return loaded;
+    }
+    runtime = loaded;
   }
 
-  return runtime;
+  const fallback = runtime ?? tryLoadSkillsFromDir(defaultSkillsDir);
+  if (options.skillsDir && fallback.metadata.skillsDir !== defaultSkillsDir) {
+    const builtIn = tryLoadSkillsFromDir(defaultSkillsDir);
+    if (builtIn.metadata.source === "files") {
+      logger.warn?.(
+        `[youarememory] custom skillsDir unavailable (${resolve(options.skillsDir)}); falling back to built-in skills at ${defaultSkillsDir}`,
+      );
+      return builtIn;
+    }
+  }
+
+  logger.warn?.(`[youarememory] skills loaded with fallback. errors=${fallback.metadata.errors.join(" | ")}`);
+  return fallback;
 }
