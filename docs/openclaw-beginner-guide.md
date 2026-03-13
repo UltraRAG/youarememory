@@ -1,144 +1,145 @@
-# OpenClaw 新手指南：每次改代码如何立刻生效
+# OpenClaw 插件开发教程（安装 + 开发 + 快速应用）
 
-这份文档只解决一件事：**你每次改完代码后，怎么最快在 OpenClaw 里看到效果**。
+这份文档覆盖完整流程：
 
-项目路径默认使用你的本机目录：
+1. 首次安装（从零可用）
+2. 日常代码开发
+3. 每次改完如何快速应用最新版本
+4. 常见报错的一键修复
+
+默认项目目录（按你的机器）：
 
 `/Users/meisen/Desktop/youarememory`
 
 ---
 
-## 0. 一次性准备（首次）
+## 0) 先复制这个环境变量（后续命令都可直接用）
 
 ```bash
-cd /Users/meisen/Desktop/youarememory
-npm install
-npm run build --workspace @youarememory/openclaw-memory-plugin
-openclaw plugins install --link ./packages/openclaw-memory-plugin
-openclaw gateway restart
-openclaw plugins info youarememory-openclaw
+export YAM_HOME="/Users/meisen/Desktop/youarememory"
 ```
-
-### 为什么推荐 `--link`
-
-- `--link` 会把 OpenClaw 插件直接链接到你的源码目录。
-- 之后你每次改代码，**不需要重复 install 插件**，只要 build + restart 即可。
 
 ---
 
-## 1. 先判断你现在是 `link` 还是 `copy`
+## 1) 首次安装（从零到可用）
+
+> 这段命令可反复执行，适合第一次安装或彻底重装。
 
 ```bash
-openclaw plugins info youarememory-openclaw
-```
-
-看输出里的 `Install` 字段：
-
-- `Install: link`：走下面的 **流程 A（最快）**
-- `Install: path`：走下面的 **流程 B（需要重装）**
-
----
-
-## 2. 每次改完代码：流程 A（推荐，link 模式）
-
-直接复制执行：
-
-```bash
-cd /Users/meisen/Desktop/youarememory && \
+export YAM_HOME="/Users/meisen/Desktop/youarememory" && \
+cd "$YAM_HOME" && \
+npm install && \
 npm run build --workspace @youarememory/openclaw-memory-plugin && \
-openclaw gateway restart && \
-open "http://127.0.0.1:39393/youarememory/"
-```
-
-> 这就是你日常最常用的一条命令。
-
----
-
-## 3. 每次改完代码：流程 B（path/copy 模式）
-
-如果你当前是 `Install: path`，每次都要重新安装插件。  
-注意：`openclaw plugins install` 在插件已存在时会报 `plugin already exists`，所以要先卸载再安装。
-
-```bash
-cd /Users/meisen/Desktop/youarememory && \
-npm run build --workspace @youarememory/openclaw-memory-plugin && \
-openclaw plugins uninstall youarememory-openclaw --force && \
-openclaw plugins install ./packages/openclaw-memory-plugin && \
-openclaw gateway restart && \
-open "http://127.0.0.1:39393/youarememory/"
-```
-
----
-
-## 4. 一次性切换到最快模式（path -> link）
-
-只做一次，之后就能使用“流程 A”：
-
-```bash
-cd /Users/meisen/Desktop/youarememory && \
-openclaw plugins uninstall youarememory-openclaw --force && \
+(openclaw plugins uninstall youarememory-openclaw --force || true) && \
+rm -rf "/Users/meisen/.openclaw/extensions/youarememory-openclaw" && \
 openclaw plugins install --link ./packages/openclaw-memory-plugin && \
+openclaw config set plugins.slots.memory '"youarememory-openclaw"' && \
+openclaw plugins enable youarememory-openclaw && \
 openclaw gateway restart && \
-openclaw plugins info youarememory-openclaw
+openclaw plugins info youarememory-openclaw && \
+open "http://127.0.0.1:39393/youarememory/?v=first-install"
 ```
 
----
+安装后你应该看到：
 
-## 5. 改不同文件时怎么做
-
-- 改 `packages/openclaw-memory-plugin/ui-source/*`（前端页面）：
-  - 先执行流程 A/B 里的 build 命令。
-  - 打开页面后如果样式没刷新，浏览器强刷（Mac：`Cmd + Shift + R`）。
-- 改 `packages/openclaw-memory-plugin/src/*`（插件逻辑）：
-  - 一定要 build + gateway restart（流程 A/B 已包含）。
+- `openclaw plugins info youarememory-openclaw` 里 `Status: loaded`
+- 页面可打开：`http://127.0.0.1:39393/youarememory/`
 
 ---
 
-## 6. 30 秒自检（看是否真的生效）
+## 2) 日常开发（推荐工作流）
+
+### 2.1 代码位置速览
+
+- 插件逻辑（TS）：`packages/openclaw-memory-plugin/src`
+- UI 页面（HTML/JS/CSS）：`packages/openclaw-memory-plugin/ui-source`
+- 构建产物：`packages/openclaw-memory-plugin/dist`
+
+### 2.2 日常改代码推荐流程
+
+1. 改代码（`src` 或 `ui-source`）
+2. 执行“快速应用命令”（下一节）
+3. 浏览器打开带版本参数的 URL（防缓存）
+
+---
+
+## 3) 每次改完后快速应用最新版本（最常用）
+
+> 这是你最常用的一条命令，直接复制即可。
+
+```bash
+export YAM_HOME="/Users/meisen/Desktop/youarememory" && \
+cd "$YAM_HOME" && \
+npm run build --workspace @youarememory/openclaw-memory-plugin && \
+openclaw config set plugins.slots.memory '"youarememory-openclaw"' && \
+openclaw plugins enable youarememory-openclaw && \
+openclaw gateway restart && \
+open "http://127.0.0.1:39393/youarememory/?v=$(date +%s)"
+```
+
+说明：
+
+- `npm run build --workspace ...` 会同时做 TS 构建 + 把 `ui-source` 复制到 `dist/ui`
+- 带 `?v=时间戳` 是为了强制浏览器拉取最新页面，避免你看到旧缓存
+
+---
+
+## 4) 开发时的两个实用模式
+
+### 模式 A：稳妥模式（推荐）
+
+- 每次改完就执行第 3 节的一条命令
+- 好处：最稳定，不会漏步骤
+
+### 模式 B：TS 监听模式（仅加速 TS 编译）
+
+```bash
+export YAM_HOME="/Users/meisen/Desktop/youarememory" && \
+cd "$YAM_HOME" && \
+npm run dev:plugin
+```
+
+注意：
+
+- 这个监听只负责 TS 编译
+- 如果你改的是 `ui-source/*`，仍然需要再执行一次 `npm run build --workspace @youarememory/openclaw-memory-plugin`（因为要复制 UI 资源）
+
+---
+
+## 5) 30 秒验证（确认真的生效）
 
 ```bash
 openclaw plugins info youarememory-openclaw
 openclaw gateway status
+python - <<'PY'
+import urllib.request
+html = urllib.request.urlopen("http://127.0.0.1:39393/youarememory/?v=check", timeout=5).read().decode("utf-8", "ignore")
+print("new-ui-marker:", "索引浏览" in html)
+PY
 ```
 
 检查点：
 
 - `Status: loaded`
-- `Source` 指向你期望的插件位置
-- UI 可访问：`http://127.0.0.1:39393/youarememory/`
-
-如果看到 `Error: memory slot set to "memory-core"`，说明记忆槽位被别的插件占用了，执行下面“故障恢复”。
+- `new-ui-marker: True`
 
 ---
 
-## 7. 常用补充命令
+## 6) 常见问题一键修复
+
+### 6.1 报错：`plugin already exists`
 
 ```bash
-# 仅构建插件（最快）
-npm run build --workspace @youarememory/openclaw-memory-plugin
-
-# 全项目类型检查
-npm run typecheck
-
-# 调试检索结果
-npm run debug:retrieve --workspace @youarememory/openclaw-memory-plugin -- --query "项目进展"
-```
-
----
-
-## 8. 故障恢复（直接复制）
-
-### 情况 A：出现 `plugin already exists`
-
-```bash
-cd /Users/meisen/Desktop/youarememory && \
-openclaw plugins uninstall youarememory-openclaw --force && \
+export YAM_HOME="/Users/meisen/Desktop/youarememory" && \
+cd "$YAM_HOME" && \
+(openclaw plugins uninstall youarememory-openclaw --force || true) && \
+rm -rf "/Users/meisen/.openclaw/extensions/youarememory-openclaw" && \
 openclaw plugins install --link ./packages/openclaw-memory-plugin && \
 openclaw gateway restart && \
 openclaw plugins info youarememory-openclaw
 ```
 
-### 情况 B：出现 `Error: memory slot set to "memory-core"`
+### 6.2 报错：`Error: memory slot set to "memory-core"`
 
 ```bash
 openclaw config set plugins.slots.memory '"youarememory-openclaw"' && \
@@ -147,6 +148,29 @@ openclaw gateway restart && \
 openclaw plugins info youarememory-openclaw
 ```
 
+### 6.3 页面还是旧版（明明你改了 UI）
+
+```bash
+export YAM_HOME="/Users/meisen/Desktop/youarememory" && \
+cd "$YAM_HOME" && \
+npm run build --workspace @youarememory/openclaw-memory-plugin && \
+openclaw gateway restart && \
+open "http://127.0.0.1:39393/youarememory/?v=$(date +%s)"
+```
+
+如果还不对，再手动强刷浏览器（Mac）：`Cmd + Shift + R`。
+
 ---
 
-如果你想再省一步，我可以下一步帮你加一个根目录脚本（例如 `npm run apply:openclaw`），以后你只敲一条 npm 命令就能完成 build + restart + 打开页面。  
+## 7) 复制即用命令清单（速查）
+
+```bash
+# A. 从零安装
+export YAM_HOME="/Users/meisen/Desktop/youarememory" && cd "$YAM_HOME" && npm install && npm run build --workspace @youarememory/openclaw-memory-plugin && (openclaw plugins uninstall youarememory-openclaw --force || true) && rm -rf "/Users/meisen/.openclaw/extensions/youarememory-openclaw" && openclaw plugins install --link ./packages/openclaw-memory-plugin && openclaw config set plugins.slots.memory '"youarememory-openclaw"' && openclaw plugins enable youarememory-openclaw && openclaw gateway restart && openclaw plugins info youarememory-openclaw && open "http://127.0.0.1:39393/youarememory/?v=first-install"
+
+# B. 每次改完快速应用（日常）
+export YAM_HOME="/Users/meisen/Desktop/youarememory" && cd "$YAM_HOME" && npm run build --workspace @youarememory/openclaw-memory-plugin && openclaw config set plugins.slots.memory '"youarememory-openclaw"' && openclaw plugins enable youarememory-openclaw && openclaw gateway restart && open "http://127.0.0.1:39393/youarememory/?v=$(date +%s)"
+
+# C. 查看当前插件状态
+openclaw plugins info youarememory-openclaw
+```
