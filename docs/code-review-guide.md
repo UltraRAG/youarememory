@@ -40,7 +40,7 @@
 
 重点关注：
 
-- 看板是否仍是三栏 ChatGPT 风格工作台
+- 看板是否已切到“主工作区 + 右侧按需抽屉”的信息结构
 - Facts 视图是否展示单例全局画像，而不是旧版 facts 行列表
 
 ### Agent Skills
@@ -72,5 +72,5 @@
 ```bash
 npm run build
 npm run typecheck
-npm run debug:retrieve --workspace @youarememory/openclaw-memory-plugin -- --query "项目进展"
+npm run debug:retrieve --workspace @youarememory/youarememory-openclaw -- --query "项目进展"
 ```

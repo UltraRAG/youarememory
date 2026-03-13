@@ -2,13 +2,15 @@
   "name": "youarememory",
   "version": "0.1.0",
   "private": true,
-  "description": "OpenClaw multi-level memory plugin with local-first storage and ChatGPT-style console UI.",
+  "description": "OpenClaw multi-level memory plugin with local-first storage and a minimal dashboard UI.",
   "workspaces": [
     "packages/*"
   ],
   "scripts": {
     "build": "npm run build --workspaces",
-    "dev:plugin": "npm run dev --workspace @youarememory/openclaw-memory-plugin",
+    "dev:plugin": "npm run dev --workspace @youarememory/youarememory-openclaw",
+    "reload:memory-plugin": "node ./scripts/reload-memory-plugin.mjs",
+    "relink:memory-plugin": "node ./scripts/relink-memory-plugin.mjs",
     "typecheck": "npm run typecheck --workspaces",
     "lint": "npm run lint --workspaces",
     "test": "npm run test --workspaces"

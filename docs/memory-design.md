@@ -23,7 +23,7 @@ YouAreMemory 通过多级索引升级 OpenClaw 的记忆机制，目标是保持
 - `TypeScript`
 - `skills` 作为规则与编排层
 - 独立开源项目
-- UI 采用 ChatGPT 风格三栏看板
+- UI 采用极简数据面板风格看板
 
 ---
 

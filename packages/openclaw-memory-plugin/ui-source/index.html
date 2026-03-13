@@ -3,213 +3,190 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>YouAreMemory Console</title>
+    <title>YouAreMemory</title>
     <link rel="stylesheet" href="./app.css" />
   </head>
   <body>
-    <div class="app-frame">
-      <div id="sidebarScrim" class="sidebar-scrim"></div>
-      <div class="shell">
-        <aside class="sidebar" id="sidebarPanel">
-          <div class="sidebar-topbar">
-            <div class="brand-block">
-              <div class="brand-mark">YM</div>
-              <div>
-                <p class="eyebrow">Memory Workspace</p>
-                <h1>YouAreMemory</h1>
-                <p class="brand-copy">OpenClaw 多级记忆看板，按 L0、L1、L2 与单例全局画像统一浏览。</p>
-              </div>
-            </div>
-            <button id="sidebarCloseBtn" class="sidebar-close" type="button">关闭</button>
-          </div>
+    <div class="app-shell">
+      <div id="appScrim" class="app-scrim"></div>
 
-          <section class="sidebar-section">
-            <div class="section-head">
-              <div class="section-label">视图</div>
-              <div class="section-hint">按层级浏览</div>
-            </div>
-            <nav id="levelTabs" class="nav-list">
-              <button class="nav-item active" data-level="l1">
-                <span class="nav-copy">
-                  <strong>L1 窗口</strong>
-                  <span>结构化窗口与摘要</span>
-                </span>
-                <span class="nav-count" data-count-for="l1">0</span>
-              </button>
-              <button class="nav-item" data-level="l2_project">
-                <span class="nav-copy">
-                  <strong>L2 项目</strong>
-                  <span>项目画像与最新进展</span>
-                </span>
-                <span class="nav-count" data-count-for="l2_project">0</span>
-              </button>
-              <button class="nav-item" data-level="l2_time">
-                <span class="nav-copy">
-                  <strong>L2 时间</strong>
-                  <span>按日期聚合的时间索引</span>
-                </span>
-                <span class="nav-count" data-count-for="l2_time">0</span>
-              </button>
-              <button class="nav-item" data-level="l0">
-                <span class="nav-copy">
-                  <strong>L0 会话</strong>
-                  <span>原始完整 session 日志</span>
-                </span>
-                <span class="nav-count" data-count-for="l0">0</span>
-              </button>
-              <button class="nav-item" data-level="facts">
-                <span class="nav-copy">
-                  <strong>全局画像</strong>
-                  <span>单例动态事实记录</span>
-                </span>
-                <span class="nav-count" data-count-for="facts">0</span>
-              </button>
-            </nav>
-          </section>
-
-          <section class="sidebar-section">
-            <div class="section-head">
-              <div class="section-label">概览</div>
-              <div class="section-hint">最新快照</div>
-            </div>
-            <div id="overviewCards" class="overview-grid"></div>
-          </section>
-
-          <section class="sidebar-section">
-            <div class="section-head">
-              <div class="section-label">索引设置</div>
-              <div class="section-hint">控制何时构建 L1/L2</div>
-            </div>
-            <div class="settings-grid">
-              <label class="settings-field">
-                <span>自动构建间隔（分钟）</span>
-                <input id="autoIndexIntervalInput" type="number" min="0" step="1" placeholder="60" />
-              </label>
-              <label class="settings-field">
-                <span>L1 切窗方式</span>
-                <select id="l1WindowModeSelect">
-                  <option value="time">按时间</option>
-                  <option value="count">按条数</option>
-                </select>
-              </label>
-              <label class="settings-field">
-                <span id="l1WindowValueLabel">L1 窗口时长（分钟）</span>
-                <input id="l1WindowValueInput" type="number" min="0" step="1" placeholder="120" />
-              </label>
-              <label class="settings-field">
-                <span>L2 时间粒度</span>
-                <select id="l2TimeGranularitySelect">
-                  <option value="day">每天</option>
-                  <option value="half_day">每半天</option>
-                  <option value="hour">每小时</option>
-                </select>
-              </label>
-              <button id="saveSettingsBtn" class="sidebar-btn" type="button">保存设置</button>
-            </div>
-          </section>
-
-          <section class="sidebar-section notice">
-            <div class="section-head">
-              <div class="section-label">升级说明</div>
-              <div class="section-hint">事实存储已切换</div>
-            </div>
-            <p>动态事实已切换为单例 `global_fact_record`。旧版多行 facts 不会自动迁移，如需干净重建请执行“清空并重建”。</p>
-          </section>
-
-          <section class="sidebar-section sidebar-footer">
-            <div class="section-head">
-              <div class="section-label">操作</div>
-              <div class="section-hint">影响本地记忆</div>
-            </div>
-            <div class="sidebar-actions">
-              <button id="refreshBtn" class="sidebar-btn">刷新数据</button>
-              <button id="buildNowBtn" class="sidebar-btn">立即构建</button>
-              <button id="clearMemoryBtn" class="sidebar-btn danger">清空并重建</button>
-            </div>
-          </section>
-        </aside>
-
-        <main class="main-panel">
-          <header class="main-header">
-            <div class="header-leading">
-              <button id="sidebarToggleBtn" class="sidebar-toggle" type="button">菜单</button>
-              <div>
-                <p class="eyebrow">Recall + Inspect</p>
-                <h2>OpenClaw 记忆工作台</h2>
-                <p class="header-copy">参考 UltraRAG 的轻量前端布局，把检索链、索引流和详情检查器放进同一个工作区。</p>
-              </div>
-            </div>
-            <div class="header-actions">
-              <span id="statusPill" class="status-pill">等待索引</span>
-              <button id="detailToggleBtn" class="detail-toggle" type="button">查看详情</button>
-            </div>
-          </header>
-
-          <section class="composer-card">
-            <div class="panel-heading">
-              <div>
-                <p class="eyebrow">Memory Recall</p>
-                <h3>测试当前检索链路</h3>
-                <p class="panel-copy">输入问题后，系统会按 `search_l2 -> search_l1 -> search_l0` 展示推理轨迹。</p>
-              </div>
-            </div>
-            <div class="composer-input">
-              <textarea
-                id="queryInput"
-                rows="3"
-                placeholder="输入问题，例如：这个项目最近进展到哪一步了？"
-              ></textarea>
-              <button id="retrieveBtn" class="primary-btn" type="button">开始检索</button>
-            </div>
-            <p class="composer-note">`Enter` 发送，`Shift + Enter` 换行。命中的索引会自动补充到下方记录流里。</p>
-          </section>
-
-          <section class="retrieval-card">
-            <div class="panel-heading">
-              <div>
-                <p class="eyebrow">Retrieval Trace</p>
-                <h3>推理轨迹</h3>
-              </div>
-              <div id="retrieveSummary" class="summary-chip">尚未检索</div>
-            </div>
-            <div id="retrieveTimeline" class="retrieval-timeline"></div>
-            <details class="context-drawer">
-              <summary>查看注入模型的上下文原文</summary>
-              <pre id="retrieveResult"></pre>
-            </details>
-          </section>
-
-          <section class="browser-card">
-            <div class="panel-heading browser-heading">
-              <div>
-                <p class="eyebrow">Live Records</p>
-                <h3 id="browserTitle">L1 窗口</h3>
-                <p id="listHint" class="panel-copy">浏览当前层级的最新记录</p>
-              </div>
-              <div class="browser-search">
-                <input id="listQueryInput" type="text" placeholder="在当前层级过滤关键词..." />
-                <button id="listSearchBtn" class="ghost-btn" type="button">过滤</button>
-              </div>
-            </div>
-            <ul id="entryList" class="entry-stream"></ul>
-          </section>
-        </main>
-
-        <aside class="detail-panel" id="detailPanel">
-          <div class="detail-header">
+      <aside class="nav-rail" id="navRail">
+        <div class="nav-header">
+          <div class="nav-brand">
+            <div class="brand-mark">YM</div>
             <div>
-              <p class="eyebrow">Record Inspector</p>
-              <h3 id="detailTitle">请选择条目</h3>
+              <p class="overline">Memory</p>
+              <h1>YouAreMemory</h1>
             </div>
-            <button id="detailCloseBtn" class="detail-close" type="button">关闭</button>
           </div>
-          <div id="detailMeta" class="detail-meta"></div>
-          <div id="detailBody" class="detail-body"></div>
-        </aside>
-      </div>
+          <button id="navCloseBtn" class="icon-btn nav-close" type="button">关闭</button>
+        </div>
+
+        <nav id="levelTabs" class="nav-list">
+          <button class="nav-item active" data-level="l1" type="button">
+            <span class="nav-label">L1 窗口</span>
+            <span class="nav-count" data-count-for="l1">0</span>
+          </button>
+          <button class="nav-item" data-level="l2_project" type="button">
+            <span class="nav-label">L2 项目</span>
+            <span class="nav-count" data-count-for="l2_project">0</span>
+          </button>
+          <button class="nav-item" data-level="l2_time" type="button">
+            <span class="nav-label">L2 时间</span>
+            <span class="nav-count" data-count-for="l2_time">0</span>
+          </button>
+          <button class="nav-item" data-level="l0" type="button">
+            <span class="nav-label">L0 会话</span>
+            <span class="nav-count" data-count-for="l0">0</span>
+          </button>
+          <button class="nav-item" data-level="facts" type="button">
+            <span class="nav-label">全局画像</span>
+            <span class="nav-count" data-count-for="facts">0</span>
+          </button>
+        </nav>
+
+        <div class="nav-footer">
+          <span class="nav-footer-label">最近索引</span>
+          <strong id="navLastIndexed">等待索引</strong>
+        </div>
+      </aside>
+
+      <main class="workspace">
+        <header class="topbar">
+          <div class="topbar-leading">
+            <button id="navToggleBtn" class="icon-btn nav-toggle" type="button">菜单</button>
+            <div>
+              <p class="overline">Dashboard</p>
+              <h2>记忆看板</h2>
+              <p id="activityText" class="activity-text">等待操作</p>
+            </div>
+          </div>
+
+          <div class="toolbar">
+            <span id="statusPill" class="status-pill">等待索引</span>
+            <button id="refreshBtn" class="tool-btn" type="button">刷新</button>
+            <button id="buildNowBtn" class="tool-btn primary" type="button">立即构建</button>
+            <button id="settingsToggleBtn" class="tool-btn" type="button">设置</button>
+            <button id="retrieveToggleBtn" class="tool-btn" type="button">检索调试</button>
+            <button id="detailToggleBtn" class="tool-btn" type="button">详情</button>
+          </div>
+        </header>
+
+        <section id="overviewCards" class="overview-strip"></section>
+
+        <section class="stream-panel">
+          <div class="panel-head">
+            <div>
+              <h3 id="browserTitle">L1 窗口</h3>
+              <p id="browserMeta" class="panel-meta">0 条</p>
+            </div>
+
+            <div class="search-row">
+              <input
+                id="listQueryInput"
+                type="text"
+                autocomplete="off"
+                placeholder="搜索当前层级"
+              />
+              <button id="listSearchBtn" class="tool-btn" type="button">搜索</button>
+            </div>
+          </div>
+
+          <ul id="entryList" class="entry-stream"></ul>
+        </section>
+      </main>
     </div>
 
-    <div id="mobileScrim" class="mobile-scrim"></div>
+    <aside class="side-drawer detail-drawer" id="detailPanel">
+      <div class="drawer-header">
+        <div>
+          <p class="overline">Detail</p>
+          <h3 id="detailTitle">记录详情</h3>
+        </div>
+        <button id="detailCloseBtn" class="icon-btn" type="button">关闭</button>
+      </div>
+      <div id="detailMeta" class="detail-meta"></div>
+      <div id="detailBody" class="detail-body"></div>
+    </aside>
+
+    <aside class="side-drawer settings-drawer" id="settingsPanel">
+      <div class="drawer-header">
+        <div>
+          <p class="overline">Settings</p>
+          <h3>索引设置</h3>
+        </div>
+        <button id="settingsCloseBtn" class="icon-btn" type="button">关闭</button>
+      </div>
+
+      <div class="drawer-section">
+        <label class="settings-field">
+          <span>自动构建间隔（分钟）</span>
+          <input id="autoIndexIntervalInput" type="number" min="0" step="1" placeholder="60" />
+        </label>
+
+        <label class="settings-field">
+          <span>L1 切窗方式</span>
+          <select id="l1WindowModeSelect">
+            <option value="time">按时间</option>
+            <option value="count">按条数</option>
+          </select>
+        </label>
+
+        <label class="settings-field">
+          <span id="l1WindowValueLabel">窗口时长（分钟）</span>
+          <input id="l1WindowValueInput" type="number" min="0" step="1" placeholder="120" />
+        </label>
+
+        <label class="settings-field">
+          <span>L2 时间粒度</span>
+          <select id="l2TimeGranularitySelect">
+            <option value="day">每天</option>
+            <option value="half_day">每半天</option>
+            <option value="hour">每小时</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="drawer-actions">
+        <button id="saveSettingsBtn" class="tool-btn primary wide" type="button">保存设置</button>
+      </div>
+
+      <div class="drawer-section drawer-danger">
+        <p>清空后会按当前配置重新建立索引。</p>
+        <button id="clearMemoryBtn" class="tool-btn danger wide" type="button">清空并重建</button>
+      </div>
+    </aside>
+
+    <aside class="side-drawer retrieve-drawer" id="retrievePanel">
+      <div class="drawer-header">
+        <div>
+          <p class="overline">Recall</p>
+          <h3>检索调试</h3>
+        </div>
+        <button id="retrieveCloseBtn" class="icon-btn" type="button">关闭</button>
+      </div>
+
+      <div class="drawer-section">
+        <div class="retrieve-input">
+          <textarea
+            id="queryInput"
+            rows="4"
+            placeholder="输入问题，例如：这个项目最近进展到哪一步了？"
+          ></textarea>
+          <button id="retrieveBtn" class="tool-btn primary wide" type="button">开始检索</button>
+        </div>
+      </div>
+
+      <div class="drawer-section">
+        <div id="retrieveSummary" class="summary-chip">尚未检索</div>
+        <div id="retrieveTimeline" class="retrieval-timeline"></div>
+        <details class="context-block">
+          <summary>上下文</summary>
+          <pre id="retrieveResult"></pre>
+        </details>
+      </div>
+    </aside>
+
     <script type="module" src="./app.js"></script>
   </body>
 </html>

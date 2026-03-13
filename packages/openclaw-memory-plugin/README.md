@@ -1,6 +1,6 @@
 # YouAreMemory OpenClaw 插件
 
-`@youarememory/openclaw-memory-plugin` 是一个 `kind: "memory"` 的 OpenClaw 插件，负责自动采集对话、构建多级索引、注入记忆上下文，并提供本地只读控制台。
+`@youarememory/youarememory-openclaw` 是一个 `kind: "memory"` 的 OpenClaw 插件，负责自动采集对话、构建多级索引、注入记忆上下文，并提供本地只读控制台。
 
 ## 能力概览
 
@@ -12,7 +12,7 @@
   - `memory_store`
   - `memory_search`
   - `search_l2` / `search_l1` / `search_l0`
-- 提供 ChatGPT 风格三栏看板
+- 提供极简数据面板风格看板
 
 ## 安装
 
@@ -20,8 +20,7 @@
 
 ```bash
 npm install
-npm run build
-openclaw plugins install ./packages/openclaw-memory-plugin
+npm run relink:memory-plugin
 ```
 
 ## OpenClaw 配置
@@ -92,12 +91,12 @@ openclaw plugins install ./packages/openclaw-memory-plugin
 
 看板包含：
 
-- 左侧：导航、总览指标、索引设置、手动构建与重建操作
-- 中间：检索输入、推理轨迹、当前层级记录流
-- 右侧：所选记录详情与关联来源
+- 左侧：层级导航
+- 中间：状态、概览指标、记录流
+- 右侧抽屉：设置、检索调试、记录详情
 
 ## 调试命令
 
 ```bash
-npm run debug:retrieve --workspace @youarememory/openclaw-memory-plugin -- --query "项目进展"
+npm run debug:retrieve --workspace @youarememory/youarememory-openclaw -- --query "项目进展"
 ```

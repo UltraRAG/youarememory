@@ -9,7 +9,7 @@
 - `L2` 二级索引（时间维、项目维）
 - `GlobalFactRecord` 单例全局画像，持续维护动态事实
 - 检索链路：`search_l2 -> search_l1 -> search_l0`
-- 本地 ChatGPT 风格三栏看板
+- 本地极简数据面板风格看板
 
 ## 为什么不是 skills-only
 
@@ -28,8 +28,7 @@
 
 ```bash
 npm install
-npm run build
-openclaw plugins install ./packages/openclaw-memory-plugin
+npm run relink:memory-plugin
 ```
 
 ## 目录结构
@@ -51,10 +50,11 @@ youarememory/
 npm run build
 npm run typecheck
 npm run dev:plugin
+npm run reload:memory-plugin
 ```
 
 调试检索：
 
 ```bash
-npm run debug:retrieve --workspace @youarememory/openclaw-memory-plugin -- --query "项目进展"
+npm run debug:retrieve --workspace @youarememory/youarememory-openclaw -- --query "项目进展"
 ```
