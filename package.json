@@ -9,8 +9,6 @@
   "scripts": {
     "build": "npm run build --workspaces",
     "dev:plugin": "npm run dev --workspace @youarememory/openclaw-memory-plugin",
-    "parity:check": "npm run build --workspace @youarememory/openclaw-memory-plugin && python3 python-implementation/scripts/parity_check.py --query \"项目进展\" --db ~/.openclaw/youarememory/memory.sqlite --skills-dir ./packages/openclaw-memory-plugin/skills",
-    "parity:check:strict": "npm run parity:check -- --strict",
     "typecheck": "npm run typecheck --workspaces",
     "lint": "npm run lint --workspaces",
     "test": "npm run test --workspaces"
