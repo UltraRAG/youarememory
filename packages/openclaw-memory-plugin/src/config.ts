@@ -46,7 +46,7 @@ export function buildPluginConfig(raw: unknown): PluginRuntimeConfig {
     : join(dataDir, "memory.sqlite");
   const skillsDir = typeof cfg.skillsDir === "string" && cfg.skillsDir.trim() ? cfg.skillsDir : undefined;
 
-  const captureStrategy = cfg.captureStrategy === "full_session" ? "full_session" : "last_turn";
+  const captureStrategy = cfg.captureStrategy === "last_turn" ? "last_turn" : "full_session";
   const runtime: PluginRuntimeConfig = {
     dataDir,
     dbPath,

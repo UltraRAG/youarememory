@@ -1,4 +1,4 @@
-# YouAreMemory 代码审查指南（纯插件版）
+# YouAreMemory 代码审查指南（插件优先版）
 
 本指南面向 OpenClaw 插件实现。
 
@@ -24,6 +24,12 @@
 - `packages/openclaw-memory-plugin/src/core/retrieval/reasoning-loop.ts`
 - `packages/openclaw-memory-plugin/src/core/storage/sqlite.ts`
 
+重点关注：
+
+- `L0` 默认是否按 `full_session` 采集
+- `GlobalFactRecord` 是否仍保持单例模型
+- `MemoryUiSnapshot` 是否直接返回 `recentL1Windows + globalFact`
+
 ### 工具与 UI
 
 - `packages/openclaw-memory-plugin/src/tools.ts`
@@ -31,6 +37,11 @@
 - `packages/openclaw-memory-plugin/ui-source/index.html`
 - `packages/openclaw-memory-plugin/ui-source/app.js`
 - `packages/openclaw-memory-plugin/ui-source/app.css`
+
+重点关注：
+
+- 看板是否仍是三栏 ChatGPT 风格工作台
+- Facts 视图是否展示单例全局画像，而不是旧版 facts 行列表
 
 ### Agent Skills
 
@@ -44,6 +55,7 @@
 - `packages/openclaw-memory-plugin/skills/extraction-rules.json`
 - `packages/openclaw-memory-plugin/skills/project-status-rules.json`
 - `packages/openclaw-memory-plugin/skills/context-template.md`
+- `docs/memory-design.md`
 
 ## 3. 推荐审查顺序
 

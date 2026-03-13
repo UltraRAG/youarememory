@@ -4,6 +4,7 @@ import { DatabaseSync } from "node:sqlite";
 import type {
   DashboardOverview,
   FactCandidate,
+  GlobalFactItem,
   GlobalFactRecord,
   L0SessionRecord,
   L1WindowRecord,
@@ -12,10 +13,25 @@ import type {
   L2TimeIndexRecord,
   MemoryUiSnapshot,
 } from "../types.js";
-import { buildFactId, buildLinkId, nowIso } from "../utils/id.js";
+import { buildLinkId, nowIso } from "../utils/id.js";
 import { safeJsonParse, scoreMatch } from "../utils/text.js";
 
 type DbRow = Record<string, unknown>;
+
+const GLOBAL_FACT_RECORD_ID = "global_fact_record" as const;
+
+export interface ClearMemoryResult {
+  cleared: {
+    l0: number;
+    l1: number;
+    l2Time: number;
+    l2Project: number;
+    facts: number;
+    links: number;
+    pipelineState: number;
+  };
+  clearedAt: string;
+}
 
 function parseL0Row(row: DbRow): L0SessionRecord {
   return {
@@ -66,20 +82,17 @@ function parseL2ProjectRow(row: DbRow): L2ProjectIndexRecord {
   };
 }
 
-function parseFactRow(row: DbRow): GlobalFactRecord {
-  const sourceL1Id = row.source_l1_id ? String(row.source_l1_id) : undefined;
-  const record: GlobalFactRecord = {
-    factId: String(row.fact_id),
-    factKey: String(row.fact_key),
-    factValue: String(row.fact_value),
-    confidence: Number(row.confidence ?? 0),
+function sortFactsByUpdatedAt(items: GlobalFactItem[]): GlobalFactItem[] {
+  return [...items].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+function parseGlobalFactRecordRow(row: DbRow): GlobalFactRecord {
+  return {
+    recordId: GLOBAL_FACT_RECORD_ID,
+    facts: sortFactsByUpdatedAt(safeJsonParse(String(row.facts_json ?? "[]"), [])),
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
   };
-  if (sourceL1Id) {
-    record.sourceL1Id = sourceL1Id;
-  }
-  return record;
 }
 
 function mergeSourceIds(existing: string[], incoming: string[]): string[] {
@@ -136,6 +149,30 @@ export class MemoryRepository {
     this.db.close();
   }
 
+  private ensureGlobalFactRecord(): void {
+    const now = nowIso();
+    const stmt = this.db.prepare(`
+      INSERT INTO global_fact_record (
+        record_id, facts_json, created_at, updated_at
+      ) VALUES (?, ?, ?, ?)
+      ON CONFLICT(record_id) DO NOTHING
+    `);
+    stmt.run(GLOBAL_FACT_RECORD_ID, "[]", now, now);
+  }
+
+  private saveGlobalFactRecord(record: GlobalFactRecord): void {
+    const stmt = this.db.prepare(`
+      INSERT INTO global_fact_record (
+        record_id, facts_json, created_at, updated_at
+      ) VALUES (?, ?, ?, ?)
+      ON CONFLICT(record_id) DO UPDATE SET
+        facts_json = excluded.facts_json,
+        created_at = excluded.created_at,
+        updated_at = excluded.updated_at
+    `);
+    stmt.run(record.recordId, JSON.stringify(record.facts), record.createdAt, record.updatedAt);
+  }
+
   migrate(): void {
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS l0_sessions (
@@ -179,6 +216,13 @@ export class MemoryRepository {
         updated_at TEXT NOT NULL
       );
 
+      CREATE TABLE IF NOT EXISTS global_fact_record (
+        record_id TEXT PRIMARY KEY,
+        facts_json TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
       CREATE TABLE IF NOT EXISTS global_facts (
         fact_id TEXT PRIMARY KEY,
         fact_key TEXT NOT NULL UNIQUE,
@@ -212,6 +256,7 @@ export class MemoryRepository {
       CREATE INDEX IF NOT EXISTS idx_l2_project_name ON l2_project_indexes(project_name);
       CREATE INDEX IF NOT EXISTS idx_facts_key ON global_facts(fact_key);
     `);
+    this.ensureGlobalFactRecord();
   }
 
   insertL0Session(record: Omit<L0SessionRecord, "createdAt"> & { createdAt?: string }): void {
@@ -429,36 +474,60 @@ export class MemoryRepository {
     return rows.map(parseL2ProjectRow);
   }
 
+  getGlobalFactRecord(): GlobalFactRecord {
+    this.ensureGlobalFactRecord();
+    const stmt = this.db.prepare("SELECT * FROM global_fact_record WHERE record_id = ?");
+    const row = stmt.get(GLOBAL_FACT_RECORD_ID) as DbRow | undefined;
+    if (row) {
+      return parseGlobalFactRecordRow(row);
+    }
+    const now = nowIso();
+    return {
+      recordId: GLOBAL_FACT_RECORD_ID,
+      facts: [],
+      createdAt: now,
+      updatedAt: now,
+    };
+  }
+
   upsertGlobalFacts(facts: FactCandidate[], sourceL1Id?: string): void {
     if (facts.length === 0) return;
-    const stmt = this.db.prepare(`
-      INSERT INTO global_facts (
-        fact_id, fact_key, fact_value, confidence, source_l1_id, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(fact_key) DO UPDATE SET
-        fact_value = excluded.fact_value,
-        confidence = MAX(excluded.confidence, confidence),
-        source_l1_id = excluded.source_l1_id,
-        updated_at = excluded.updated_at
-    `);
+    const current = this.getGlobalFactRecord();
+    const byKey = new Map<string, GlobalFactItem>();
+    for (const item of current.facts) {
+      byKey.set(item.factKey, item);
+    }
+
     const now = nowIso();
     for (const fact of facts) {
-      const factId = buildFactId(fact.factKey);
-      stmt.run(factId, fact.factKey, fact.factValue, fact.confidence, sourceL1Id ?? null, now, now);
+      const existing = byKey.get(fact.factKey);
+      byKey.set(fact.factKey, {
+        factKey: fact.factKey,
+        factValue: fact.factValue,
+        confidence: existing ? Math.max(existing.confidence, fact.confidence) : fact.confidence,
+        sourceL1Ids: mergeSourceIds(existing?.sourceL1Ids ?? [], sourceL1Id ? [sourceL1Id] : []),
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now,
+      });
     }
+
+    this.saveGlobalFactRecord({
+      recordId: GLOBAL_FACT_RECORD_ID,
+      facts: sortFactsByUpdatedAt(Array.from(byKey.values())),
+      createdAt: current.createdAt,
+      updatedAt: now,
+    });
   }
 
-  listGlobalFacts(limit = 50): GlobalFactRecord[] {
-    const stmt = this.db.prepare("SELECT * FROM global_facts ORDER BY updated_at DESC LIMIT ?");
-    const rows = stmt.all(limit) as DbRow[];
-    return rows.map(parseFactRow);
+  listGlobalFacts(limit = 50): GlobalFactItem[] {
+    return sortFactsByUpdatedAt(this.getGlobalFactRecord().facts).slice(0, limit);
   }
 
-  searchFacts(query: string, limit = 20): GlobalFactRecord[] {
+  searchFacts(query: string, limit = 20): GlobalFactItem[] {
     const rows = this.listGlobalFacts(Math.max(60, limit * 8));
     const scored = rows.map((item) => ({
       item,
-      score: computeTokenScore(query, [item.factKey, item.factValue]),
+      score: computeTokenScore(query, [item.factKey, item.factValue, item.sourceL1Ids.join(" ")]),
     }));
     return scored
       .filter((hit) => hit.score > 0.2)
@@ -489,7 +558,7 @@ export class MemoryRepository {
       totalL1: count("l1_windows"),
       totalL2Time: count("l2_time_indexes"),
       totalL2Project: count("l2_project_indexes"),
-      totalFacts: count("global_facts"),
+      totalFacts: this.getGlobalFactRecord().facts.length,
     };
     if (state?.state_value) {
       overview.lastIndexedAt = state.state_value;
@@ -515,13 +584,52 @@ export class MemoryRepository {
     return row?.state_value;
   }
 
+  clearAllMemoryData(): ClearMemoryResult {
+    const runDelete = (table: string): number => {
+      const stmt = this.db.prepare(`DELETE FROM ${table}`);
+      const result = stmt.run() as { changes?: number };
+      return Number(result.changes ?? 0);
+    };
+
+    const currentFacts = this.getGlobalFactRecord().facts.length;
+    this.db.exec("BEGIN");
+    try {
+      const cleared = {
+        links: runDelete("index_links"),
+        l2Project: runDelete("l2_project_indexes"),
+        l2Time: runDelete("l2_time_indexes"),
+        l1: runDelete("l1_windows"),
+        l0: runDelete("l0_sessions"),
+        facts: currentFacts,
+        pipelineState: runDelete("pipeline_state"),
+      };
+      runDelete("global_facts");
+      const resetAt = nowIso();
+      this.saveGlobalFactRecord({
+        recordId: GLOBAL_FACT_RECORD_ID,
+        facts: [],
+        createdAt: resetAt,
+        updatedAt: resetAt,
+      });
+      this.db.exec("COMMIT");
+      return {
+        cleared,
+        clearedAt: resetAt,
+      };
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
   getUiSnapshot(limit = 20): MemoryUiSnapshot {
     return {
       overview: this.getOverview(),
       recentTimeIndexes: this.listRecentL2Time(limit),
       recentProjectIndexes: this.listRecentL2Projects(limit),
-      recentFacts: this.listGlobalFacts(limit),
+      recentL1Windows: this.listRecentL1(limit),
       recentSessions: this.listRecentL0(limit),
+      globalFact: this.getGlobalFactRecord(),
     };
   }
 }

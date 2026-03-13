@@ -1,5 +1,5 @@
 import type {
-  GlobalFactRecord,
+  GlobalFactItem,
   IntentType,
   L0SearchResult,
   L1SearchResult,
@@ -68,11 +68,14 @@ function collectL0IdsFromL1(results: L1SearchResult[]): string[] {
   return Array.from(ids);
 }
 
-function renderFacts(facts: GlobalFactRecord[]): string {
+function renderFacts(facts: GlobalFactItem[]): string {
   if (facts.length === 0) return "";
   return [
     "## Dynamic Facts",
-    ...facts.map((fact) => `- ${fact.factKey}: ${truncate(fact.factValue, 120)} (confidence=${fact.confidence.toFixed(2)})`),
+    ...facts.map(
+      (fact) =>
+        `- ${fact.factKey}: ${truncate(fact.factValue, 120)} (confidence=${fact.confidence.toFixed(2)}, sources=${fact.sourceL1Ids.length})`,
+    ),
   ].join("\n");
 }
 
@@ -203,7 +206,11 @@ export class ReasoningRetriever {
       }
     }
 
-    const facts = options.includeFacts === false ? [] : this.repository.searchFacts(query, 5);
+    const facts = options.includeFacts === false
+      ? []
+      : intent === "fact"
+        ? this.repository.listGlobalFacts(5)
+        : this.repository.searchFacts(query, 5);
     const context = renderContextTemplate(this.skills.contextTemplate, {
       intent,
       enoughAt,

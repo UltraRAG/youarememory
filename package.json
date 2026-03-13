@@ -2,7 +2,7 @@
   "name": "youarememory",
   "version": "0.1.0",
   "private": true,
-  "description": "OpenClaw multi-level memory plugin with local-first storage and memos-style UI.",
+  "description": "OpenClaw multi-level memory plugin with local-first storage and ChatGPT-style console UI.",
   "workspaces": [
     "packages/*"
   ],

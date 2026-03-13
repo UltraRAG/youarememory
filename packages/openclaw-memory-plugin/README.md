@@ -1,17 +1,18 @@
 # YouAreMemory OpenClaw 插件
 
-`@youarememory/openclaw-memory-plugin` 是 `kind: "memory"` 的 OpenClaw 插件。
+`@youarememory/openclaw-memory-plugin` 是一个 `kind: "memory"` 的 OpenClaw 插件，负责自动采集对话、构建多级索引、注入记忆上下文，并提供本地只读控制台。
 
 ## 能力概览
 
-- 采集会话并写入 `L0`
-- heartbeat 构建 `L1/L2 + global facts`
-- 在 `before_prompt_build` 注入记忆上下文
+- 采集完整 session 并写入 `L0`
+- heartbeat 构建 `L1`、`L2` 与 `GlobalFactRecord`
+- 在 `before_prompt_build` / `before_agent_start` 自动注入记忆上下文
 - 提供工具：
   - `memory_recall`
   - `memory_store`
   - `memory_search`
   - `search_l2` / `search_l1` / `search_l0`
+- 提供 ChatGPT 风格三栏看板
 
 ## 安装
 
@@ -40,7 +41,7 @@ openclaw plugins install ./packages/openclaw-memory-plugin
           "allowPromptInjection": true
         },
         "config": {
-          "captureStrategy": "last_turn",
+          "captureStrategy": "full_session",
           "includeAssistant": true,
           "maxMessageChars": 6000,
           "heartbeatBatchSize": 30,
@@ -68,18 +69,23 @@ openclaw plugins install ./packages/openclaw-memory-plugin
 }
 ```
 
-重启并验证：
+配置说明：
 
-```bash
-openclaw gateway restart
-openclaw plugins list
-```
+- `captureStrategy` 默认推荐 `full_session`，与 L0 “原始对话日志”定义一致
+- `last_turn` 仍可保留为轻量模式，但不再是默认
+- 动态事实现在写入单例 `global_fact_record`，旧版多行 `global_facts` 不会自动迁移
 
 ## UI
 
 启用 `uiEnabled=true` 后可访问：
 
 - `http://127.0.0.1:39393/youarememory/`
+
+看板包含：
+
+- 左侧：导航、总览指标、重建操作
+- 中间：检索输入、推理轨迹、当前层级记录流
+- 右侧：所选记录详情与关联来源
 
 ## 调试命令
 

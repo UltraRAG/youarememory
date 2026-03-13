@@ -1,7 +1,7 @@
 {
   "id": "youarememory-openclaw",
   "name": "YouAreMemory OpenClaw Plugin",
-  "description": "Multi-level memory plugin (L0/L1/L2) with local-first SQLite and memos-style UI.",
+  "description": "Multi-level memory plugin (L0/L1/L2) with local-first SQLite and ChatGPT-style UI.",
   "version": "0.1.0",
   "kind": "memory",
   "main": "./dist/index.js",
@@ -30,7 +30,7 @@
           "last_turn",
           "full_session"
         ],
-        "default": "last_turn"
+        "default": "full_session"
       },
       "includeAssistant": {
         "type": "boolean",
@@ -81,7 +81,7 @@
     },
     "captureStrategy": {
       "label": "Capture Strategy",
-      "help": "last_turn captures latest user-assistant exchange, full_session captures all turns."
+      "help": "full_session captures a complete session by default; last_turn remains as a lightweight fallback mode."
     },
     "uiEnabled": {
       "label": "Enable Local UI",
