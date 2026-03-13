@@ -98,7 +98,7 @@ const plugin = {
   description: "L0/L1/L2 local-first memory plugin for OpenClaw.",
   kind: "memory" as const,
 
-  async register(api: OpenClawPluginApi): Promise<void> {
+  register(api: OpenClawPluginApi): void {
     const logger = safeLog(api.logger);
     const config = buildPluginConfig(api.pluginConfig);
     const skills = config.skillsDir
@@ -156,19 +156,6 @@ const plugin = {
       return stats;
     };
 
-    const repairedVersion = repository.getPipelineState("repairVersion");
-    if (repairedVersion !== MEMORY_REPAIR_VERSION) {
-      const repair = repository.repairL0Sessions((record) => sanitizeL0Record(record, config));
-      repository.resetDerivedIndexes();
-      const stats = await indexNow("repair");
-      logger.info?.(
-        `[youarememory] repaired l0 updated=${repair.updated} removed=${repair.removed}; rebuilt l1=${stats.l1Created}, l2_time=${stats.l2TimeUpdated}, l2_project=${stats.l2ProjectUpdated}, profile=${stats.profileUpdated}, failed=${stats.failed}`,
-      );
-      repository.setPipelineState("repairVersion", MEMORY_REPAIR_VERSION);
-    }
-
-    rescheduleHeartbeat();
-
     const tools = buildPluginTools(repository, retriever);
     api.registerTool?.(() => tools, { names: tools.map((tool) => tool.name) });
     const pendingBySession = new Map<string, MemoryMessage[]>();
@@ -224,7 +211,7 @@ const plugin = {
             includeFacts: true,
           });
           if (!retrieved.context) return;
-          return { prependContext: retrieved.context };
+          return { prependSystemContext: retrieved.context };
         } catch (error) {
           logger.warn?.(`[youarememory] recall failed: ${String(error)}`);
           return;
@@ -277,10 +264,34 @@ const plugin = {
       });
       if (captured) {
         logger.info?.(
-          `[youarememory] captured l0 session=${sessionKey} indexed=pending trigger=timer|session_boundary|manual`,
+          `[youarememory] captured l0 session=${sessionKey} indexed=pending trigger=message_capture|timer|session_boundary|manual`,
         );
+        const stats = await indexNow("message_capture", [sessionKey]);
+        logIndexStats(logger, "message_capture", stats);
       }
     });
+
+    rescheduleHeartbeat();
+
+    const startBackgroundRepair = (): void => {
+      const repairedVersion = repository.getPipelineState("repairVersion");
+      if (repairedVersion === MEMORY_REPAIR_VERSION) return;
+      void (async () => {
+        try {
+          const repair = repository.repairL0Sessions((record) => sanitizeL0Record(record, config));
+          repository.resetDerivedIndexes();
+          const stats = await indexNow("repair");
+          logger.info?.(
+            `[youarememory] repaired l0 updated=${repair.updated} removed=${repair.removed}; rebuilt l1=${stats.l1Created}, l2_time=${stats.l2TimeUpdated}, l2_project=${stats.l2ProjectUpdated}, profile=${stats.profileUpdated}, failed=${stats.failed}`,
+          );
+          repository.setPipelineState("repairVersion", MEMORY_REPAIR_VERSION);
+        } catch (error) {
+          logger.warn?.(`[youarememory] startup repair failed: ${String(error)}`);
+        }
+      })();
+    };
+
+    startBackgroundRepair();
   },
 };
 
