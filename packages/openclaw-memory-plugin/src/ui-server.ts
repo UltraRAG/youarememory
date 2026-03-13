@@ -44,6 +44,13 @@ function sendNotFound(res: ServerResponse): void {
   res.end(JSON.stringify({ error: "Not found" }));
 }
 
+function sendMethodNotAllowed(res: ServerResponse, allow: string): void {
+  res.statusCode = 405;
+  res.setHeader("Allow", allow);
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.end(JSON.stringify({ error: "Method not allowed" }));
+}
+
 function parseLimit(value: string | null, fallback: number): number {
   if (!value) return fallback;
   const parsed = Number.parseInt(value, 10);
@@ -89,14 +96,19 @@ export class LocalUiServer {
     if (!relativePath) return sendNotFound(res);
 
     if (relativePath.startsWith("/api/")) {
-      return this.handleApi(relativePath, url, res);
+      return this.handleApi(relativePath, req.method ?? "GET", url, res);
     }
     return this.handleStatic(relativePath, res);
   }
 
-  private handleApi(relativePath: string, url: URL, res: ServerResponse): void {
+  private handleApi(relativePath: string, method: string, url: URL, res: ServerResponse): void {
+    const upperMethod = method.toUpperCase();
     const query = url.searchParams.get("q") ?? "";
     const limit = parseLimit(url.searchParams.get("limit"), 20);
+    if (relativePath === "/api/clear") {
+      if (upperMethod !== "POST") return sendMethodNotAllowed(res, "POST");
+      return sendJson(res, this.repository.clearAllMemoryData());
+    }
     if (relativePath === "/api/overview") {
       return sendJson(res, this.repository.getOverview());
     }

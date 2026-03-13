@@ -17,6 +17,19 @@ import { safeJsonParse, scoreMatch } from "../utils/text.js";
 
 type DbRow = Record<string, unknown>;
 
+export interface ClearMemoryResult {
+  cleared: {
+    l0: number;
+    l1: number;
+    l2Time: number;
+    l2Project: number;
+    facts: number;
+    links: number;
+    pipelineState: number;
+  };
+  clearedAt: string;
+}
+
 function parseL0Row(row: DbRow): L0SessionRecord {
   return {
     l0IndexId: String(row.l0_index_id),
@@ -513,6 +526,35 @@ export class MemoryRepository {
     const stmt = this.db.prepare("SELECT state_value FROM pipeline_state WHERE state_key = ?");
     const row = stmt.get(key) as { state_value?: string } | undefined;
     return row?.state_value;
+  }
+
+  clearAllMemoryData(): ClearMemoryResult {
+    const runDelete = (table: string): number => {
+      const stmt = this.db.prepare(`DELETE FROM ${table}`);
+      const result = stmt.run() as { changes?: number };
+      return Number(result.changes ?? 0);
+    };
+
+    this.db.exec("BEGIN");
+    try {
+      const cleared = {
+        links: runDelete("index_links"),
+        l2Project: runDelete("l2_project_indexes"),
+        l2Time: runDelete("l2_time_indexes"),
+        l1: runDelete("l1_windows"),
+        l0: runDelete("l0_sessions"),
+        facts: runDelete("global_facts"),
+        pipelineState: runDelete("pipeline_state"),
+      };
+      this.db.exec("COMMIT");
+      return {
+        cleared,
+        clearedAt: nowIso(),
+      };
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
   }
 
   getUiSnapshot(limit = 20): MemoryUiSnapshot {

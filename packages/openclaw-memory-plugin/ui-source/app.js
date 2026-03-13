@@ -15,6 +15,7 @@ const retrieveBtn = $("#retrieveBtn");
 const retrieveSummary = $("#retrieveSummary");
 const retrieveResult = $("#retrieveResult");
 const refreshBtn = $("#refreshBtn");
+const clearMemoryBtn = $("#clearMemoryBtn");
 
 const LEVEL_CONFIG = {
   l2_time: {
@@ -467,8 +468,8 @@ function switchLevel(nextLevel) {
   setVisibleItems(state.baseItems[nextLevel] || []);
 }
 
-async function fetchJson(path) {
-  const response = await fetch(path);
+async function fetchJson(path, init) {
+  const response = await fetch(path, init);
   if (!response.ok) {
     throw new Error(`request failed: ${response.status}`);
   }
@@ -524,6 +525,15 @@ async function bootstrapL1(snapshot) {
   return merged;
 }
 
+function resetLocalCache() {
+  setBaseLevelData("l2_time", []);
+  setBaseLevelData("l2_project", []);
+  setBaseLevelData("l1", []);
+  setBaseLevelData("l0", []);
+  setBaseLevelData("facts", []);
+  setVisibleItems([]);
+}
+
 async function loadSnapshot() {
   const snapshot = await fetchJson("./api/snapshot?limit=30");
   renderOverview(snapshot.overview);
@@ -537,6 +547,35 @@ async function loadSnapshot() {
   setBaseLevelData("l1", l1Bootstrap);
 
   switchLevel(state.activeLevel);
+}
+
+async function clearAllMemory() {
+  const confirmed = window.confirm("将清空所有 L0/L1/L2/事实 索引与记忆，该操作不可恢复。确认继续？");
+  if (!confirmed) return;
+
+  retrieveSummary.textContent = "清空中...";
+  retrieveResult.textContent = "";
+  if (clearMemoryBtn) clearMemoryBtn.disabled = true;
+  if (refreshBtn) refreshBtn.disabled = true;
+
+  try {
+    const payload = await fetchJson("./api/clear", { method: "POST" });
+    const cleared = payload?.cleared ?? {};
+    const total = Number(cleared.l0 ?? 0)
+      + Number(cleared.l1 ?? 0)
+      + Number(cleared.l2Time ?? 0)
+      + Number(cleared.l2Project ?? 0)
+      + Number(cleared.facts ?? 0);
+
+    resetLocalCache();
+    await loadSnapshot();
+    retrieveSummary.textContent = `已清空 ${total} 条记忆记录（L0 ${cleared.l0 ?? 0} / L1 ${cleared.l1 ?? 0} / L2-Time ${cleared.l2Time ?? 0} / L2-Project ${cleared.l2Project ?? 0} / Facts ${cleared.facts ?? 0}）`;
+  } catch (error) {
+    retrieveSummary.textContent = `清空失败: ${String(error)}`;
+  } finally {
+    if (clearMemoryBtn) clearMemoryBtn.disabled = false;
+    if (refreshBtn) refreshBtn.disabled = false;
+  }
 }
 
 async function searchCurrentLevel() {
@@ -646,6 +685,14 @@ refreshBtn?.addEventListener("click", () => {
     .catch((error) => {
       retrieveSummary.textContent = `刷新失败: ${String(error)}`;
     });
+});
+
+clearMemoryBtn?.addEventListener("click", () => {
+  clearAllMemory().catch((error) => {
+    retrieveSummary.textContent = `清空失败: ${String(error)}`;
+    if (clearMemoryBtn) clearMemoryBtn.disabled = false;
+    if (refreshBtn) refreshBtn.disabled = false;
+  });
 });
 
 loadSnapshot().catch((error) => {

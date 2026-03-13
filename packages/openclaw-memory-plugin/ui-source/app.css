@@ -46,6 +46,12 @@ p {
   margin-bottom: 16px;
 }
 
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .topbar h1 {
   font-size: 34px;
   line-height: 1.1;
@@ -72,9 +78,25 @@ button:hover {
   border-color: var(--accent);
 }
 
+button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
 .ghost-btn {
   background: rgba(255, 255, 255, 0.75);
   backdrop-filter: blur(4px);
+}
+
+.danger-btn {
+  background: #fff1f2;
+  color: #b91c1c;
+  border-color: #fecdd3;
+}
+
+.danger-btn:hover {
+  border-color: #fda4af;
+  background: #ffe4e6;
 }
 
 .overview {
@@ -449,6 +471,10 @@ pre {
   .topbar {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .topbar-actions {
+    width: 100%;
   }
 
   .tab-group {
