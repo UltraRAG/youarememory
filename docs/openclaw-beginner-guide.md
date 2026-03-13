@@ -56,11 +56,13 @@ open "http://127.0.0.1:39393/youarememory/"
 
 ## 3. 每次改完代码：流程 B（path/copy 模式）
 
-如果你当前是 `Install: path`，每次都要重新安装插件：
+如果你当前是 `Install: path`，每次都要重新安装插件。  
+注意：`openclaw plugins install` 在插件已存在时会报 `plugin already exists`，所以要先卸载再安装。
 
 ```bash
 cd /Users/meisen/Desktop/youarememory && \
 npm run build --workspace @youarememory/openclaw-memory-plugin && \
+openclaw plugins uninstall youarememory-openclaw --force && \
 openclaw plugins install ./packages/openclaw-memory-plugin && \
 openclaw gateway restart && \
 open "http://127.0.0.1:39393/youarememory/"
@@ -105,6 +107,8 @@ openclaw gateway status
 - `Source` 指向你期望的插件位置
 - UI 可访问：`http://127.0.0.1:39393/youarememory/`
 
+如果看到 `Error: memory slot set to "memory-core"`，说明记忆槽位被别的插件占用了，执行下面“故障恢复”。
+
 ---
 
 ## 7. 常用补充命令
@@ -118,6 +122,29 @@ npm run typecheck
 
 # 调试检索结果
 npm run debug:retrieve --workspace @youarememory/openclaw-memory-plugin -- --query "项目进展"
+```
+
+---
+
+## 8. 故障恢复（直接复制）
+
+### 情况 A：出现 `plugin already exists`
+
+```bash
+cd /Users/meisen/Desktop/youarememory && \
+openclaw plugins uninstall youarememory-openclaw --force && \
+openclaw plugins install --link ./packages/openclaw-memory-plugin && \
+openclaw gateway restart && \
+openclaw plugins info youarememory-openclaw
+```
+
+### 情况 B：出现 `Error: memory slot set to "memory-core"`
+
+```bash
+openclaw config set plugins.slots.memory '"youarememory-openclaw"' && \
+openclaw plugins enable youarememory-openclaw && \
+openclaw gateway restart && \
+openclaw plugins info youarememory-openclaw
 ```
 
 ---
