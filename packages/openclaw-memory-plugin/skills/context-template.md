@@ -2,7 +2,7 @@ You are using multi-level memory indexes for this turn.
 intent={{intent}}
 enoughAt={{enoughAt}}
 
-{{factsBlock}}
+{{profileBlock}}
 
 {{l2Block}}
 

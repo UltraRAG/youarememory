@@ -1,5 +1,5 @@
 import type {
-  GlobalFactItem,
+  GlobalProfileRecord,
   IntentType,
   L0SearchResult,
   L1SearchResult,
@@ -18,14 +18,11 @@ export interface RetrievalOptions {
   includeFacts?: boolean;
 }
 
-function renderFacts(facts: GlobalFactItem[]): string {
-  if (facts.length === 0) return "";
+function renderProfile(profile: GlobalProfileRecord | null): string {
+  if (!profile?.profileText.trim()) return "";
   return [
-    "## Dynamic Facts",
-    ...facts.map(
-      (fact) =>
-        `- ${fact.factKey}: ${truncate(fact.factValue, 120)} (confidence=${fact.confidence.toFixed(2)}, sources=${fact.sourceL1Ids.length})`,
-    ),
+    "## Global Profile",
+    profile.profileText,
   ].join("\n");
 }
 
@@ -55,7 +52,7 @@ function renderL0(results: L0SearchResult[]): string {
   if (results.length === 0) return "";
   const lines: string[] = ["## L0 Raw Sessions"];
   for (const hit of results) {
-    const userMessages = hit.item.messages.filter((m) => m.role === "user").map((m) => m.content);
+    const userMessages = hit.item.messages.filter((message) => message.role === "user").map((message) => message.content);
     lines.push(`- [${hit.item.timestamp}] ${truncate(userMessages[userMessages.length - 1] ?? "", 180)}`);
   }
   return lines.join("\n");
@@ -66,7 +63,7 @@ function renderContextTemplate(
   input: {
     intent: IntentType;
     enoughAt: RetrievalResult["enoughAt"];
-    factsBlock: string;
+    profileBlock: string;
     l2Block: string;
     l1Block: string;
     l0Block: string;
@@ -75,7 +72,7 @@ function renderContextTemplate(
   let content = template;
   content = content.replaceAll("{{intent}}", input.intent);
   content = content.replaceAll("{{enoughAt}}", input.enoughAt);
-  content = content.replaceAll("{{factsBlock}}", input.factsBlock);
+  content = content.replaceAll("{{profileBlock}}", input.profileBlock);
   content = content.replaceAll("{{l2Block}}", input.l2Block);
   content = content.replaceAll("{{l1Block}}", input.l1Block);
   content = content.replaceAll("{{l0Block}}", input.l0Block);
@@ -106,37 +103,33 @@ export class ReasoningRetriever {
     private readonly extractor: LlmMemoryExtractor,
   ) {}
 
-  private async searchFacts(query: string, limit: number): Promise<GlobalFactItem[]> {
-    const facts = this.repository.listGlobalFacts(Math.max(10, limit * 4));
-    if (facts.length === 0 || limit <= 0) return [];
+  private async searchProfile(query: string): Promise<GlobalProfileRecord | null> {
+    const profile = this.repository.getGlobalProfileRecord();
+    if (!profile.profileText.trim()) return null;
     const selection = await this.extractor.reasonOverMemory({
       query,
-      facts,
+      profile,
       l2Time: [],
       l2Projects: [],
       l1Windows: [],
       l0Sessions: [],
-      limits: { fact: limit, l2: 0, l1: 0, l0: 0 },
+      limits: { l2: 0, l1: 0, l0: 0 },
     });
-    const byId = new Map(facts.map((fact) => [fact.factKey, fact]));
-    return selection.factKeys
-      .map((id) => byId.get(id))
-      .filter((fact): fact is GlobalFactItem => Boolean(fact))
-      .slice(0, limit);
+    return selection.useProfile ? profile : null;
   }
 
-  async searchL2(_query: string, _intent: IntentType, limit: number): Promise<L2SearchResult[]> {
-    const facts = this.repository.listGlobalFacts(Math.max(6, limit * 3));
+  async searchL2(query: string, _intent: IntentType, limit: number): Promise<L2SearchResult[]> {
+    const profile = this.repository.getGlobalProfileRecord();
     const l2Time = this.repository.listRecentL2Time(Math.max(12, limit * 4));
     const l2Projects = this.repository.listRecentL2Projects(Math.max(12, limit * 4));
     const selection = await this.extractor.reasonOverMemory({
-      query: _query,
-      facts,
+      query,
+      profile: profile.profileText.trim() ? profile : null,
       l2Time,
       l2Projects,
       l1Windows: [],
       l0Sessions: [],
-      limits: { fact: Math.min(3, facts.length), l2: limit, l1: 0, l0: 0 },
+      limits: { l2: limit, l1: 0, l0: 0 },
     });
     const byId = new Map<string, L2SearchResult>();
     l2Time.forEach((item) => byId.set(item.l2IndexId, { level: "l2_time", score: 0, item }));
@@ -158,12 +151,12 @@ export class ReasoningRetriever {
     const candidates = Array.from(merged.values());
     const selection = await this.extractor.reasonOverMemory({
       query,
-      facts: [],
+      profile: null,
       l2Time: [],
       l2Projects: [],
       l1Windows: candidates,
       l0Sessions: [],
-      limits: { fact: 0, l2: 0, l1: limit, l0: 0 },
+      limits: { l2: 0, l1: limit, l0: 0 },
     });
     const byId = new Map(candidates.map((item) => [item.l1IndexId, item]));
     return selection.l1Ids
@@ -183,12 +176,12 @@ export class ReasoningRetriever {
     const candidates = Array.from(merged.values());
     const selection = await this.extractor.reasonOverMemory({
       query,
-      facts: [],
+      profile: null,
       l2Time: [],
       l2Projects: [],
       l1Windows: [],
       l0Sessions: candidates,
-      limits: { fact: 0, l2: 0, l1: 0, l0: limit },
+      limits: { l2: 0, l1: 0, l0: limit },
     });
     const byId = new Map(candidates.map((item) => [item.l0IndexId, item]));
     return selection.l0Ids
@@ -204,33 +197,80 @@ export class ReasoningRetriever {
     const l2Limit = options.l2Limit ?? 6;
     const l1Limit = options.l1Limit ?? 6;
     const l0Limit = options.l0Limit ?? 4;
-    const factLimit = options.includeFacts === false ? 0 : 5;
+    const profileCandidate = options.includeFacts === false ? null : this.repository.getGlobalProfileRecord();
+    const profile = profileCandidate?.profileText.trim() ? profileCandidate : null;
 
-    const selectedFacts = factLimit > 0 ? await this.searchFacts(query, factLimit) : [];
-    const l2Results = await this.searchL2(query, "general", l2Limit);
-    const relatedL1Ids = Array.from(new Set(l2Results.flatMap((hit) => hit.item.l1Source)));
-    const l1Results = await this.searchL1(query, relatedL1Ids, l1Limit);
-    const relatedL0Ids = Array.from(new Set(l1Results.flatMap((hit) => hit.item.l0Source)));
-    const l0Results = await this.searchL0(query, relatedL0Ids, l0Limit);
+    const l2Time = this.repository.listRecentL2Time(Math.max(12, l2Limit * 4));
+    const l2Projects = this.repository.listRecentL2Projects(Math.max(12, l2Limit * 4));
+    const l1Windows = this.repository.listRecentL1(Math.max(12, l1Limit * 4));
+    const l0Sessions = this.repository.listRecentL0(Math.max(12, l0Limit * 4));
 
-    const coverage = await this.extractor.judgeCoverage({
+    const selection = await this.extractor.reasonOverMemory({
       query,
-      facts: selectedFacts,
-      l2Results,
-      l1Results: l1Results.map((hit) => hit.item),
-      l0Results: l0Results.map((hit) => hit.item),
+      profile,
+      l2Time,
+      l2Projects,
+      l1Windows,
+      l0Sessions,
+      limits: { l2: l2Limit, l1: l1Limit, l0: l0Limit },
     });
 
-    const enoughAt = coerceEnoughAt(coverage.enoughAt, {
+    const l2ById = new Map<string, L2SearchResult>();
+    l2Time.forEach((item) => l2ById.set(item.l2IndexId, { level: "l2_time", score: 0, item }));
+    l2Projects.forEach((item) => l2ById.set(item.l2IndexId, { level: "l2_project", score: 0, item }));
+    const l1ById = new Map(l1Windows.map((item) => [item.l1IndexId, item]));
+    const l0ById = new Map(l0Sessions.map((item) => [item.l0IndexId, item]));
+
+    let l2Results = selection.l2Ids
+      .map((id, index) => {
+        const hit = l2ById.get(id);
+        return hit ? { ...hit, score: toRankScore(index) } : undefined;
+      })
+      .filter((hit): hit is L2SearchResult => Boolean(hit))
+      .slice(0, l2Limit);
+
+    let l1Results = selection.l1Ids
+      .map((id, index) => {
+        const item = l1ById.get(id);
+        return item ? { score: toRankScore(index), item } : undefined;
+      })
+      .filter((hit): hit is L1SearchResult => Boolean(hit))
+      .slice(0, l1Limit);
+
+    let l0Results = selection.l0Ids
+      .map((id, index) => {
+        const item = l0ById.get(id);
+        return item ? { score: toRankScore(index), item } : undefined;
+      })
+      .filter((hit): hit is L0SearchResult => Boolean(hit))
+      .slice(0, l0Limit);
+
+    let selectedProfile = selection.useProfile ? profile : null;
+    if (!selectedProfile && options.includeFacts !== false) {
+      selectedProfile = await this.searchProfile(query);
+    }
+    if (l2Results.length === 0) {
+      l2Results = await this.searchL2(query, selection.intent, l2Limit);
+    }
+    if (l1Results.length === 0) {
+      const relatedL1Ids = Array.from(new Set(l2Results.flatMap((hit) => hit.item.l1Source)));
+      l1Results = await this.searchL1(query, relatedL1Ids, l1Limit);
+    }
+    if (l0Results.length === 0) {
+      const relatedL0Ids = Array.from(new Set(l1Results.flatMap((hit) => hit.item.l0Source)));
+      l0Results = await this.searchL0(query, relatedL0Ids, l0Limit);
+    }
+
+    const enoughAt = coerceEnoughAt(selection.enoughAt, {
       l2: l2Results.length,
       l1: l1Results.length,
       l0: l0Results.length,
     });
 
     const context = renderContextTemplate(this.skills.contextTemplate, {
-      intent: coverage.intent,
+      intent: selection.intent,
       enoughAt,
-      factsBlock: renderFacts(selectedFacts),
+      profileBlock: renderProfile(selectedProfile),
       l2Block: renderL2(l2Results),
       l1Block: renderL1(l1Results),
       l0Block: renderL0(l0Results),
@@ -238,8 +278,9 @@ export class ReasoningRetriever {
 
     return {
       query,
-      intent: coverage.intent,
+      intent: selection.intent,
       enoughAt,
+      profile: selectedProfile,
       l2Results,
       l1Results,
       l0Results,

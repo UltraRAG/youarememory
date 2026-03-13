@@ -1,14 +1,15 @@
-import type { IndexingSettings, L0SessionRecord, MemoryMessage } from "../types.js";
+import type {
+  ActiveTopicBufferRecord,
+  IndexingSettings,
+  L0SessionRecord,
+  MemoryMessage,
+  ProjectDetail,
+} from "../types.js";
 import { buildL0IndexId, nowIso } from "../utils/id.js";
 import { extractL1FromWindow } from "../indexers/l1-extractor.js";
 import { buildL2ProjectsFromL1, buildL2TimeFromL1 } from "../indexers/l2-builder.js";
 import { LlmMemoryExtractor } from "../skills/llm-extraction.js";
 import { MemoryRepository } from "../storage/sqlite.js";
-
-interface L0WindowGroup {
-  sessionKey: string;
-  records: L0SessionRecord[];
-}
 
 export interface HeartbeatOptions {
   batchSize?: number;
@@ -31,57 +32,13 @@ export interface HeartbeatStats {
   l1Created: number;
   l2TimeUpdated: number;
   l2ProjectUpdated: number;
-  factsUpdated: number;
+  profileUpdated: number;
   failed: number;
 }
 
 function sameMessage(left: MemoryMessage | undefined, right: MemoryMessage | undefined): boolean {
   if (!left || !right) return false;
   return left.role === right.role && left.content === right.content;
-}
-
-function buildWindowGroups(records: L0SessionRecord[], settings: IndexingSettings): L0WindowGroup[] {
-  const bySession = new Map<string, L0SessionRecord[]>();
-  for (const record of records) {
-    const group = bySession.get(record.sessionKey) ?? [];
-    group.push(record);
-    bySession.set(record.sessionKey, group);
-  }
-
-  const groups: L0WindowGroup[] = [];
-  for (const [sessionKey, items] of bySession.entries()) {
-    const ordered = [...items].sort((left, right) => left.timestamp.localeCompare(right.timestamp));
-    let current: L0SessionRecord[] = [];
-    let windowStart = Number.NaN;
-
-    for (const record of ordered) {
-      const recordTime = new Date(record.timestamp).getTime();
-      const overCount = settings.l1WindowMaxL0 > 0 && current.length >= settings.l1WindowMaxL0;
-      const overTime = settings.l1WindowMinutes > 0
-        && current.length > 0
-        && Number.isFinite(windowStart)
-        && Number.isFinite(recordTime)
-        && recordTime - windowStart >= settings.l1WindowMinutes * 60_000;
-
-      const shouldSplit = settings.l1WindowMode === "count" ? overCount : overTime;
-      if (shouldSplit) {
-        groups.push({ sessionKey, records: current });
-        current = [];
-        windowStart = Number.NaN;
-      }
-
-      if (current.length === 0) {
-        windowStart = recordTime;
-      }
-      current.push(record);
-    }
-
-    if (current.length > 0) {
-      groups.push({ sessionKey, records: current });
-    }
-  }
-
-  return groups;
 }
 
 function hasNewContent(previous: MemoryMessage[], incoming: MemoryMessage[]): boolean {
@@ -94,24 +51,132 @@ function hasNewContent(previous: MemoryMessage[], incoming: MemoryMessage[]): bo
   return false;
 }
 
+function normalizeTurn(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function userTurnsFromRecord(record: L0SessionRecord): string[] {
+  return record.messages
+    .filter((message) => message.role === "user")
+    .map((message) => normalizeTurn(message.content))
+    .filter(Boolean);
+}
+
+function findTurnOverlap(existing: string[], incoming: string[]): number {
+  const max = Math.min(existing.length, incoming.length);
+  for (let size = max; size > 0; size -= 1) {
+    let matched = true;
+    for (let index = 0; index < size; index += 1) {
+      if (existing[existing.length - size + index] !== incoming[index]) {
+        matched = false;
+        break;
+      }
+    }
+    if (matched) return size;
+  }
+  return 0;
+}
+
+function extractIncomingUserTurns(record: L0SessionRecord, buffer?: ActiveTopicBufferRecord): string[] {
+  const turns = userTurnsFromRecord(record);
+  if (!buffer || buffer.userTurns.length === 0) return turns;
+  const overlap = findTurnOverlap(buffer.userTurns, turns);
+  return turns.slice(overlap);
+}
+
+function summarizeTopicSeed(turns: string[]): string {
+  const raw = normalizeTurn(turns[turns.length - 1] ?? turns[0] ?? "当前话题");
+  return raw.length <= 120 ? raw : raw.slice(0, 120).trim();
+}
+
+function mergeUniqueStrings(existing: string[], incoming: string[]): string[] {
+  const next = [...existing];
+  for (const item of incoming) {
+    if (!next.includes(item)) next.push(item);
+  }
+  return next;
+}
+
+function buildLocalDateKey(timestamp: string): string {
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return timestamp.slice(0, 10) || "unknown";
+  const year = String(date.getFullYear());
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function mergeProjectDetail(existing: ProjectDetail, incoming: ProjectDetail): ProjectDetail {
+  const statusRank: Record<ProjectDetail["status"], number> = {
+    blocked: 5,
+    in_progress: 4,
+    planned: 3,
+    on_hold: 2,
+    done: 1,
+    unknown: 0,
+  };
+  const preferredStatus = statusRank[incoming.status] >= statusRank[existing.status] ? incoming.status : existing.status;
+  return {
+    ...existing,
+    name: incoming.name.length >= existing.name.length ? incoming.name : existing.name,
+    status: preferredStatus,
+    summary: incoming.summary || existing.summary,
+    latestProgress: incoming.latestProgress || existing.latestProgress,
+    confidence: Math.max(existing.confidence, incoming.confidence),
+  };
+}
+
 async function canonicalizeL1Projects(
   projects: Awaited<ReturnType<typeof extractL1FromWindow>>["projectDetails"],
   repository: MemoryRepository,
   extractor: LlmMemoryExtractor,
 ): Promise<Awaited<ReturnType<typeof extractL1FromWindow>>["projectDetails"]> {
   if (projects.length === 0) return projects;
-  const existingProjects = repository.listRecentL2Projects(40);
-  const resolved = [];
+  const catalog = new Map<string, {
+    projectKey: string;
+    projectName: string;
+    summary: string;
+    currentStatus: ProjectDetail["status"];
+    latestProgress: string;
+  }>();
+  for (const item of repository.listRecentL2Projects(60)) {
+    catalog.set(item.projectKey, {
+      projectKey: item.projectKey,
+      projectName: item.projectName,
+      summary: item.summary,
+      currentStatus: item.currentStatus,
+      latestProgress: item.latestProgress,
+    });
+  }
+
+  const resolved = new Map<string, ProjectDetail>();
   for (const project of projects) {
-    resolved.push(await extractor.resolveProjectIdentity({ project, existingProjects }));
+    const existingProjects = Array.from(catalog.values()).map((item) => ({
+      l2IndexId: `catalog:${item.projectKey}`,
+      projectKey: item.projectKey,
+      projectName: item.projectName,
+      summary: item.summary,
+      currentStatus: item.currentStatus,
+      latestProgress: item.latestProgress,
+      l1Source: [],
+      createdAt: "",
+      updatedAt: "",
+    }));
+    const normalized = await extractor.resolveProjectIdentity({ project, existingProjects });
+    const merged = resolved.has(normalized.key)
+      ? mergeProjectDetail(resolved.get(normalized.key)!, normalized)
+      : normalized;
+    resolved.set(merged.key, merged);
+    catalog.set(merged.key, {
+      projectKey: merged.key,
+      projectName: merged.name,
+      summary: merged.summary,
+      currentStatus: merged.status,
+      latestProgress: merged.latestProgress,
+    });
   }
-  const deduped = new Map<string, (typeof resolved)[number]>();
-  for (const project of resolved) {
-    if (!deduped.has(project.key)) {
-      deduped.set(project.key, project);
-    }
-  }
-  return Array.from(deduped.values());
+
+  return Array.from(resolved.values());
 }
 
 export class HeartbeatIndexer {
@@ -166,13 +231,143 @@ export class HeartbeatIndexer {
     return record;
   }
 
+  private createTopicBuffer(record: L0SessionRecord, incomingUserTurns: string[], topicSummary?: string): ActiveTopicBufferRecord {
+    const seedTurns = incomingUserTurns.length > 0 ? incomingUserTurns : userTurnsFromRecord(record);
+    const now = nowIso();
+    return {
+      sessionKey: record.sessionKey,
+      startedAt: record.timestamp,
+      updatedAt: record.timestamp,
+      topicSummary: topicSummary?.trim() || summarizeTopicSeed(seedTurns),
+      userTurns: seedTurns,
+      l0Ids: [record.l0IndexId],
+      lastL0Id: record.l0IndexId,
+      createdAt: now,
+    };
+  }
+
+  private extendTopicBuffer(
+    buffer: ActiveTopicBufferRecord,
+    record: L0SessionRecord,
+    incomingUserTurns: string[],
+    topicSummary?: string,
+  ): ActiveTopicBufferRecord {
+    return {
+      ...buffer,
+      updatedAt: record.timestamp,
+      topicSummary: topicSummary?.trim() || buffer.topicSummary || summarizeTopicSeed(buffer.userTurns),
+      userTurns: mergeUniqueStrings(buffer.userTurns, incomingUserTurns),
+      l0Ids: mergeUniqueStrings(buffer.l0Ids, [record.l0IndexId]),
+      lastL0Id: record.l0IndexId,
+    };
+  }
+
+  private async closeTopicBuffer(sessionKey: string, stats: HeartbeatStats, reason: string): Promise<void> {
+    const buffer = this.repository.getActiveTopicBuffer(sessionKey);
+    if (!buffer || buffer.l0Ids.length === 0) {
+      if (buffer) this.repository.deleteActiveTopicBuffer(sessionKey);
+      return;
+    }
+
+    const records = this.repository.getL0ByIds(buffer.l0Ids);
+    if (records.length === 0) {
+      this.repository.deleteActiveTopicBuffer(sessionKey);
+      return;
+    }
+
+    const extracted = await extractL1FromWindow(records, this.extractor);
+    const canonicalProjects = await canonicalizeL1Projects(extracted.projectDetails, this.repository, this.extractor);
+    const l1 = {
+      ...extracted,
+      projectDetails: canonicalProjects,
+      projectTags: canonicalProjects.map((project) => project.name),
+    };
+    this.repository.insertL1Window(l1);
+    for (const l0 of records) {
+      this.repository.insertLink("l1", l1.l1IndexId, "l0", l0.l0IndexId);
+    }
+    stats.l1Created += 1;
+
+    const dateKey = buildLocalDateKey(l1.endedAt);
+    const existingDay = this.repository.getL2TimeByDate(dateKey);
+    const daySummary = await this.extractor.rewriteDailyTimeSummary({
+      dateKey,
+      existingSummary: existingDay?.summary ?? "",
+      l1,
+    });
+    const l2Time = buildL2TimeFromL1(l1, daySummary);
+    this.repository.upsertL2TimeIndex(l2Time);
+    this.repository.insertLink("l2", l2Time.l2IndexId, "l1", l1.l1IndexId);
+    stats.l2TimeUpdated += 1;
+
+    const projectIndexes = buildL2ProjectsFromL1(l1);
+    for (const l2Project of projectIndexes) {
+      this.repository.upsertL2ProjectIndex(l2Project);
+      this.repository.insertLink("l2", l2Project.l2IndexId, "l1", l1.l1IndexId);
+      stats.l2ProjectUpdated += 1;
+    }
+
+    const currentProfile = this.repository.getGlobalProfileRecord();
+    const nextProfileText = await this.extractor.rewriteGlobalProfile({
+      existingProfile: currentProfile.profileText,
+      l1,
+    });
+    this.repository.upsertGlobalProfile(nextProfileText, [l1.l1IndexId]);
+    stats.profileUpdated += 1;
+
+    this.repository.deleteActiveTopicBuffer(sessionKey);
+    this.logger?.info?.(
+      `[youarememory] closed topic session=${sessionKey} reason=${reason} l1=${l1.l1IndexId} l0=${records.length}`,
+    );
+  }
+
+  private async closeOtherSessionBuffers(currentSessionKey: string, stats: HeartbeatStats, reason: string): Promise<void> {
+    const openBuffers = this.repository.listActiveTopicBuffers();
+    for (const buffer of openBuffers) {
+      if (buffer.sessionKey === currentSessionKey) continue;
+      await this.closeTopicBuffer(buffer.sessionKey, stats, `${reason}:session_boundary`);
+    }
+  }
+
+  private async processPendingRecord(record: L0SessionRecord, stats: HeartbeatStats, reason: string): Promise<void> {
+    await this.closeOtherSessionBuffers(record.sessionKey, stats, reason);
+
+    const buffer = this.repository.getActiveTopicBuffer(record.sessionKey);
+    const incomingUserTurns = extractIncomingUserTurns(record, buffer);
+    if (!buffer) {
+      this.repository.upsertActiveTopicBuffer(this.createTopicBuffer(record, incomingUserTurns));
+      return;
+    }
+
+    if (incomingUserTurns.length === 0) {
+      this.repository.upsertActiveTopicBuffer(this.extendTopicBuffer(buffer, record, incomingUserTurns));
+      return;
+    }
+
+    const decision = await this.extractor.judgeTopicShift({
+      currentTopicSummary: buffer.topicSummary,
+      recentUserTurns: buffer.userTurns.slice(-8),
+      incomingUserTurns,
+    });
+
+    if (decision.topicChanged) {
+      await this.closeTopicBuffer(record.sessionKey, stats, `${reason}:topic_shift`);
+      this.repository.upsertActiveTopicBuffer(this.createTopicBuffer(record, incomingUserTurns, decision.topicSummary));
+      return;
+    }
+
+    this.repository.upsertActiveTopicBuffer(
+      this.extendTopicBuffer(buffer, record, incomingUserTurns, decision.topicSummary),
+    );
+  }
+
   async runHeartbeat(options: HeartbeatRunOptions = {}): Promise<HeartbeatStats> {
     const stats: HeartbeatStats = {
       l0Captured: 0,
       l1Created: 0,
       l2TimeUpdated: 0,
       l2ProjectUpdated: 0,
-      factsUpdated: 0,
+      profileUpdated: 0,
       failed: 0,
     };
 
@@ -187,43 +382,15 @@ export class HeartbeatIndexer {
       if (pending.length === 0) break;
       stats.l0Captured += pending.length;
 
-      const groups = buildWindowGroups(pending, this.settings);
       const indexedIds: string[] = [];
-
-      for (const group of groups) {
+      for (const record of pending) {
         try {
-          const extracted = await extractL1FromWindow(group.records, this.extractor);
-          const canonicalProjects = await canonicalizeL1Projects(extracted.projectDetails, this.repository, this.extractor);
-          const l1 = {
-            ...extracted,
-            projectDetails: canonicalProjects,
-            projectTags: canonicalProjects.map((project) => project.name),
-          };
-          this.repository.insertL1Window(l1);
-          for (const l0 of group.records) {
-            this.repository.insertLink("l1", l1.l1IndexId, "l0", l0.l0IndexId);
-          }
-          stats.l1Created += 1;
-
-          const l2Time = buildL2TimeFromL1(l1, this.settings);
-          this.repository.upsertL2TimeIndex(l2Time);
-          this.repository.insertLink("l2", l2Time.l2IndexId, "l1", l1.l1IndexId);
-          stats.l2TimeUpdated += 1;
-
-          const projectIndexes = buildL2ProjectsFromL1(l1);
-          for (const l2Project of projectIndexes) {
-            this.repository.upsertL2ProjectIndex(l2Project);
-            this.repository.insertLink("l2", l2Project.l2IndexId, "l1", l1.l1IndexId);
-            stats.l2ProjectUpdated += 1;
-          }
-
-          this.repository.upsertGlobalFacts(l1.facts, l1.l1IndexId);
-          stats.factsUpdated += l1.facts.length;
-          indexedIds.push(...group.records.map((record) => record.l0IndexId));
+          await this.processPendingRecord(record, stats, reason);
+          indexedIds.push(record.l0IndexId);
         } catch (error) {
           stats.failed += 1;
           this.logger?.warn?.(
-            `[youarememory] heartbeat failed reason=${reason} session=${group.sessionKey}: ${String(error)}`,
+            `[youarememory] heartbeat failed reason=${reason} session=${record.sessionKey} l0=${record.l0IndexId}: ${String(error)}`,
           );
         }
       }
@@ -233,7 +400,33 @@ export class HeartbeatIndexer {
       if (pending.length < batchSize) break;
     }
 
-    if (stats.l1Created > 0 || stats.l2TimeUpdated > 0 || stats.l2ProjectUpdated > 0) {
+    if (reason === "session_boundary" && sessionKeys && sessionKeys.length > 0) {
+      for (const sessionKey of sessionKeys) {
+        try {
+          await this.closeTopicBuffer(sessionKey, stats, reason);
+        } catch (error) {
+          stats.failed += 1;
+          this.logger?.warn?.(
+            `[youarememory] close topic failed reason=${reason} session=${sessionKey}: ${String(error)}`,
+          );
+        }
+      }
+    }
+
+    if (reason === "manual") {
+      for (const buffer of this.repository.listActiveTopicBuffers()) {
+        try {
+          await this.closeTopicBuffer(buffer.sessionKey, stats, reason);
+        } catch (error) {
+          stats.failed += 1;
+          this.logger?.warn?.(
+            `[youarememory] close topic failed reason=${reason} session=${buffer.sessionKey}: ${String(error)}`,
+          );
+        }
+      }
+    }
+
+    if (stats.l1Created > 0 || stats.l2TimeUpdated > 0 || stats.l2ProjectUpdated > 0 || stats.profileUpdated > 0) {
       this.repository.setPipelineState("lastIndexedAt", nowIso());
     }
     return stats;

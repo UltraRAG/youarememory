@@ -15,7 +15,7 @@ import type { OpenClawPluginApi, PluginLogger } from "./plugin-api.js";
 import { buildPluginTools } from "./tools.js";
 import { LocalUiServer } from "./ui-server.js";
 
-const MEMORY_REPAIR_VERSION = "2026-03-13-llm-reasoning-v12";
+const MEMORY_REPAIR_VERSION = "2026-03-13-topic-driven-memory-v13";
 
 function safeLog(logger: PluginLogger | undefined): PluginLogger {
   return logger ?? console;
@@ -81,13 +81,14 @@ function shouldLogStats(stats: HeartbeatStats): boolean {
     || stats.l1Created > 0
     || stats.l2TimeUpdated > 0
     || stats.l2ProjectUpdated > 0
+    || stats.profileUpdated > 0
     || stats.failed > 0;
 }
 
 function logIndexStats(logger: PluginLogger, reason: string, stats: HeartbeatStats): void {
   if (!shouldLogStats(stats)) return;
   logger.info?.(
-    `[youarememory] indexed reason=${reason} l0=${stats.l0Captured}, l1=${stats.l1Created}, l2_time=${stats.l2TimeUpdated}, l2_project=${stats.l2ProjectUpdated}, failed=${stats.failed}`,
+    `[youarememory] indexed reason=${reason} l0=${stats.l0Captured}, l1=${stats.l1Created}, l2_time=${stats.l2TimeUpdated}, l2_project=${stats.l2ProjectUpdated}, profile=${stats.profileUpdated}, failed=${stats.failed}`,
   );
 }
 
@@ -161,7 +162,7 @@ const plugin = {
       repository.resetDerivedIndexes();
       const stats = await indexNow("repair");
       logger.info?.(
-        `[youarememory] repaired l0 updated=${repair.updated} removed=${repair.removed}; rebuilt l1=${stats.l1Created}, l2_time=${stats.l2TimeUpdated}, l2_project=${stats.l2ProjectUpdated}, failed=${stats.failed}`,
+        `[youarememory] repaired l0 updated=${repair.updated} removed=${repair.removed}; rebuilt l1=${stats.l1Created}, l2_time=${stats.l2TimeUpdated}, l2_project=${stats.l2ProjectUpdated}, profile=${stats.profileUpdated}, failed=${stats.failed}`,
       );
       repository.setPipelineState("repairVersion", MEMORY_REPAIR_VERSION);
     }
@@ -205,9 +206,8 @@ const plugin = {
         start: () => uiServer?.start(),
         stop: stopRuntime,
       });
-    } else if (uiServer) {
-        uiServer.start();
     }
+    uiServer?.start();
 
     api.on?.(
       "before_prompt_build",

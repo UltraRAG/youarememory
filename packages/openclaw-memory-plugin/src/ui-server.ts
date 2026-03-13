@@ -103,6 +103,7 @@ export class LocalUiServer {
   private server = createServer((req, res) => {
     void this.handle(req, res);
   });
+  private started = false;
   private readonly prefix: string;
 
   constructor(
@@ -116,6 +117,8 @@ export class LocalUiServer {
   }
 
   start(): void {
+    if (this.started) return;
+    this.started = true;
     this.server.listen(this.options.port, this.options.host, () => {
       this.logger.info?.(
         `[youarememory] dashboard ready at http://${this.options.host}:${this.options.port}${this.prefix}/`,
@@ -124,6 +127,8 @@ export class LocalUiServer {
   }
 
   stop(): void {
+    if (!this.started) return;
+    this.started = false;
     this.server.close();
   }
 
@@ -195,8 +200,8 @@ export class LocalUiServer {
     if (relativePath === "/api/l0") {
       return sendJson(res, this.repository.searchL0(query, limit));
     }
-    if (relativePath === "/api/facts") {
-      return sendJson(res, this.repository.searchFacts(query, limit));
+    if (relativePath === "/api/profile" || relativePath === "/api/facts") {
+      return sendJson(res, this.repository.searchGlobalProfile(query, limit));
     }
     if (relativePath === "/api/retrieve") {
       return sendJson(

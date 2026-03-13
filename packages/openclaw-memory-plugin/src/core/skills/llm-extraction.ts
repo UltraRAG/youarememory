@@ -1,11 +1,10 @@
 import type {
   FactCandidate,
-  GlobalFactItem,
+  GlobalProfileRecord,
   IntentType,
   L0SessionRecord,
   L1WindowRecord,
   L2ProjectIndexRecord,
-  L2SearchResult,
   L2TimeIndexRecord,
   MemoryMessage,
   ProjectDetail,
@@ -58,10 +57,23 @@ interface RawProjectResolutionPayload {
   canonical_name?: unknown;
 }
 
+interface RawTopicShiftPayload {
+  topic_changed?: unknown;
+  topic_summary?: unknown;
+}
+
+interface RawDailySummaryPayload {
+  summary?: unknown;
+}
+
+interface RawProfilePayload {
+  profile_text?: unknown;
+}
+
 interface RawReasoningPayload {
   intent?: unknown;
   enough_at?: unknown;
-  fact_keys?: unknown;
+  use_profile?: unknown;
   l2_ids?: unknown;
   l1_ids?: unknown;
   l0_ids?: unknown;
@@ -80,15 +92,39 @@ export interface LlmProjectResolutionInput {
   agentId?: string;
 }
 
+export interface LlmTopicShiftInput {
+  currentTopicSummary: string;
+  recentUserTurns: string[];
+  incomingUserTurns: string[];
+  agentId?: string;
+}
+
+export interface LlmTopicShiftDecision {
+  topicChanged: boolean;
+  topicSummary: string;
+}
+
+export interface LlmDailyTimeSummaryInput {
+  dateKey: string;
+  existingSummary: string;
+  l1: L1WindowRecord;
+  agentId?: string;
+}
+
+export interface LlmGlobalProfileInput {
+  existingProfile: string;
+  l1: L1WindowRecord;
+  agentId?: string;
+}
+
 export interface LlmReasoningInput {
   query: string;
-  facts: GlobalFactItem[];
+  profile: GlobalProfileRecord | null;
   l2Time: L2TimeIndexRecord[];
   l2Projects: L2ProjectIndexRecord[];
   l1Windows: L1WindowRecord[];
   l0Sessions: L0SessionRecord[];
   limits: {
-    fact: number;
     l2: number;
     l1: number;
     l0: number;
@@ -99,19 +135,10 @@ export interface LlmReasoningInput {
 export interface LlmReasoningSelection {
   intent: IntentType;
   enoughAt: RetrievalResult["enoughAt"];
-  factKeys: string[];
+  useProfile: boolean;
   l2Ids: string[];
   l1Ids: string[];
   l0Ids: string[];
-}
-
-export interface LlmCoverageJudgeInput {
-  query: string;
-  facts: GlobalFactItem[];
-  l2Results: L2SearchResult[];
-  l1Results: L1WindowRecord[];
-  l0Results: L0SessionRecord[];
-  agentId?: string;
 }
 
 const EXTRACTION_SYSTEM_PROMPT = `
@@ -131,6 +158,7 @@ Rules:
 - Example: "preparing an EMNLP submission" is another independent project-like thread.
 - Do not treat casual one-off mentions as projects.
 - Extract facts only when they are likely to matter in future conversations: preferences, constraints, goals, identity, long-lived context, stable relationships, or durable project context.
+- The facts are intermediate material for a later global profile rewrite, so prefer stable facts over temporary situation notes.
 - Natural-language output fields must use the dominant language of the user messages. If user messages are mixed, prefer the most recent user language. Keys and enums must stay in English.
 - Return valid JSON only. No markdown fences, no commentary.
 
@@ -160,12 +188,13 @@ Use this exact JSON shape:
 `.trim();
 
 const PROJECT_RESOLUTION_SYSTEM_PROMPT = `
-You resolve whether two memory project descriptions refer to the same underlying ongoing project.
+You resolve whether an incoming project memory should merge into an existing project memory.
 
 Rules:
 - Prefer merging duplicates caused by wording differences, synonyms, or different granularity of the same effort.
 - Match only when the underlying ongoing effort is clearly the same.
 - Reuse an existing project when possible.
+- If multiple labels refer to the same EMNLP submission, the same health follow-up, or the same long-running effort, merge them.
 - Return JSON only.
 
 Use this exact JSON shape:
@@ -203,6 +232,57 @@ Use this exact JSON shape:
 }
 `.trim();
 
+const TOPIC_BOUNDARY_SYSTEM_PROMPT = `
+You judge whether new user messages continue the current topic or start a new topic.
+
+Rules:
+- Use only semantic meaning, not keyword overlap.
+- Treat a topic as the same if the user is still talking about the same underlying problem, project, situation, or intent.
+- Treat it as changed only when the new user messages clearly pivot to a different underlying topic.
+- You are given only user messages. Do not assume any assistant content.
+- Return JSON only.
+
+Use this exact JSON shape:
+{
+  "topic_changed": true,
+  "topic_summary": "short topic summary in the user's language"
+}
+`.trim();
+
+const DAILY_TIME_SUMMARY_SYSTEM_PROMPT = `
+You maintain a single daily episodic memory summary for a user.
+
+Rules:
+- Focus on what happened during that day, what the user was dealing with, and the day's situation.
+- Do not turn the summary into a long-term profile.
+- Do not over-focus on project metadata; describe the day's lived context.
+- Merge the existing daily summary with the new L1 window into one concise updated daily summary.
+- Natural-language output must follow the language used by the user in the new L1 window.
+- Return JSON only.
+
+Use this exact JSON shape:
+{
+  "summary": "updated daily summary"
+}
+`.trim();
+
+const GLOBAL_PROFILE_SYSTEM_PROMPT = `
+You maintain a single global user profile summary.
+
+Rules:
+- Rewrite the whole profile as one concise paragraph.
+- Keep only stable user traits, identity, long-term preferences, constraints, relationships, communication style, and long-range goals.
+- Do not include temporary daily events, short-lived situations, or project progress updates.
+- Use the existing profile plus the new L1 facts as evidence, then rewrite the full profile.
+- Natural-language output must follow the user's dominant language in the new L1 window.
+- Return JSON only.
+
+Use this exact JSON shape:
+{
+  "profile_text": "updated stable user profile paragraph"
+}
+`.trim();
+
 const REASONING_SYSTEM_PROMPT = `
 You are a semantic memory retrieval reasoner.
 
@@ -211,42 +291,26 @@ Your job is to decide which memory records are relevant to the user's query.
 Rules:
 - Use semantic meaning, not keyword overlap.
 - Use high recall for obvious paraphrases and near-synonyms.
-- Examples of relevant paraphrases:
-  - "投论文" ~= "投稿" ~= "会议投稿" ~= "准备 EMNLP 投稿"
-  - "拉肚子" ~= "腹泻" ~= "肠胃炎" ~= "买药/康复跟进"
-- Prefer the smallest set of records needed to answer the query well.
+- Temporal summary questions like "我今天都在忙什么", "今天发生了什么", "我最近在做什么", "what was I doing today", or "what happened recently" should usually select L2 time indexes.
+- If there is a current-day or recent-day L2 time summary and the user asks about today/recent activity, prefer that L2 time record even if wording differs.
+- For project queries, prefer L2 project indexes when they already capture enough.
+- For time queries, prefer L2 time indexes when they already capture enough.
+- For profile/fact queries about the user's identity, preferences, habits, or stable traits, set use_profile=true when the global profile is useful.
+- Select the smallest set of records needed to answer the query well.
+- enough_at only refers to L2/L1/L0 structured memory. The profile is an additional supporting source.
 - If L2 already captures enough, set enough_at to "l2".
 - If L2 is insufficient but L1 is enough, set enough_at to "l1".
 - If detailed raw conversation is needed, set enough_at to "l0".
-- Select facts, L2, L1, and L0 independently by their IDs.
 - Return JSON only.
 
 Use this exact JSON shape:
 {
   "intent": "time | project | fact | general",
   "enough_at": "l2 | l1 | l0 | none",
-  "fact_keys": ["fact key"],
+  "use_profile": true,
   "l2_ids": ["l2 index id"],
   "l1_ids": ["l1 index id"],
   "l0_ids": ["l0 index id"]
-}
-`.trim();
-
-const COVERAGE_JUDGE_SYSTEM_PROMPT = `
-You judge the user's intent and which memory level is sufficient, based on candidates that were already preselected by prior semantic retrieval.
-
-Rules:
-- Do not re-rank or delete the candidates.
-- Decide only the user's intent and the lowest level sufficient to answer well.
-- If any selected L2 candidates already answer the query, enough_at should be "l2".
-- If L2 is insufficient but selected L1 is enough, enough_at should be "l1".
-- If raw selected L0 is needed, enough_at should be "l0".
-- Return JSON only.
-
-Use this exact JSON shape:
-{
-  "intent": "time | project | fact | general",
-  "enough_at": "l2 | l1 | l0 | none"
 }
 `.trim();
 
@@ -388,6 +452,55 @@ function buildProjectCompletionPrompt(input: {
   }, null, 2);
 }
 
+function buildTopicShiftPrompt(input: LlmTopicShiftInput): string {
+  return JSON.stringify({
+    current_topic_summary: truncateForPrompt(input.currentTopicSummary, 160),
+    recent_user_turns: input.recentUserTurns.map((value) => truncateForPrompt(value, 180)).slice(-8),
+    incoming_user_turns: input.incomingUserTurns.map((value) => truncateForPrompt(value, 180)).slice(-6),
+  }, null, 2);
+}
+
+function buildDailyTimeSummaryPrompt(input: LlmDailyTimeSummaryInput): string {
+  return JSON.stringify({
+    date_key: input.dateKey,
+    existing_daily_summary: truncateForPrompt(input.existingSummary, 320),
+    new_l1: {
+      summary: truncateForPrompt(input.l1.summary, 220),
+      situation_time_info: truncateForPrompt(input.l1.situationTimeInfo, 220),
+      projects: input.l1.projectDetails.map((project) => ({
+        name: project.name,
+        status: project.status,
+        summary: truncateForPrompt(project.summary, 160),
+        latest_progress: truncateForPrompt(project.latestProgress, 160),
+      })),
+      facts: input.l1.facts.map((fact) => ({
+        key: fact.factKey,
+        value: truncateForPrompt(fact.factValue, 120),
+      })).slice(0, 10),
+    },
+  }, null, 2);
+}
+
+function buildGlobalProfilePrompt(input: LlmGlobalProfileInput): string {
+  return JSON.stringify({
+    existing_profile: truncateForPrompt(input.existingProfile, 320),
+    new_l1: {
+      summary: truncateForPrompt(input.l1.summary, 220),
+      situation_time_info: truncateForPrompt(input.l1.situationTimeInfo, 160),
+      facts: input.l1.facts.map((fact) => ({
+        key: fact.factKey,
+        value: truncateForPrompt(fact.factValue, 140),
+        confidence: fact.confidence,
+      })).slice(0, 16),
+      projects: input.l1.projectDetails.map((project) => ({
+        name: project.name,
+        status: project.status,
+        summary: truncateForPrompt(project.summary, 140),
+      })).slice(0, 8),
+    },
+  }, null, 2);
+}
+
 function extractFirstJsonObject(raw: string): string {
   const trimmed = raw.trim();
   if (!trimmed) throw new Error("Empty extraction response");
@@ -526,6 +639,16 @@ function normalizeIntent(value: unknown): IntentType {
 function normalizeEnoughAt(value: unknown): RetrievalResult["enoughAt"] {
   if (value === "l2" || value === "l1" || value === "l0" || value === "none") return value;
   return "none";
+}
+
+function normalizeBoolean(value: unknown, fallback = false): boolean {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "true") return true;
+    if (normalized === "false") return false;
+  }
+  return fallback;
 }
 
 function extractChatCompletionsText(payload: unknown): string {
@@ -793,6 +916,49 @@ export class LlmMemoryExtractor {
     }
   }
 
+  async judgeTopicShift(input: LlmTopicShiftInput): Promise<LlmTopicShiftDecision> {
+    const fallbackSummary = truncate(
+      normalizeWhitespace(
+        input.currentTopicSummary
+          || input.incomingUserTurns[input.incomingUserTurns.length - 1]
+          || input.recentUserTurns[input.recentUserTurns.length - 1]
+          || "当前话题",
+      ),
+      120,
+    );
+    if (input.incomingUserTurns.length === 0) {
+      return { topicChanged: false, topicSummary: fallbackSummary };
+    }
+    if (!input.currentTopicSummary.trim() && input.recentUserTurns.length === 0) {
+      return {
+        topicChanged: false,
+        topicSummary: truncate(input.incomingUserTurns.map((item) => normalizeWhitespace(item)).join(" / "), 120) || fallbackSummary,
+      };
+    }
+
+    try {
+      const raw = await this.callStructuredJson({
+        systemPrompt: TOPIC_BOUNDARY_SYSTEM_PROMPT,
+        userPrompt: buildTopicShiftPrompt(input),
+        requestLabel: "Topic shift",
+        ...(input.agentId ? { agentId: input.agentId } : {}),
+      });
+      const parsed = JSON.parse(extractFirstJsonObject(raw)) as RawTopicShiftPayload;
+      return {
+        topicChanged: normalizeBoolean(parsed.topic_changed, false),
+        topicSummary: truncate(
+          typeof parsed.topic_summary === "string" && parsed.topic_summary.trim()
+            ? normalizeWhitespace(parsed.topic_summary)
+            : fallbackSummary,
+          120,
+        ),
+      };
+    } catch (error) {
+      this.logger?.warn?.(`[youarememory] topic shift fallback: ${String(error)}`);
+      return { topicChanged: false, topicSummary: fallbackSummary };
+    }
+  }
+
   async resolveProjectIdentity(input: LlmProjectResolutionInput): Promise<ProjectDetail> {
     if (input.existingProjects.length === 0) return input.project;
     const candidates = input.existingProjects.slice(0, 24).map((project) => ({
@@ -842,16 +1008,64 @@ export class LlmMemoryExtractor {
     }
   }
 
+  async rewriteDailyTimeSummary(input: LlmDailyTimeSummaryInput): Promise<string> {
+    try {
+      const raw = await this.callStructuredJson({
+        systemPrompt: DAILY_TIME_SUMMARY_SYSTEM_PROMPT,
+        userPrompt: buildDailyTimeSummaryPrompt(input),
+        requestLabel: "Daily summary",
+        ...(input.agentId ? { agentId: input.agentId } : {}),
+      });
+      const parsed = JSON.parse(extractFirstJsonObject(raw)) as RawDailySummaryPayload;
+      const summary = typeof parsed.summary === "string" ? normalizeWhitespace(parsed.summary) : "";
+      if (summary) return truncate(summary, 280);
+    } catch (error) {
+      this.logger?.warn?.(`[youarememory] daily summary fallback: ${String(error)}`);
+    }
+    return truncate(input.l1.situationTimeInfo || input.l1.summary || input.existingSummary, 280);
+  }
+
+  async rewriteGlobalProfile(input: LlmGlobalProfileInput): Promise<string> {
+    try {
+      const raw = await this.callStructuredJson({
+        systemPrompt: GLOBAL_PROFILE_SYSTEM_PROMPT,
+        userPrompt: buildGlobalProfilePrompt(input),
+        requestLabel: "Global profile",
+        ...(input.agentId ? { agentId: input.agentId } : {}),
+      });
+      const parsed = JSON.parse(extractFirstJsonObject(raw)) as RawProfilePayload;
+      const profileText = typeof parsed.profile_text === "string" ? normalizeWhitespace(parsed.profile_text) : "";
+      if (profileText) return truncate(profileText, 420);
+    } catch (error) {
+      this.logger?.warn?.(`[youarememory] global profile fallback: ${String(error)}`);
+    }
+
+    const fallbackFacts = input.l1.facts.map((fact) => fact.factValue).filter(Boolean).slice(0, 8).join("；");
+    return truncate(input.existingProfile || fallbackFacts || input.l1.summary, 420);
+  }
+
   async reasonOverMemory(input: LlmReasoningInput): Promise<LlmReasoningSelection> {
+    if (!input.profile && input.l2Time.length === 0 && input.l2Projects.length === 0 && input.l1Windows.length === 0 && input.l0Sessions.length === 0) {
+      return {
+        intent: "general",
+        enoughAt: "none",
+        useProfile: false,
+        l2Ids: [],
+        l1Ids: [],
+        l0Ids: [],
+      };
+    }
+
     const raw = await this.callStructuredJson({
       systemPrompt: REASONING_SYSTEM_PROMPT,
       userPrompt: JSON.stringify({
         query: input.query,
-        facts: input.facts.map((fact) => ({
-          id: fact.factKey,
-          value: truncateForPrompt(fact.factValue, 160),
-          confidence: fact.confidence,
-        })),
+        profile: input.profile
+          ? {
+              id: input.profile.recordId,
+              text: truncateForPrompt(input.profile.profileText, 260),
+            }
+          : null,
         l2_time: input.l2Time.map((item) => ({
           id: item.l2IndexId,
           date_key: item.dateKey,
@@ -891,47 +1105,10 @@ export class LlmMemoryExtractor {
     return {
       intent: normalizeIntent(parsed.intent),
       enoughAt: normalizeEnoughAt(parsed.enough_at),
-      factKeys: normalizeStringArray(parsed.fact_keys, input.limits.fact),
+      useProfile: normalizeBoolean(parsed.use_profile, false),
       l2Ids: normalizeStringArray(parsed.l2_ids, input.limits.l2),
       l1Ids: normalizeStringArray(parsed.l1_ids, input.limits.l1),
       l0Ids: normalizeStringArray(parsed.l0_ids, input.limits.l0),
-    };
-  }
-
-  async judgeCoverage(input: LlmCoverageJudgeInput): Promise<Pick<LlmReasoningSelection, "intent" | "enoughAt">> {
-    const raw = await this.callStructuredJson({
-      systemPrompt: COVERAGE_JUDGE_SYSTEM_PROMPT,
-      userPrompt: JSON.stringify({
-        query: input.query,
-        facts: input.facts.map((fact) => ({
-          id: fact.factKey,
-          value: truncateForPrompt(fact.factValue, 160),
-        })),
-        l2_results: input.l2Results.map((hit) => ({
-          id: hit.item.l2IndexId,
-          level: hit.level,
-          summary: hit.level === "l2_time"
-            ? truncateForPrompt(hit.item.summary, 180)
-            : truncateForPrompt(`${hit.item.projectName} ${hit.item.summary} ${hit.item.latestProgress}`, 180),
-        })),
-        l1_results: input.l1Results.map((item) => ({
-          id: item.l1IndexId,
-          summary: truncateForPrompt(item.summary, 180),
-          situation: truncateForPrompt(item.situationTimeInfo, 160),
-        })),
-        l0_results: input.l0Results.map((item) => ({
-          id: item.l0IndexId,
-          timestamp: item.timestamp,
-          messages: item.messages.map((message) => truncateForPrompt(message.content, 120)).slice(0, 4),
-        })),
-      }, null, 2),
-      requestLabel: "Coverage judge",
-      ...(input.agentId ? { agentId: input.agentId } : {}),
-    });
-    const parsed = JSON.parse(extractFirstJsonObject(raw)) as RawReasoningPayload;
-    return {
-      intent: normalizeIntent(parsed.intent),
-      enoughAt: normalizeEnoughAt(parsed.enough_at),
     };
   }
 }

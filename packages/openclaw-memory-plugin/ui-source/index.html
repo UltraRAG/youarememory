@@ -39,9 +39,9 @@
             <span class="nav-label">L0 会话</span>
             <span class="nav-count" data-count-for="l0">0</span>
           </button>
-          <button class="nav-item" data-level="facts" type="button">
+          <button class="nav-item" data-level="profile" type="button">
             <span class="nav-label">全局画像</span>
-            <span class="nav-count" data-count-for="facts">0</span>
+            <span class="nav-count" data-count-for="profile">0</span>
           </button>
         </nav>
 
@@ -123,28 +123,6 @@
           <span>自动构建间隔（分钟）</span>
           <input id="autoIndexIntervalInput" type="number" min="0" step="1" placeholder="60" />
         </label>
-
-        <label class="settings-field">
-          <span>L1 切窗方式</span>
-          <select id="l1WindowModeSelect">
-            <option value="time">按时间</option>
-            <option value="count">按条数</option>
-          </select>
-        </label>
-
-        <label class="settings-field">
-          <span id="l1WindowValueLabel">窗口时长（分钟）</span>
-          <input id="l1WindowValueInput" type="number" min="0" step="1" placeholder="120" />
-        </label>
-
-        <label class="settings-field">
-          <span>L2 时间粒度</span>
-          <select id="l2TimeGranularitySelect">
-            <option value="day">每天</option>
-            <option value="half_day">每半天</option>
-            <option value="hour">每小时</option>
-          </select>
-        </label>
       </div>
 
       <div class="drawer-actions">
@@ -152,7 +130,6 @@
       </div>
 
       <div class="drawer-section drawer-danger">
-        <p>清空后会按当前配置重新建立索引。</p>
         <button id="clearMemoryBtn" class="tool-btn danger wide" type="button">清空并重建</button>
       </div>
     </aside>

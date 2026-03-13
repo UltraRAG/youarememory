@@ -23,15 +23,20 @@ export interface FactCandidate {
 }
 
 export type ProjectStatus = "planned" | "in_progress" | "blocked" | "on_hold" | "done" | "unknown";
-export type L2TimeGranularity = "day" | "half_day" | "hour";
-export type L1WindowMode = "time" | "count";
 
 export interface IndexingSettings {
   autoIndexIntervalMinutes: number;
-  l1WindowMode: L1WindowMode;
-  l1WindowMinutes: number;
-  l1WindowMaxL0: number;
-  l2TimeGranularity: L2TimeGranularity;
+}
+
+export interface ActiveTopicBufferRecord {
+  sessionKey: string;
+  startedAt: string;
+  updatedAt: string;
+  topicSummary: string;
+  userTurns: string[];
+  l0Ids: string[];
+  lastL0Id: string;
+  createdAt: string;
 }
 
 export interface ProjectDetail {
@@ -72,25 +77,17 @@ export interface L2ProjectIndexRecord {
   projectKey: string;
   projectName: string;
   summary: string;
-  currentStatus: string;
+  currentStatus: ProjectStatus;
   latestProgress: string;
   l1Source: string[];
   createdAt: string;
   updatedAt: string;
 }
 
-export interface GlobalFactItem {
-  factKey: string;
-  factValue: string;
-  confidence: number;
+export interface GlobalProfileRecord {
+  recordId: "global_profile_record";
+  profileText: string;
   sourceL1Ids: string[];
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface GlobalFactRecord {
-  recordId: "global_fact_record";
-  facts: GlobalFactItem[];
   createdAt: string;
   updatedAt: string;
 }
@@ -132,6 +129,7 @@ export interface RetrievalResult {
   query: string;
   intent: IntentType;
   enoughAt: "l2" | "l1" | "l0" | "none";
+  profile: GlobalProfileRecord | null;
   l2Results: L2SearchResult[];
   l1Results: L1SearchResult[];
   l0Results: L0SearchResult[];
@@ -141,10 +139,11 @@ export interface RetrievalResult {
 export interface DashboardOverview {
   totalL0: number;
   pendingL0: number;
+  openTopics: number;
   totalL1: number;
   totalL2Time: number;
   totalL2Project: number;
-  totalFacts: number;
+  totalProfiles: number;
   lastIndexedAt?: string;
 }
 
@@ -155,5 +154,5 @@ export interface MemoryUiSnapshot {
   recentProjectIndexes: L2ProjectIndexRecord[];
   recentL1Windows: L1WindowRecord[];
   recentSessions: L0SessionRecord[];
-  globalFact: GlobalFactRecord;
+  globalProfile: GlobalProfileRecord;
 }

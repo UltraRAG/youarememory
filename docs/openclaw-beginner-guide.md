@@ -90,16 +90,17 @@ npm run reload:memory-plugin
 当前版本已经切换到：
 
 - `captureStrategy = full_session` 默认
-- `GlobalFactRecord` 单例模型
-- `L1` 按 session-window 聚合
+- `GlobalProfileRecord` 单例模型
+- `L1` 按话题闭合构建
 - 索引触发支持：定时、切到新 session、看板“立即构建”
 
 这意味着：
 
 - `L0` 默认保存完整 session，而不是只保存最后一轮
-- 动态事实不再是一条 fact 一行，而是写入单例 `global_fact_record`
-- 旧版 `global_facts` 不会自动迁移到新单例
-- 看板里可设置自动构建间隔、`L1` 切窗方式和 `L2` 时间粒度
+- 全局画像会被持续重写到单例 `global_profile_record`
+- `L1` 不再按时间或条数切窗，而是由模型判断话题是否闭合
+- `L2` 时间固定按天维护，不再提供粒度配置
+- 看板设置里只保留自动构建间隔；手动触发用“立即构建”或“清空并重建”
 
 ### 推荐重建流程
 
@@ -108,7 +109,7 @@ npm run reload:memory-plugin
 1. 打开看板
 2. 点右上角 `设置`
 3. 在设置抽屉里点击 `清空并重建`
-4. 继续正常对话，让新的 `L0 / L1 / L2 / GlobalFact` 重新建立
+4. 继续正常对话，让新的 `L0 / L1 / L2 / GlobalProfile` 重新建立
 
 ---
 
@@ -176,14 +177,14 @@ npm run reload:memory-plugin
 
 ### 7.3 升级后事实为空
 
-这通常表示本地还是旧版 `global_facts` 数据。
+这通常表示本地还是旧版 `global_facts` / `global_fact_record` 数据。
 
 处理方式：
 
 1. 打开看板
 2. 点 `设置`
 3. 点 `清空并重建`
-4. 继续正常对话，等待新事实重新进入 `global_fact_record`
+4. 继续正常对话，等待新画像重新进入 `global_profile_record`
 
 ---
 

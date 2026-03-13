@@ -78,7 +78,7 @@ export const DEFAULT_CONTEXT_TEMPLATE = `You are using multi-level memory indexe
 intent={{intent}}
 enoughAt={{enoughAt}}
 
-{{factsBlock}}
+{{profileBlock}}
 
 {{l2Block}}
 

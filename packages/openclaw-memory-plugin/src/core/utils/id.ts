@@ -21,8 +21,8 @@ export function buildL2TimeIndexId(dateKey: string): string {
   return `time_${hashText(dateKey)}`;
 }
 
-export function buildL2ProjectIndexId(projectName: string): string {
-  return `project_${hashText(projectName.toLowerCase())}`;
+export function buildL2ProjectIndexId(projectKey: string): string {
+  return `project_${hashText(projectKey.toLowerCase())}`;
 }
 
 export function buildFactId(factKey: string): string {

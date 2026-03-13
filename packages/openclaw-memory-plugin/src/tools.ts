@@ -1,4 +1,3 @@
-import type { FactCandidate } from "./core/types.js";
 import { MemoryRepository, ReasoningRetriever } from "./core/index.js";
 import type { PluginTool } from "./plugin-api.js";
 
@@ -49,14 +48,12 @@ export function buildPluginTools(
     },
     {
       name: "memory_store",
-      label: "Store Fact",
-      description: "Store a durable fact into dynamic user profile.",
+      label: "Append Profile Note",
+      description: "Append a manual note into the global user profile summary.",
       parameters: {
         type: "object",
         properties: {
-          content: { type: "string", description: "Fact content to save." },
-          factKey: { type: "string", description: "Optional stable key." },
-          confidence: { type: "number", description: "0~1 confidence score." },
+          content: { type: "string", description: "Profile note content to append." },
         },
         required: ["content"],
       },
@@ -64,19 +61,8 @@ export function buildPluginTools(
         const input = (params ?? {}) as Record<string, unknown>;
         const content = typeof input.content === "string" ? input.content.trim() : "";
         if (!content) return jsonResult({ ok: false, error: "content is required" });
-        const explicitKey = typeof input.factKey === "string" && input.factKey.trim()
-          ? input.factKey.trim()
-          : `manual:${content.slice(0, 64).toLowerCase()}`;
-        const confidence = typeof input.confidence === "number"
-          ? Math.min(1, Math.max(0.1, input.confidence))
-          : 0.8;
-        const fact: FactCandidate = {
-          factKey: explicitKey,
-          factValue: content,
-          confidence,
-        };
-        repository.upsertGlobalFacts([fact]);
-        return jsonResult({ ok: true, stored: fact });
+        const profile = repository.appendToGlobalProfile(content);
+        return jsonResult({ ok: true, profile });
       },
     },
     {

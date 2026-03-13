@@ -1,70 +1,54 @@
 import type {
-  IndexingSettings,
   L1WindowRecord,
   L2ProjectIndexRecord,
   L2TimeIndexRecord,
-  L2TimeGranularity,
+  ProjectDetail,
 } from "../types.js";
 import { buildL2ProjectIndexId, buildL2TimeIndexId, nowIso } from "../utils/id.js";
 
-function bucketStart(date: Date, granularity: L2TimeGranularity): Date {
-  const next = new Date(date);
-  next.setMinutes(0, 0, 0);
-  if (granularity === "day") {
-    next.setHours(0, 0, 0, 0);
-    return next;
-  }
-  if (granularity === "half_day") {
-    next.setHours(next.getHours() < 12 ? 0 : 12, 0, 0, 0);
-    return next;
-  }
-  return next;
-}
-
-function formatBucketKey(date: Date, granularity: L2TimeGranularity): string {
-  const yyyyMmDd = date.toISOString().slice(0, 10);
-  const hh = String(date.getHours()).padStart(2, "0");
-  if (granularity === "day") {
-    return yyyyMmDd;
-  }
-  if (granularity === "half_day") {
-    const endHour = date.getHours() < 12 ? "12" : "24";
-    return `${yyyyMmDd} ${hh}:00-${endHour}:00`;
-  }
-  return `${yyyyMmDd} ${hh}:00`;
+function formatLocalDayKey(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value.slice(0, 10) || "unknown-day";
+  const year = String(date.getFullYear());
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 export function buildL2TimeFromL1(
   l1: L1WindowRecord,
-  settings: Pick<IndexingSettings, "l2TimeGranularity">,
+  summary: string,
 ): L2TimeIndexRecord {
-  const granularity = settings.l2TimeGranularity;
-  const start = bucketStart(new Date(l1.startedAt), granularity);
-  const dateKey = Number.isNaN(start.getTime())
-    ? l1.startedAt.slice(0, 10) || l1.timePeriod
-    : formatBucketKey(start, granularity);
+  const dateKey = formatLocalDayKey(l1.startedAt || l1.endedAt || l1.createdAt);
   const now = nowIso();
   return {
     l2IndexId: buildL2TimeIndexId(dateKey),
     dateKey,
-    summary: l1.summary,
+    summary,
     l1Source: [l1.l1IndexId],
     createdAt: now,
     updatedAt: now,
   };
 }
 
-export function buildL2ProjectsFromL1(l1: L1WindowRecord): L2ProjectIndexRecord[] {
+export function buildL2ProjectFromDetail(
+  project: ProjectDetail,
+  l1IndexId: string,
+): L2ProjectIndexRecord {
   const now = nowIso();
-  return l1.projectDetails.map((project) => ({
+  return {
     l2IndexId: buildL2ProjectIndexId(project.key),
     projectKey: project.key,
     projectName: project.name,
-    summary: project.summary || `${project.name}: ${l1.summary}`,
+    summary: project.summary,
     currentStatus: project.status,
-    latestProgress: project.latestProgress || l1.situationTimeInfo,
-    l1Source: [l1.l1IndexId],
+    latestProgress: project.latestProgress,
+    l1Source: [l1IndexId],
     createdAt: now,
     updatedAt: now,
-  }));
+  };
+}
+
+export function buildL2ProjectsFromL1(l1: L1WindowRecord): L2ProjectIndexRecord[] {
+  return l1.projectDetails.map((project) => buildL2ProjectFromDetail(project, l1.l1IndexId));
 }
