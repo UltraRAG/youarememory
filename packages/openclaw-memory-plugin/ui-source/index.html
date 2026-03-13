@@ -11,39 +11,59 @@
       <header class="topbar">
         <div>
           <h1>YouAreMemory</h1>
-          <p>OpenClaw 多级记忆面板（L0 / L1 / L2）</p>
+          <p>多级记忆可视化面板（L0 / L1 / L2）</p>
         </div>
-        <button id="refreshBtn">刷新</button>
+        <button id="refreshBtn" class="ghost-btn">刷新数据</button>
       </header>
 
       <section class="overview" id="overviewCards"></section>
 
-      <section class="search">
-        <input id="queryInput" type="text" placeholder="输入问题，测试 L2→L1→L0 检索..." />
-        <button id="retrieveBtn">检索</button>
-      </section>
+      <section class="workspace">
+        <article class="panel browser-panel">
+          <header class="panel-header">
+            <div>
+              <h2>索引浏览</h2>
+              <p id="listHint">点击条目可在右侧查看详情</p>
+            </div>
+            <div class="tab-group" id="levelTabs">
+              <button class="tab active" data-level="l2_time">L2 时间</button>
+              <button class="tab" data-level="l2_project">L2 项目</button>
+              <button class="tab" data-level="l1">L1 窗口</button>
+              <button class="tab" data-level="l0">L0 会话</button>
+              <button class="tab" data-level="facts">事实</button>
+            </div>
+          </header>
 
-      <section class="retrieve-result">
-        <h2>检索上下文</h2>
-        <pre id="retrieveResult"></pre>
-      </section>
+          <div class="browser-content">
+            <div class="list-pane">
+              <div class="list-search">
+                <input id="listQueryInput" type="text" placeholder="在当前层级检索关键词..." />
+                <button id="listSearchBtn">查询</button>
+              </div>
+              <ul id="entryList" class="entry-list"></ul>
+            </div>
 
-      <section class="grid">
-        <article>
-          <h2>L2 时间索引</h2>
-          <ul id="timeList"></ul>
+            <aside class="detail-pane">
+              <h3 id="detailTitle">请选择条目</h3>
+              <div id="detailMeta" class="detail-meta"></div>
+              <div id="detailBody" class="detail-body"></div>
+            </aside>
+          </div>
         </article>
-        <article>
-          <h2>L2 项目索引</h2>
-          <ul id="projectList"></ul>
-        </article>
-        <article>
-          <h2>动态事实画像</h2>
-          <ul id="factList"></ul>
-        </article>
-        <article>
-          <h2>L0 最近会话</h2>
-          <ul id="sessionList"></ul>
+
+        <article class="panel retrieve-panel">
+          <header class="panel-header">
+            <div>
+              <h2>上下文检索</h2>
+              <p>沿用原检索逻辑，展示 L2→L1→L0 汇总</p>
+            </div>
+          </header>
+          <div class="search">
+            <input id="queryInput" type="text" placeholder="输入问题，测试 L2→L1→L0 检索..." />
+            <button id="retrieveBtn">检索</button>
+          </div>
+          <div id="retrieveSummary" class="retrieve-summary muted">尚未检索</div>
+          <pre id="retrieveResult"></pre>
         </article>
       </section>
     </div>
