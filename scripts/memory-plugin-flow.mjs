@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { access, readFile, rm } from "node:fs/promises";
+import { readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
@@ -204,13 +204,8 @@ async function readOpenClawConfig() {
   }
 }
 
-async function pathExists(targetPath) {
-  try {
-    await access(targetPath);
-    return true;
-  } catch {
-    return false;
-  }
+async function writeOpenClawConfig(config) {
+  await writeFile(resolveConfigPath(), `${JSON.stringify(config, null, 2)}\n`, "utf-8");
 }
 
 async function verifyMemorySlotBound() {
@@ -221,6 +216,22 @@ async function verifyMemorySlotBound() {
 async function verifyPluginEnabled() {
   const config = await readOpenClawConfig();
   return config?.plugins?.entries?.[PLUGIN_ID]?.enabled === true;
+}
+
+async function ensurePluginLoadPath(pluginPath) {
+  printStep("Register plugin source path");
+  const config = (await readOpenClawConfig()) ?? {};
+  const plugins = config.plugins && typeof config.plugins === "object" ? config.plugins : {};
+  const load = plugins.load && typeof plugins.load === "object" ? plugins.load : {};
+  const normalizedPluginPath = path.resolve(pluginPath);
+  const currentPaths = Array.isArray(load.paths)
+    ? load.paths.filter((entry) => typeof entry === "string" && entry.trim())
+    : [];
+  const dedupedPaths = currentPaths.filter((entry) => path.resolve(entry) !== normalizedPluginPath);
+  load.paths = [normalizedPluginPath, ...dedupedPaths];
+  plugins.load = load;
+  config.plugins = plugins;
+  await writeOpenClawConfig(config);
 }
 
 async function isUiReachable() {
@@ -234,51 +245,17 @@ async function isUiReachable() {
   }
 }
 
-async function uninstallPlugin(repoRoot) {
-  printStep("Remove existing plugin link");
-  const result = await runCommand(
-    "openclaw",
-    ["plugins", "uninstall", PLUGIN_ID, "--force"],
-    {
-      cwd: repoRoot,
-      timeoutMs: SHORT_COMMAND_TIMEOUT_MS,
-      tolerateNonZero: true,
-    },
-  );
+async function removePluginInstallMetadata() {
+  printStep("Remove existing plugin link metadata");
   const config = await readOpenClawConfig();
-  const removed = !config?.plugins?.entries?.[PLUGIN_ID];
-  if (!removed) {
-    const snippet = summarizeOutput(`${result.stderr}\n${result.stdout}`);
-    throw new Error(`failed to uninstall plugin link\n${snippet || "plugin entry still exists"}`);
+  if (!config?.plugins?.installs?.[PLUGIN_ID]) {
+    return;
   }
-  if (result.timedOut) {
-    console.warn("warning: `openclaw plugins uninstall` timed out, but the plugin entry was removed.");
+  delete config.plugins.installs[PLUGIN_ID];
+  if (Object.keys(config.plugins.installs).length === 0) {
+    delete config.plugins.installs;
   }
-}
-
-async function installPluginLink(repoRoot, pluginPath, installDir) {
-  printStep("Link plugin into OpenClaw");
-  const result = await runCommand(
-    "openclaw",
-    ["plugins", "install", "--link", pluginPath],
-    {
-      cwd: repoRoot,
-      timeoutMs: SHORT_COMMAND_TIMEOUT_MS,
-      tolerateNonZero: true,
-    },
-  );
-
-  const config = await readOpenClawConfig();
-  const installed = Boolean(config?.plugins?.entries?.[PLUGIN_ID]) || await pathExists(installDir);
-  if (!installed) {
-    const snippet = summarizeOutput(`${result.stderr}\n${result.stdout}`);
-    throw new Error(`failed to install plugin link\n${snippet || "plugin link not found after install"}`);
-  }
-  if (result.timedOut) {
-    console.warn("warning: `openclaw plugins install --link` timed out, but the plugin link was created.");
-  } else if (result.code !== 0) {
-    console.warn(`warning: \`openclaw plugins install --link\` exited with ${result.code}, but the plugin link was created.`);
-  }
+  await writeOpenClawConfig(config);
 }
 
 async function runConfigMutation(repoRoot, label, command, args, verifyState) {
@@ -396,13 +373,11 @@ export async function relinkMemoryPlugin({ importMetaUrl } = {}) {
   const installDir = path.join(resolveStateDir(), "extensions", PLUGIN_ID);
 
   await buildPlugin(repoRoot);
-
-  await uninstallPlugin(repoRoot);
+  await ensurePluginLoadPath(pluginPath);
+  await removePluginInstallMetadata();
 
   printStep("Clean extension directory");
   await rm(installDir, { recursive: true, force: true });
-
-  await installPluginLink(repoRoot, pluginPath, installDir);
 
   await runReloadFlow(repoRoot, { skipBuild: true });
 }

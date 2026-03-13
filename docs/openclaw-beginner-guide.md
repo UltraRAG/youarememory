@@ -26,9 +26,9 @@ npm run relink:memory-plugin
 `relink:memory-plugin` 会自动完成：
 
 - 构建插件
-- 卸载旧链接
+- 清理旧链接元数据
 - 清理本地旧扩展目录
-- 重新 `install --link`
+- 修正本机 `plugins.load.paths`，确保当前仓库插件可被发现
 - 绑定 memory slot
 - 启用插件
 - 重启 gateway

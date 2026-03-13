@@ -104,6 +104,7 @@ export class LocalUiServer {
     void this.handle(req, res);
   });
   private started = false;
+  private listening = false;
   private readonly prefix: string;
 
   constructor(
@@ -114,6 +115,19 @@ export class LocalUiServer {
     private readonly logger: PluginLogger,
   ) {
     this.prefix = withSlashPrefix(options.prefix).replace(/\/+$/, "");
+    this.server.on("listening", () => {
+      this.listening = true;
+    });
+    this.server.on("close", () => {
+      this.listening = false;
+      this.started = false;
+    });
+    this.server.on("error", (error) => {
+      this.listening = false;
+      this.started = false;
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn?.(`[youarememory] dashboard server failed: ${message}`);
+    });
   }
 
   start(): void {
@@ -127,8 +141,9 @@ export class LocalUiServer {
   }
 
   stop(): void {
-    if (!this.started) return;
+    if (!this.started && !this.listening) return;
     this.started = false;
+    if (!this.listening) return;
     this.server.close();
   }
 

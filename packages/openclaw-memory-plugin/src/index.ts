@@ -206,8 +206,9 @@ const plugin = {
         start: () => uiServer?.start(),
         stop: stopRuntime,
       });
+    } else {
+      uiServer?.start();
     }
-    uiServer?.start();
 
     api.on?.(
       "before_prompt_build",
