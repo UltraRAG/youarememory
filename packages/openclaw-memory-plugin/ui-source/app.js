@@ -13,6 +13,9 @@ const detailBody = $("#detailBody");
 const statusPill = $("#statusPill");
 const detailToggleBtn = $("#detailToggleBtn");
 const detailCloseBtn = $("#detailCloseBtn");
+const sidebarToggleBtn = $("#sidebarToggleBtn");
+const sidebarCloseBtn = $("#sidebarCloseBtn");
+const sidebarScrim = $("#sidebarScrim");
 const mobileScrim = $("#mobileScrim");
 
 const queryInput = $("#queryInput");
@@ -102,7 +105,20 @@ function formatTime(value) {
 }
 
 function isMobileLayout() {
-  return window.matchMedia("(max-width: 1180px)").matches;
+  return window.matchMedia("(max-width: 1040px)").matches;
+}
+
+function isSidebarDrawerLayout() {
+  return window.matchMedia("(max-width: 1220px)").matches;
+}
+
+function openSidebarDrawer() {
+  if (!isSidebarDrawerLayout()) return;
+  document.body.classList.add("sidebar-open");
+}
+
+function closeSidebarDrawer() {
+  document.body.classList.remove("sidebar-open");
 }
 
 function openDetailDrawer() {
@@ -440,10 +456,12 @@ function appendMessagesSection(messages = []) {
   messages.forEach((message) => {
     const line = document.createElement("div");
     line.className = "message-item";
+    line.classList.toggle("is-user", message.role === "user");
+    line.classList.toggle("is-assistant", message.role === "assistant");
 
     const role = document.createElement("span");
     role.className = "message-role";
-    role.textContent = message.role || "unknown";
+    role.textContent = String(message.role || "unknown");
 
     const content = document.createElement("span");
     content.className = "message-content";
@@ -593,6 +611,7 @@ function switchLevel(nextLevel) {
   });
 
   setVisibleItems(state.baseItems[nextLevel] || []);
+  closeSidebarDrawer();
 }
 
 function createRetrieveCard(titleText, countText, lines) {
@@ -878,9 +897,24 @@ mobileScrim?.addEventListener("click", () => {
   closeDetailDrawer();
 });
 
+sidebarToggleBtn?.addEventListener("click", () => {
+  openSidebarDrawer();
+});
+
+sidebarCloseBtn?.addEventListener("click", () => {
+  closeSidebarDrawer();
+});
+
+sidebarScrim?.addEventListener("click", () => {
+  closeSidebarDrawer();
+});
+
 window.addEventListener("resize", () => {
   if (!isMobileLayout()) {
     closeDetailDrawer();
+  }
+  if (!isSidebarDrawerLayout()) {
+    closeSidebarDrawer();
   }
 });
 
