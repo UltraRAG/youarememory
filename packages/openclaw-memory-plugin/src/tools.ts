@@ -43,7 +43,7 @@ export function buildPluginTools(
           return jsonResult({ ok: false, error: "query is required" });
         }
         const limit = toLimit(input.limit, 6);
-        const result = retriever.retrieve(query, { l2Limit: limit, l1Limit: limit, l0Limit: Math.max(3, Math.floor(limit / 2)) });
+        const result = await retriever.retrieve(query, { l2Limit: limit, l1Limit: limit, l0Limit: Math.max(3, Math.floor(limit / 2)) });
         return jsonResult({ ok: true, ...result });
       },
     },
@@ -98,7 +98,7 @@ export function buildPluginTools(
         const limit = toLimit(input.limit, 8);
         const type = typeof input.type === "string" ? input.type : "general";
         const intent = type === "time" || type === "project" ? type : "general";
-        const results = retriever.searchL2(query, intent, limit);
+        const results = await retriever.searchL2(query, intent, limit);
         return jsonResult({ ok: true, count: results.length, results });
       },
     },
@@ -120,7 +120,7 @@ export function buildPluginTools(
         const query = typeof input.query === "string" ? input.query : "";
         const ids = Array.isArray(input.l1Ids) ? input.l1Ids.filter((v): v is string => typeof v === "string") : [];
         const limit = toLimit(input.limit, 8);
-        const results = retriever.searchL1(query, ids, limit);
+        const results = await retriever.searchL1(query, ids, limit);
         return jsonResult({ ok: true, count: results.length, results });
       },
     },
@@ -142,7 +142,7 @@ export function buildPluginTools(
         const query = typeof input.query === "string" ? input.query : "";
         const ids = Array.isArray(input.l0Ids) ? input.l0Ids.filter((v): v is string => typeof v === "string") : [];
         const limit = toLimit(input.limit, 6);
-        const results = retriever.searchL0(query, ids, limit);
+        const results = await retriever.searchL0(query, ids, limit);
         return jsonResult({ ok: true, count: results.length, results });
       },
     },
@@ -162,7 +162,7 @@ export function buildPluginTools(
         const input = (params ?? {}) as Record<string, unknown>;
         const query = typeof input.query === "string" ? input.query : "";
         const limit = toLimit(input.limit, 6);
-        const result = retriever.retrieve(query, { l2Limit: limit, l1Limit: limit, l0Limit: Math.max(3, Math.floor(limit / 2)) });
+        const result = await retriever.retrieve(query, { l2Limit: limit, l1Limit: limit, l0Limit: Math.max(3, Math.floor(limit / 2)) });
         return jsonResult({ ok: true, alias: "memory_recall", ...result });
       },
     },

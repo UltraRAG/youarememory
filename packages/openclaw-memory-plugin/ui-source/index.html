@@ -75,6 +75,39 @@
             <div id="overviewCards" class="overview-grid"></div>
           </section>
 
+          <section class="sidebar-section">
+            <div class="section-head">
+              <div class="section-label">索引设置</div>
+              <div class="section-hint">控制何时构建 L1/L2</div>
+            </div>
+            <div class="settings-grid">
+              <label class="settings-field">
+                <span>自动构建间隔（分钟）</span>
+                <input id="autoIndexIntervalInput" type="number" min="0" step="1" placeholder="60" />
+              </label>
+              <label class="settings-field">
+                <span>L1 切窗方式</span>
+                <select id="l1WindowModeSelect">
+                  <option value="time">按时间</option>
+                  <option value="count">按条数</option>
+                </select>
+              </label>
+              <label class="settings-field">
+                <span id="l1WindowValueLabel">L1 窗口时长（分钟）</span>
+                <input id="l1WindowValueInput" type="number" min="0" step="1" placeholder="120" />
+              </label>
+              <label class="settings-field">
+                <span>L2 时间粒度</span>
+                <select id="l2TimeGranularitySelect">
+                  <option value="day">每天</option>
+                  <option value="half_day">每半天</option>
+                  <option value="hour">每小时</option>
+                </select>
+              </label>
+              <button id="saveSettingsBtn" class="sidebar-btn" type="button">保存设置</button>
+            </div>
+          </section>
+
           <section class="sidebar-section notice">
             <div class="section-head">
               <div class="section-label">升级说明</div>
@@ -90,6 +123,7 @@
             </div>
             <div class="sidebar-actions">
               <button id="refreshBtn" class="sidebar-btn">刷新数据</button>
+              <button id="buildNowBtn" class="sidebar-btn">立即构建</button>
               <button id="clearMemoryBtn" class="sidebar-btn danger">清空并重建</button>
             </div>
           </section>

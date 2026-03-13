@@ -90,12 +90,15 @@ open "http://127.0.0.1:39393/youarememory/?v=$(date +%s)"
 
 - `captureStrategy = full_session` 默认
 - `GlobalFactRecord` 单例模型
+- `L1` 改为 session-window 聚合，不再对每条 `L0` 直接生成一个 `L1`
+- 索引触发支持：定时、切换到新 session、看板“立即构建”
 
 这意味着：
 
 - L0 默认保存完整 session，而不是只保存最后一轮
 - 动态事实不再是一条 fact 一行，而是写入单例 `global_fact_record`
 - 旧版 `global_facts` 不会自动迁移到新单例
+- 看板里可以直接设置自动构建间隔、`L1` 切窗模式（时间或条数二选一）和 `L2` 时间粒度
 
 ### 推荐重建流程
 

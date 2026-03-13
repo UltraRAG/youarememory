@@ -1,13 +1,48 @@
-import type { L1WindowRecord, L2ProjectIndexRecord, L2TimeIndexRecord } from "../types.js";
+import type {
+  IndexingSettings,
+  L1WindowRecord,
+  L2ProjectIndexRecord,
+  L2TimeIndexRecord,
+  L2TimeGranularity,
+} from "../types.js";
 import { buildL2ProjectIndexId, buildL2TimeIndexId, nowIso } from "../utils/id.js";
 
-function parseDateKey(timePeriod: string): string {
-  const idx = timePeriod.indexOf(":");
-  return idx >= 0 ? timePeriod.slice(0, idx) : timePeriod;
+function bucketStart(date: Date, granularity: L2TimeGranularity): Date {
+  const next = new Date(date);
+  next.setMinutes(0, 0, 0);
+  if (granularity === "day") {
+    next.setHours(0, 0, 0, 0);
+    return next;
+  }
+  if (granularity === "half_day") {
+    next.setHours(next.getHours() < 12 ? 0 : 12, 0, 0, 0);
+    return next;
+  }
+  return next;
 }
 
-export function buildL2TimeFromL1(l1: L1WindowRecord): L2TimeIndexRecord {
-  const dateKey = parseDateKey(l1.timePeriod);
+function formatBucketKey(date: Date, granularity: L2TimeGranularity): string {
+  const yyyyMmDd = date.toISOString().slice(0, 10);
+  const hh = String(date.getHours()).padStart(2, "0");
+  if (granularity === "day") {
+    return yyyyMmDd;
+  }
+  if (granularity === "half_day") {
+    const endHour = date.getHours() < 12 ? "12" : "24";
+    return `${yyyyMmDd} ${hh}:00-${endHour}:00`;
+  }
+  return `${yyyyMmDd} ${hh}:00`;
+}
+
+export function buildL2TimeFromL1(
+  l1: L1WindowRecord,
+  settings: Pick<IndexingSettings, "l2TimeGranularity">,
+): L2TimeIndexRecord {
+  const granularity = settings.l2TimeGranularity;
+  const start = bucketStart(new Date(l1.startedAt), granularity);
+  const dateKey = Number.isNaN(start.getTime())
+    ? l1.startedAt.slice(0, 10) || l1.timePeriod
+    : formatBucketKey(start, granularity);
   const now = nowIso();
   return {
     l2IndexId: buildL2TimeIndexId(dateKey),

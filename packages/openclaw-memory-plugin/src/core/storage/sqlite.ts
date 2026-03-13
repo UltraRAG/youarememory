@@ -6,6 +6,7 @@ import type {
   FactCandidate,
   GlobalFactItem,
   GlobalFactRecord,
+  IndexingSettings,
   L0SessionRecord,
   L1WindowRecord,
   L2ProjectIndexRecord,
@@ -20,6 +21,7 @@ import { safeJsonParse, scoreMatch } from "../utils/text.js";
 type DbRow = Record<string, unknown>;
 
 const GLOBAL_FACT_RECORD_ID = "global_fact_record" as const;
+const INDEXING_SETTINGS_STATE_KEY = "indexingSettings" as const;
 
 export interface ClearMemoryResult {
   cleared: {
@@ -56,7 +58,10 @@ function parseL0Row(row: DbRow): L0SessionRecord {
 function parseL1Row(row: DbRow): L1WindowRecord {
   return {
     l1IndexId: String(row.l1_index_id),
+    sessionKey: String(row.session_key ?? ""),
     timePeriod: String(row.time_period),
+    startedAt: String(row.started_at ?? row.created_at),
+    endedAt: String(row.ended_at ?? row.created_at),
     summary: String(row.summary),
     facts: safeJsonParse(String(row.facts_json ?? "[]"), []),
     situationTimeInfo: String(row.situation_time_info ?? ""),
@@ -143,6 +148,36 @@ function computeTokenScore(query: string, candidates: string[]): number {
   return best;
 }
 
+function normalizeIndexingSettings(
+  input: Partial<IndexingSettings> | undefined,
+  defaults: IndexingSettings,
+): IndexingSettings {
+  const autoIndexIntervalMinutes = typeof input?.autoIndexIntervalMinutes === "number" && Number.isFinite(input.autoIndexIntervalMinutes)
+    ? Math.max(0, Math.floor(input.autoIndexIntervalMinutes))
+    : defaults.autoIndexIntervalMinutes;
+  const l1WindowMode = input?.l1WindowMode === "time" || input?.l1WindowMode === "count"
+    ? input.l1WindowMode
+    : defaults.l1WindowMode;
+  const l1WindowMinutes = typeof input?.l1WindowMinutes === "number" && Number.isFinite(input.l1WindowMinutes)
+    ? Math.max(0, Math.floor(input.l1WindowMinutes))
+    : defaults.l1WindowMinutes;
+  const l1WindowMaxL0 = typeof input?.l1WindowMaxL0 === "number" && Number.isFinite(input.l1WindowMaxL0)
+    ? Math.max(0, Math.floor(input.l1WindowMaxL0))
+    : defaults.l1WindowMaxL0;
+  const l2TimeGranularity = input?.l2TimeGranularity === "day"
+    || input?.l2TimeGranularity === "half_day"
+    || input?.l2TimeGranularity === "hour"
+    ? input.l2TimeGranularity
+    : defaults.l2TimeGranularity;
+  return {
+    autoIndexIntervalMinutes,
+    l1WindowMode,
+    l1WindowMinutes,
+    l1WindowMaxL0,
+    l2TimeGranularity,
+  };
+}
+
 export class MemoryRepository {
   private readonly db: DatabaseSync;
 
@@ -208,7 +243,10 @@ export class MemoryRepository {
 
       CREATE TABLE IF NOT EXISTS l1_windows (
         l1_index_id TEXT PRIMARY KEY,
+        session_key TEXT NOT NULL DEFAULT '',
         time_period TEXT NOT NULL,
+        started_at TEXT NOT NULL DEFAULT '',
+        ended_at TEXT NOT NULL DEFAULT '',
         summary TEXT NOT NULL,
         facts_json TEXT NOT NULL,
         situation_time_info TEXT NOT NULL,
@@ -279,6 +317,9 @@ export class MemoryRepository {
       CREATE INDEX IF NOT EXISTS idx_l2_project_name ON l2_project_indexes(project_name);
       CREATE INDEX IF NOT EXISTS idx_facts_key ON global_facts(fact_key);
     `);
+    this.ensureColumn("l1_windows", "session_key", "TEXT NOT NULL DEFAULT ''");
+    this.ensureColumn("l1_windows", "started_at", "TEXT NOT NULL DEFAULT ''");
+    this.ensureColumn("l1_windows", "ended_at", "TEXT NOT NULL DEFAULT ''");
     this.ensureColumn("l1_windows", "project_details_json", "TEXT NOT NULL DEFAULT '[]'");
     this.ensureColumn("l2_project_indexes", "project_key", "TEXT NOT NULL DEFAULT ''");
     this.db.exec("CREATE INDEX IF NOT EXISTS idx_l2_project_key ON l2_project_indexes(project_key);");
@@ -303,14 +344,23 @@ export class MemoryRepository {
     );
   }
 
-  listUnindexedL0Sessions(limit = 20): L0SessionRecord[] {
+  listUnindexedL0Sessions(limit = 20, sessionKeys?: string[]): L0SessionRecord[] {
+    const keys = Array.isArray(sessionKeys) ? sessionKeys.filter(Boolean) : [];
+    const whereParts = ["indexed = 0"];
+    const params: Array<string | number> = [];
+    if (keys.length > 0) {
+      whereParts.push(`session_key IN (${keys.map(() => "?").join(", ")})`);
+      params.push(...keys);
+    }
+    const limitSql = Number.isFinite(limit) ? "LIMIT ?" : "";
+    if (Number.isFinite(limit)) params.push(limit);
     const stmt = this.db.prepare(`
       SELECT * FROM l0_sessions
-      WHERE indexed = 0
+      WHERE ${whereParts.join(" AND ")}
       ORDER BY timestamp ASC
-      LIMIT ?
+      ${limitSql}
     `);
-    const rows = stmt.all(limit) as DbRow[];
+    const rows = stmt.all(...params) as DbRow[];
     return rows.map(parseL0Row);
   }
 
@@ -357,12 +407,15 @@ export class MemoryRepository {
   insertL1Window(window: L1WindowRecord): void {
     const stmt = this.db.prepare(`
       INSERT OR IGNORE INTO l1_windows (
-        l1_index_id, time_period, summary, facts_json, situation_time_info, project_tags_json, project_details_json, l0_source_json, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        l1_index_id, session_key, time_period, started_at, ended_at, summary, facts_json, situation_time_info, project_tags_json, project_details_json, l0_source_json, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     stmt.run(
       window.l1IndexId,
+      window.sessionKey,
       window.timePeriod,
+      window.startedAt,
+      window.endedAt,
       window.summary,
       JSON.stringify(window.facts),
       window.situationTimeInfo,
@@ -386,6 +439,8 @@ export class MemoryRepository {
     const scored = rows.map((item) => ({
       item,
       score: computeTokenScore(query, [
+        item.sessionKey,
+        item.timePeriod,
         item.summary,
         item.situationTimeInfo,
         item.projectTags.join(" "),
@@ -401,7 +456,7 @@ export class MemoryRepository {
   }
 
   listRecentL1(limit = 20): L1WindowRecord[] {
-    const stmt = this.db.prepare("SELECT * FROM l1_windows ORDER BY created_at DESC LIMIT ?");
+    const stmt = this.db.prepare("SELECT * FROM l1_windows ORDER BY ended_at DESC, created_at DESC LIMIT ?");
     const rows = stmt.all(limit) as DbRow[];
     return rows.map(parseL1Row);
   }
@@ -613,6 +668,11 @@ export class MemoryRepository {
     const state = stateStmt.get("lastIndexedAt") as { state_value?: string } | undefined;
     const overview: DashboardOverview = {
       totalL0: count("l0_sessions"),
+      pendingL0: (() => {
+        const stmt = this.db.prepare("SELECT COUNT(1) AS total FROM l0_sessions WHERE indexed = 0");
+        const row = stmt.get() as { total?: number } | undefined;
+        return Number(row?.total ?? 0);
+      })(),
       totalL1: count("l1_windows"),
       totalL2Time: count("l2_time_indexes"),
       totalL2Project: count("l2_project_indexes"),
@@ -640,6 +700,19 @@ export class MemoryRepository {
     const stmt = this.db.prepare("SELECT state_value FROM pipeline_state WHERE state_key = ?");
     const row = stmt.get(key) as { state_value?: string } | undefined;
     return row?.state_value;
+  }
+
+  getIndexingSettings(defaults: IndexingSettings): IndexingSettings {
+    const raw = this.getPipelineState(INDEXING_SETTINGS_STATE_KEY);
+    if (!raw) return normalizeIndexingSettings(undefined, defaults);
+    const parsed = safeJsonParse<Partial<IndexingSettings>>(raw, {});
+    return normalizeIndexingSettings(parsed, defaults);
+  }
+
+  saveIndexingSettings(input: Partial<IndexingSettings>, defaults: IndexingSettings): IndexingSettings {
+    const next = normalizeIndexingSettings(input, defaults);
+    this.setPipelineState(INDEXING_SETTINGS_STATE_KEY, JSON.stringify(next));
+    return next;
   }
 
   resetDerivedIndexes(): void {
@@ -746,6 +819,7 @@ export class MemoryRepository {
     };
 
     const currentFacts = this.getGlobalFactRecord().facts.length;
+    const indexingSettings = this.getPipelineState(INDEXING_SETTINGS_STATE_KEY);
     this.db.exec("BEGIN");
     try {
       const cleared = {
@@ -765,6 +839,9 @@ export class MemoryRepository {
         createdAt: resetAt,
         updatedAt: resetAt,
       });
+      if (indexingSettings) {
+        this.setPipelineState(INDEXING_SETTINGS_STATE_KEY, indexingSettings);
+      }
       this.db.exec("COMMIT");
       return {
         cleared,
@@ -779,6 +856,13 @@ export class MemoryRepository {
   getUiSnapshot(limit = 20): MemoryUiSnapshot {
     return {
       overview: this.getOverview(),
+      settings: this.getIndexingSettings({
+        autoIndexIntervalMinutes: 60,
+        l1WindowMode: "time",
+        l1WindowMinutes: 120,
+        l1WindowMaxL0: 8,
+        l2TimeGranularity: "day",
+      }),
       recentTimeIndexes: this.listRecentL2Time(limit),
       recentProjectIndexes: this.listRecentL2Projects(limit),
       recentL1Windows: this.listRecentL1(limit),

@@ -1,4 +1,17 @@
-import type { FactCandidate, MemoryMessage, ProjectDetail, ProjectStatus } from "../types.js";
+import type {
+  FactCandidate,
+  GlobalFactItem,
+  IntentType,
+  L0SessionRecord,
+  L1WindowRecord,
+  L2ProjectIndexRecord,
+  L2SearchResult,
+  L2TimeIndexRecord,
+  MemoryMessage,
+  ProjectDetail,
+  ProjectStatus,
+  RetrievalResult,
+} from "../types.js";
 
 type LoggerLike = {
   info?: (...args: unknown[]) => void;
@@ -39,11 +52,66 @@ interface RawExtractionPayload {
   projects?: unknown;
 }
 
+interface RawProjectResolutionPayload {
+  matched_project_key?: unknown;
+  canonical_key?: unknown;
+  canonical_name?: unknown;
+}
+
+interface RawReasoningPayload {
+  intent?: unknown;
+  enough_at?: unknown;
+  fact_keys?: unknown;
+  l2_ids?: unknown;
+  l1_ids?: unknown;
+  l0_ids?: unknown;
+}
+
 export interface SessionExtractionResult {
   summary: string;
   situationTimeInfo: string;
   facts: FactCandidate[];
   projectDetails: ProjectDetail[];
+}
+
+export interface LlmProjectResolutionInput {
+  project: ProjectDetail;
+  existingProjects: L2ProjectIndexRecord[];
+  agentId?: string;
+}
+
+export interface LlmReasoningInput {
+  query: string;
+  facts: GlobalFactItem[];
+  l2Time: L2TimeIndexRecord[];
+  l2Projects: L2ProjectIndexRecord[];
+  l1Windows: L1WindowRecord[];
+  l0Sessions: L0SessionRecord[];
+  limits: {
+    fact: number;
+    l2: number;
+    l1: number;
+    l0: number;
+  };
+  agentId?: string;
+}
+
+export interface LlmReasoningSelection {
+  intent: IntentType;
+  enoughAt: RetrievalResult["enoughAt"];
+  factKeys: string[];
+  l2Ids: string[];
+  l1Ids: string[];
+  l0Ids: string[];
+}
+
+export interface LlmCoverageJudgeInput {
+  query: string;
+  facts: GlobalFactItem[];
+  l2Results: L2SearchResult[];
+  l1Results: L1WindowRecord[];
+  l0Results: L0SessionRecord[];
+  agentId?: string;
 }
 
 const EXTRACTION_SYSTEM_PROMPT = `
@@ -56,6 +124,11 @@ Rules:
 - Ignore system prompts, tool scaffolding, hidden reasoning, formatting artifacts, and operational chatter.
 - Be conservative. If something is ambiguous, omit it.
 - Track projects only when they look like a real ongoing effort, task stream, research topic, implementation effort, or recurring problem worth revisiting later.
+- "Project" here is broad: it can be a workstream, submission, research effort, health/problem thread, or other ongoing topic the user is likely to revisit.
+- If the conversation contains multiple independent ongoing threads, return multiple project items instead of collapsing them into one.
+- Repeated caregiving, illness handling, symptom tracking, recovery follow-up, or other ongoing real-world problem-solving threads should be treated as projects when the user is actively managing them.
+- Example: "friend has diarrhea / user buys medicine / later reports recovery" is a project-like thread.
+- Example: "preparing an EMNLP submission" is another independent project-like thread.
 - Do not treat casual one-off mentions as projects.
 - Extract facts only when they are likely to matter in future conversations: preferences, constraints, goals, identity, long-lived context, stable relationships, or durable project context.
 - Natural-language output fields must use the dominant language of the user messages. If user messages are mixed, prefer the most recent user language. Keys and enums must stay in English.
@@ -83,6 +156,97 @@ Use this exact JSON shape:
       "confidence": 0.0
     }
   ]
+}
+`.trim();
+
+const PROJECT_RESOLUTION_SYSTEM_PROMPT = `
+You resolve whether two memory project descriptions refer to the same underlying ongoing project.
+
+Rules:
+- Prefer merging duplicates caused by wording differences, synonyms, or different granularity of the same effort.
+- Match only when the underlying ongoing effort is clearly the same.
+- Reuse an existing project when possible.
+- Return JSON only.
+
+Use this exact JSON shape:
+{
+  "matched_project_key": "existing project key or null",
+  "canonical_key": "stable lower-kebab-case key",
+  "canonical_name": "project name users would recognize"
+}
+`.trim();
+
+const PROJECT_COMPLETION_SYSTEM_PROMPT = `
+You review an extracted project list and complete any missing ongoing threads from the conversation.
+
+Rules:
+- Return the full corrected project list, not just additions.
+- Include all independent ongoing threads that are likely to matter in future conversation.
+- Health/caregiving/problem-management threads count as projects when the user is actively managing them.
+- Resolved but substantial threads from the current window may still be kept with status "done" if they are a meaningful thread the user may refer back to.
+- Example pair of separate projects in one window: "friend's stomach illness and medicine follow-up" plus "EMNLP submission preparation".
+- Merge duplicates caused by wording differences.
+- Return JSON only.
+
+Use this exact JSON shape:
+{
+  "projects": [
+    {
+      "key": "stable english identifier, lower-kebab-case",
+      "name": "project name as the user would recognize it",
+      "status": "planned | in_progress | blocked | on_hold | done | unknown",
+      "summary": "short project summary",
+      "latest_progress": "latest meaningful progress or state",
+      "confidence": 0.0
+    }
+  ]
+}
+`.trim();
+
+const REASONING_SYSTEM_PROMPT = `
+You are a semantic memory retrieval reasoner.
+
+Your job is to decide which memory records are relevant to the user's query.
+
+Rules:
+- Use semantic meaning, not keyword overlap.
+- Use high recall for obvious paraphrases and near-synonyms.
+- Examples of relevant paraphrases:
+  - "投论文" ~= "投稿" ~= "会议投稿" ~= "准备 EMNLP 投稿"
+  - "拉肚子" ~= "腹泻" ~= "肠胃炎" ~= "买药/康复跟进"
+- Prefer the smallest set of records needed to answer the query well.
+- If L2 already captures enough, set enough_at to "l2".
+- If L2 is insufficient but L1 is enough, set enough_at to "l1".
+- If detailed raw conversation is needed, set enough_at to "l0".
+- Select facts, L2, L1, and L0 independently by their IDs.
+- Return JSON only.
+
+Use this exact JSON shape:
+{
+  "intent": "time | project | fact | general",
+  "enough_at": "l2 | l1 | l0 | none",
+  "fact_keys": ["fact key"],
+  "l2_ids": ["l2 index id"],
+  "l1_ids": ["l1 index id"],
+  "l0_ids": ["l0 index id"]
+}
+`.trim();
+
+const COVERAGE_JUDGE_SYSTEM_PROMPT = `
+You judge the user's intent and which memory level is sufficient, based on candidates that were already preselected by prior semantic retrieval.
+
+Rules:
+- Do not re-rank or delete the candidates.
+- Decide only the user's intent and the lowest level sufficient to answer well.
+- If any selected L2 candidates already answer the query, enough_at should be "l2".
+- If L2 is insufficient but selected L1 is enough, enough_at should be "l1".
+- If raw selected L0 is needed, enough_at should be "l0".
+- Return JSON only.
+
+Use this exact JSON shape:
+{
+  "intent": "time | project | fact | general",
+  "enough_at": "l2 | l1 | l0 | none"
 }
 `.trim();
 
@@ -192,6 +356,8 @@ function buildPrompt(timestamp: string, messages: MemoryMessage[], extraInstruct
     "- situation_time_info should read like a short progress update anchored to this conversation moment.",
     "- facts should be durable and future-useful, not turn-specific noise.",
     "- projects should only include trackable ongoing efforts.",
+    "- if there are two or more unrelated ongoing threads, list them as separate project entries.",
+    "- health/caregiving/problem-management threads count as projects when they are ongoing across turns.",
   ];
   if (preferredLanguage) {
     sections.push(`- Write all natural-language output fields in ${preferredLanguage}.`);
@@ -200,6 +366,26 @@ function buildPrompt(timestamp: string, messages: MemoryMessage[], extraInstruct
     sections.push("", "Additional requirement:", extraInstruction);
   }
   return sections.join("\n");
+}
+
+function buildProjectCompletionPrompt(input: {
+  timestamp: string;
+  messages: MemoryMessage[];
+  summary: string;
+  facts: FactCandidate[];
+  projectDetails: ProjectDetail[];
+}): string {
+  return JSON.stringify({
+    timestamp: input.timestamp,
+    messages: input.messages.map((message, index) => ({
+      index,
+      role: message.role,
+      content: truncateForPrompt(message.content, 220),
+    })),
+    current_summary: input.summary,
+    current_facts: input.facts,
+    current_projects: input.projectDetails,
+  }, null, 2);
 }
 
 function extractFirstJsonObject(raw: string): string {
@@ -319,6 +505,29 @@ function normalizeProjectDetails(items: unknown): ProjectDetail[] {
   return Array.from(projects.values()).slice(0, 8);
 }
 
+function truncateForPrompt(value: string, maxLength: number): string {
+  return truncate(normalizeWhitespace(value), maxLength);
+}
+
+function normalizeStringArray(items: unknown, maxItems: number): string[] {
+  if (!Array.isArray(items)) return [];
+  return items
+    .filter((item): item is string => typeof item === "string")
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, maxItems);
+}
+
+function normalizeIntent(value: unknown): IntentType {
+  if (value === "time" || value === "project" || value === "fact" || value === "general") return value;
+  return "general";
+}
+
+function normalizeEnoughAt(value: unknown): RetrievalResult["enoughAt"] {
+  if (value === "l2" || value === "l1" || value === "l0" || value === "none") return value;
+  return "none";
+}
+
 function extractChatCompletionsText(payload: unknown): string {
   if (!isRecord(payload) || !Array.isArray(payload.choices)) {
     throw new Error("Invalid chat completions payload");
@@ -353,6 +562,10 @@ function extractResponsesText(payload: unknown): string {
   const text = chunks.join("\n").trim();
   if (!text) throw new Error("Responses payload did not contain text");
   return text;
+}
+
+function looksLikeEnvVarName(value: string): boolean {
+  return /^[A-Z0-9_]+$/.test(value);
 }
 
 export class LlmMemoryExtractor {
@@ -409,30 +622,43 @@ export class LlmMemoryExtractor {
     const resolver = typeof modelAuth?.resolveApiKeyForProvider === "function"
       ? modelAuth.resolveApiKeyForProvider as (params: { provider: string; cfg?: Record<string, unknown> }) => Promise<{ apiKey?: string }>
       : undefined;
-    if (!resolver) throw new Error("OpenClaw runtime modelAuth resolver is not available");
-    const auth = await resolver({ provider, cfg: this.config });
-    if (!auth?.apiKey || !String(auth.apiKey).trim()) {
-      throw new Error(`No API key resolved for extraction provider "${provider}"`);
+    if (resolver) {
+      const auth = await resolver({ provider, cfg: this.config });
+      if (auth?.apiKey && String(auth.apiKey).trim()) {
+        return String(auth.apiKey).trim();
+      }
     }
-    return String(auth.apiKey).trim();
+
+    const modelsConfig = isRecord(this.config.models) ? this.config.models : undefined;
+    const providers = modelsConfig && isRecord(modelsConfig.providers) ? modelsConfig.providers : undefined;
+    const providerConfig = providers && isRecord(providers[provider])
+      ? providers[provider] as Record<string, unknown>
+      : undefined;
+    const configured = typeof providerConfig?.apiKey === "string" ? providerConfig.apiKey.trim() : "";
+    if (configured) {
+      if (looksLikeEnvVarName(configured) && typeof process.env[configured] === "string" && process.env[configured]?.trim()) {
+        return process.env[configured]!.trim();
+      }
+      return configured;
+    }
+
+    throw new Error(`No API key resolved for extraction provider "${provider}"`);
   }
 
-  private async callModel(
-    messages: MemoryMessage[],
-    timestamp: string,
-    agentId?: string,
-    extraInstruction?: string,
-  ): Promise<string> {
-    const selection = this.resolveSelection(agentId);
+  private async callStructuredJson(input: {
+    systemPrompt: string;
+    userPrompt: string;
+    agentId?: string;
+    requestLabel: string;
+  }): Promise<string> {
+    const selection = this.resolveSelection(input.agentId);
     if (!selection.baseUrl) {
-      throw new Error(`Extraction provider "${selection.provider}" does not have a baseUrl`);
+      throw new Error(`${input.requestLabel} provider "${selection.provider}" does not have a baseUrl`);
     }
     const apiKey = await this.resolveApiKey(selection.provider);
     const headers = new Headers(selection.headers);
     if (!headers.has("content-type")) headers.set("content-type", "application/json");
     if (!headers.has("authorization")) headers.set("authorization", `Bearer ${apiKey}`);
-
-    const prompt = buildPrompt(timestamp, messages, extraInstruction);
     const apiType = selection.api.trim().toLowerCase();
     let url = "";
     let body: Record<string, unknown>;
@@ -443,8 +669,8 @@ export class LlmMemoryExtractor {
         model: selection.model,
         temperature: 0,
         input: [
-          { role: "system", content: EXTRACTION_SYSTEM_PROMPT },
-          { role: "user", content: prompt },
+          { role: "system", content: input.systemPrompt },
+          { role: "user", content: input.userPrompt },
         ],
       };
     } else {
@@ -455,8 +681,8 @@ export class LlmMemoryExtractor {
         stream: false,
         response_format: { type: "json_object" },
         messages: [
-          { role: "system", content: EXTRACTION_SYSTEM_PROMPT },
-          { role: "user", content: prompt },
+          { role: "system", content: input.systemPrompt },
+          { role: "user", content: input.userPrompt },
         ],
       };
     }
@@ -475,7 +701,7 @@ export class LlmMemoryExtractor {
     }
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`Extraction request failed (${response.status}): ${truncate(errorText, 300)}`);
+      throw new Error(`${input.requestLabel} request failed (${response.status}): ${truncate(errorText, 300)}`);
     }
 
     const payload = await response.json();
@@ -492,7 +718,12 @@ export class LlmMemoryExtractor {
       "Return one complete JSON object only. Do not use ellipses, placeholders, comments, markdown fences, or trailing commas.",
     ]) {
       try {
-        const rawText = await this.callModel(input.messages, input.timestamp, input.agentId, extraInstruction);
+        const rawText = await this.callStructuredJson({
+          systemPrompt: EXTRACTION_SYSTEM_PROMPT,
+          userPrompt: buildPrompt(input.timestamp, input.messages, extraInstruction),
+          requestLabel: "Extraction",
+          ...(input.agentId ? { agentId: input.agentId } : {}),
+        });
         parsed = JSON.parse(extractFirstJsonObject(rawText)) as RawExtractionPayload;
         break;
       } catch (error) {
@@ -508,8 +739,16 @@ export class LlmMemoryExtractor {
       throw new Error("Extraction payload did not include a usable summary");
     }
 
-    const projectDetails = normalizeProjectDetails(parsed.projects);
+    let projectDetails = normalizeProjectDetails(parsed.projects);
     const facts = normalizeFacts(parsed.facts);
+    projectDetails = await this.completeProjectDetails({
+      timestamp: input.timestamp,
+      messages: input.messages,
+      summary,
+      facts,
+      projectDetails,
+      ...(input.agentId ? { agentId: input.agentId } : {}),
+    });
     const situationTimeInfoRaw = typeof parsed.situation_time_info === "string"
       ? normalizeWhitespace(parsed.situation_time_info)
       : "";
@@ -527,6 +766,172 @@ export class LlmMemoryExtractor {
       situationTimeInfo,
       facts,
       projectDetails,
+    };
+  }
+
+  private async completeProjectDetails(input: {
+    timestamp: string;
+    messages: MemoryMessage[];
+    summary: string;
+    facts: FactCandidate[];
+    projectDetails: ProjectDetail[];
+    agentId?: string;
+  }): Promise<ProjectDetail[]> {
+    try {
+      const raw = await this.callStructuredJson({
+        systemPrompt: PROJECT_COMPLETION_SYSTEM_PROMPT,
+        userPrompt: buildProjectCompletionPrompt(input),
+        requestLabel: "Project completion",
+        ...(input.agentId ? { agentId: input.agentId } : {}),
+      });
+      const parsed = JSON.parse(extractFirstJsonObject(raw)) as RawExtractionPayload;
+      const completed = normalizeProjectDetails(parsed.projects);
+      return completed.length > 0 ? completed : input.projectDetails;
+    } catch (error) {
+      this.logger?.warn?.(`[youarememory] project completion fallback: ${String(error)}`);
+      return input.projectDetails;
+    }
+  }
+
+  async resolveProjectIdentity(input: LlmProjectResolutionInput): Promise<ProjectDetail> {
+    if (input.existingProjects.length === 0) return input.project;
+    const candidates = input.existingProjects.slice(0, 24).map((project) => ({
+      project_key: project.projectKey,
+      project_name: project.projectName,
+      summary: truncateForPrompt(project.summary, 160),
+      latest_progress: truncateForPrompt(project.latestProgress, 160),
+      status: project.currentStatus,
+    }));
+    try {
+      const raw = await this.callStructuredJson({
+        systemPrompt: PROJECT_RESOLUTION_SYSTEM_PROMPT,
+        userPrompt: JSON.stringify({
+          incoming_project: {
+            key: input.project.key,
+            name: input.project.name,
+            summary: input.project.summary,
+            latest_progress: input.project.latestProgress,
+            status: input.project.status,
+          },
+          existing_projects: candidates,
+        }, null, 2),
+        requestLabel: "Project resolution",
+        ...(input.agentId ? { agentId: input.agentId } : {}),
+      });
+      const parsed = JSON.parse(extractFirstJsonObject(raw)) as RawProjectResolutionPayload;
+      const matchedProjectKey = typeof parsed.matched_project_key === "string"
+        ? parsed.matched_project_key.trim()
+        : "";
+      const matched = matchedProjectKey
+        ? input.existingProjects.find((project) => project.projectKey === matchedProjectKey)
+        : undefined;
+      return {
+        ...input.project,
+        key: matched?.projectKey
+          ?? (typeof parsed.canonical_key === "string" && parsed.canonical_key.trim()
+            ? slugifyKeyPart(parsed.canonical_key)
+            : input.project.key),
+        name: matched?.projectName
+          ?? (typeof parsed.canonical_name === "string" && parsed.canonical_name.trim()
+            ? truncateForPrompt(parsed.canonical_name, 80)
+            : input.project.name),
+      };
+    } catch (error) {
+      this.logger?.warn?.(`[youarememory] project resolution fallback for ${input.project.key}: ${String(error)}`);
+      return input.project;
+    }
+  }
+
+  async reasonOverMemory(input: LlmReasoningInput): Promise<LlmReasoningSelection> {
+    const raw = await this.callStructuredJson({
+      systemPrompt: REASONING_SYSTEM_PROMPT,
+      userPrompt: JSON.stringify({
+        query: input.query,
+        facts: input.facts.map((fact) => ({
+          id: fact.factKey,
+          value: truncateForPrompt(fact.factValue, 160),
+          confidence: fact.confidence,
+        })),
+        l2_time: input.l2Time.map((item) => ({
+          id: item.l2IndexId,
+          date_key: item.dateKey,
+          summary: truncateForPrompt(item.summary, 180),
+        })),
+        l2_project: input.l2Projects.map((item) => ({
+          id: item.l2IndexId,
+          project_key: item.projectKey,
+          project_name: item.projectName,
+          summary: truncateForPrompt(item.summary, 180),
+          latest_progress: truncateForPrompt(item.latestProgress, 180),
+          status: item.currentStatus,
+        })),
+        l1_windows: input.l1Windows.map((item) => ({
+          id: item.l1IndexId,
+          session_key: item.sessionKey,
+          time_period: item.timePeriod,
+          summary: truncateForPrompt(item.summary, 180),
+          situation: truncateForPrompt(item.situationTimeInfo, 160),
+          projects: item.projectDetails.map((project) => project.name),
+        })),
+        l0_sessions: input.l0Sessions.map((item) => ({
+          id: item.l0IndexId,
+          session_key: item.sessionKey,
+          timestamp: item.timestamp,
+          messages: item.messages
+            .filter((message) => message.role === "user")
+            .slice(-2)
+            .map((message) => truncateForPrompt(message.content, 160)),
+        })),
+        limits: input.limits,
+      }, null, 2),
+      requestLabel: "Reasoning",
+      ...(input.agentId ? { agentId: input.agentId } : {}),
+    });
+    const parsed = JSON.parse(extractFirstJsonObject(raw)) as RawReasoningPayload;
+    return {
+      intent: normalizeIntent(parsed.intent),
+      enoughAt: normalizeEnoughAt(parsed.enough_at),
+      factKeys: normalizeStringArray(parsed.fact_keys, input.limits.fact),
+      l2Ids: normalizeStringArray(parsed.l2_ids, input.limits.l2),
+      l1Ids: normalizeStringArray(parsed.l1_ids, input.limits.l1),
+      l0Ids: normalizeStringArray(parsed.l0_ids, input.limits.l0),
+    };
+  }
+
+  async judgeCoverage(input: LlmCoverageJudgeInput): Promise<Pick<LlmReasoningSelection, "intent" | "enoughAt">> {
+    const raw = await this.callStructuredJson({
+      systemPrompt: COVERAGE_JUDGE_SYSTEM_PROMPT,
+      userPrompt: JSON.stringify({
+        query: input.query,
+        facts: input.facts.map((fact) => ({
+          id: fact.factKey,
+          value: truncateForPrompt(fact.factValue, 160),
+        })),
+        l2_results: input.l2Results.map((hit) => ({
+          id: hit.item.l2IndexId,
+          level: hit.level,
+          summary: hit.level === "l2_time"
+            ? truncateForPrompt(hit.item.summary, 180)
+            : truncateForPrompt(`${hit.item.projectName} ${hit.item.summary} ${hit.item.latestProgress}`, 180),
+        })),
+        l1_results: input.l1Results.map((item) => ({
+          id: item.l1IndexId,
+          summary: truncateForPrompt(item.summary, 180),
+          situation: truncateForPrompt(item.situationTimeInfo, 160),
+        })),
+        l0_results: input.l0Results.map((item) => ({
+          id: item.l0IndexId,
+          timestamp: item.timestamp,
+          messages: item.messages.map((message) => truncateForPrompt(message.content, 120)).slice(0, 4),
+        })),
+      }, null, 2),
+      requestLabel: "Coverage judge",
+      ...(input.agentId ? { agentId: input.agentId } : {}),
+    });
+    const parsed = JSON.parse(extractFirstJsonObject(raw)) as RawReasoningPayload;
+    return {
+      intent: normalizeIntent(parsed.intent),
+      enoughAt: normalizeEnoughAt(parsed.enough_at),
     };
   }
 }

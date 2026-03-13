@@ -44,6 +44,35 @@
         "type": "integer",
         "default": 30
       },
+      "autoIndexIntervalMinutes": {
+        "type": "integer",
+        "default": 60
+      },
+      "l1WindowMode": {
+        "type": "string",
+        "enum": [
+          "time",
+          "count"
+        ],
+        "default": "time"
+      },
+      "l1WindowMinutes": {
+        "type": "integer",
+        "default": 120
+      },
+      "l1WindowMaxL0": {
+        "type": "integer",
+        "default": 8
+      },
+      "l2TimeGranularity": {
+        "type": "string",
+        "enum": [
+          "day",
+          "half_day",
+          "hour"
+        ],
+        "default": "day"
+      },
       "recallEnabled": {
         "type": "boolean",
         "default": true
@@ -81,7 +110,27 @@
     },
     "captureStrategy": {
       "label": "Capture Strategy",
-      "help": "full_session captures a complete session by default; last_turn remains as a lightweight fallback mode."
+      "help": "full_session is retained as a fallback source, but indexing now batches L0s into session windows before building L1/L2."
+    },
+    "autoIndexIntervalMinutes": {
+      "label": "Auto Index Interval",
+      "placeholder": "60"
+    },
+    "l1WindowMode": {
+      "label": "L1 Window Mode",
+      "help": "Choose either time-based windows or count-based windows for L1 construction."
+    },
+    "l1WindowMinutes": {
+      "label": "L1 Window Minutes",
+      "placeholder": "120"
+    },
+    "l1WindowMaxL0": {
+      "label": "L1 Max L0 Count",
+      "placeholder": "8"
+    },
+    "l2TimeGranularity": {
+      "label": "L2 Time Granularity",
+      "help": "Choose whether L2 time indexes aggregate by day, half-day, or hour."
     },
     "uiEnabled": {
       "label": "Enable Local UI",

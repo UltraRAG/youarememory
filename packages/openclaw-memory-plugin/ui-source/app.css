@@ -256,6 +256,33 @@ summary:focus-visible {
   gap: 8px;
 }
 
+.settings-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.settings-field {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.settings-field span {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.settings-field input,
+.settings-field select {
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: 14px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+}
+
 .sidebar-btn,
 .ghost-btn,
 .primary-btn,

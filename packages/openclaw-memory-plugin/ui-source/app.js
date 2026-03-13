@@ -24,7 +24,14 @@ const retrieveSummary = $("#retrieveSummary");
 const retrieveTimeline = $("#retrieveTimeline");
 const retrieveResult = $("#retrieveResult");
 const refreshBtn = $("#refreshBtn");
+const buildNowBtn = $("#buildNowBtn");
 const clearMemoryBtn = $("#clearMemoryBtn");
+const saveSettingsBtn = $("#saveSettingsBtn");
+const autoIndexIntervalInput = $("#autoIndexIntervalInput");
+const l1WindowModeSelect = $("#l1WindowModeSelect");
+const l1WindowValueLabel = $("#l1WindowValueLabel");
+const l1WindowValueInput = $("#l1WindowValueInput");
+const l2TimeGranularitySelect = $("#l2TimeGranularitySelect");
 
 const LEVEL_CONFIG = {
   l1: {
@@ -43,7 +50,7 @@ const LEVEL_CONFIG = {
     label: "L2 时间",
     endpoint: "./api/l2/time",
     emptyText: "暂无 L2 时间索引。",
-    description: "按日期聚合的时间维摘要。",
+    description: "按配置时间桶聚合的时间维摘要。",
   },
   l0: {
     label: "L0 会话",
@@ -63,6 +70,7 @@ const state = {
   activeLevel: "l1",
   overview: {},
   globalFact: createEmptyGlobalFact(),
+  settings: createDefaultSettings(),
   baseRaw: {
     l2_time: [],
     l2_project: [],
@@ -87,6 +95,16 @@ function createEmptyGlobalFact() {
     facts: [],
     createdAt: "",
     updatedAt: "",
+  };
+}
+
+function createDefaultSettings() {
+  return {
+    autoIndexIntervalMinutes: 60,
+    l1WindowMode: "time",
+    l1WindowMinutes: 120,
+    l1WindowMaxL0: 8,
+    l2TimeGranularity: "day",
   };
 }
 
@@ -132,11 +150,14 @@ function closeDetailDrawer() {
 
 function updateStatusPill(overview = {}) {
   if (!statusPill) return;
+  const pending = Number(overview.pendingL0 ?? 0);
   if (overview.lastIndexedAt) {
-    statusPill.textContent = `最近索引 ${formatTime(overview.lastIndexedAt)}`;
+    statusPill.textContent = pending > 0
+      ? `待索引 ${pending} · 最近索引 ${formatTime(overview.lastIndexedAt)}`
+      : `最近索引 ${formatTime(overview.lastIndexedAt)}`;
     return;
   }
-  statusPill.textContent = "等待索引";
+  statusPill.textContent = pending > 0 ? `待索引 ${pending}` : "等待索引";
 }
 
 function createMetricCard(label, value, note) {
@@ -165,6 +186,7 @@ function renderOverview(overview = {}) {
   overviewCards.innerHTML = "";
   overviewCards.append(
     createMetricCard("L0 会话", overview.totalL0 ?? 0, "完整原始 session"),
+    createMetricCard("待索引 L0", overview.pendingL0 ?? 0, "等待定时 / 切 session / 手动"),
     createMetricCard("L1 窗口", overview.totalL1 ?? 0, "结构化摘要层"),
     createMetricCard("L2 时间", overview.totalL2Time ?? 0, "日期聚合索引"),
     createMetricCard("L2 项目", overview.totalL2Project ?? 0, "项目聚合索引"),
@@ -174,6 +196,53 @@ function renderOverview(overview = {}) {
       overview.lastIndexedAt ? `更新于 ${formatTime(overview.lastIndexedAt)}` : "等待重建",
     ),
   );
+}
+
+function applySettings(settings = {}) {
+  state.settings = {
+    ...createDefaultSettings(),
+    ...(settings || {}),
+  };
+  if (autoIndexIntervalInput) autoIndexIntervalInput.value = String(state.settings.autoIndexIntervalMinutes ?? 60);
+  if (l1WindowModeSelect) l1WindowModeSelect.value = state.settings.l1WindowMode || "time";
+  renderL1WindowMode();
+  if (l2TimeGranularitySelect) l2TimeGranularitySelect.value = state.settings.l2TimeGranularity || "day";
+}
+
+function readSettingsForm() {
+  const toNumber = (input, fallback) => {
+    const value = Number.parseInt(input?.value || "", 10);
+    return Number.isFinite(value) ? Math.max(0, value) : fallback;
+  };
+  const l1WindowMode = l1WindowModeSelect?.value === "count" ? "count" : "time";
+  const l1WindowValue = toNumber(
+    l1WindowValueInput,
+    l1WindowMode === "count"
+      ? state.settings.l1WindowMaxL0 ?? 8
+      : state.settings.l1WindowMinutes ?? 120,
+  );
+  return {
+    autoIndexIntervalMinutes: toNumber(autoIndexIntervalInput, state.settings.autoIndexIntervalMinutes ?? 60),
+    l1WindowMode,
+    l1WindowMinutes: l1WindowMode === "time" ? l1WindowValue : (state.settings.l1WindowMinutes ?? 120),
+    l1WindowMaxL0: l1WindowMode === "count" ? l1WindowValue : (state.settings.l1WindowMaxL0 ?? 8),
+    l2TimeGranularity: l2TimeGranularitySelect?.value || state.settings.l2TimeGranularity || "day",
+  };
+}
+
+function renderL1WindowMode() {
+  const mode = l1WindowModeSelect?.value === "count" ? "count" : "time";
+  if (l1WindowValueLabel) {
+    l1WindowValueLabel.textContent = mode === "count" ? "L1 最大 L0 数" : "L1 窗口时长（分钟）";
+  }
+  if (l1WindowValueInput) {
+    l1WindowValueInput.placeholder = mode === "count" ? "8" : "120";
+    l1WindowValueInput.value = String(
+      mode === "count"
+        ? state.settings.l1WindowMaxL0 ?? 8
+        : state.settings.l1WindowMinutes ?? 120,
+    );
+  }
 }
 
 function renderNavCounts() {
@@ -229,7 +298,7 @@ function normalizeEntry(level, raw) {
       badge: "window",
       title: raw.timePeriod || "L1 窗口",
       subtitle: raw.summary || "暂无摘要",
-      meta: `facts ${raw.facts?.length ?? 0} · projects ${raw.projectTags?.length ?? 0} · source ${raw.l0Source?.length ?? 0}`,
+      meta: `${raw.sessionKey || "unknown-session"} · L0 ${raw.l0Source?.length ?? 0} · projects ${raw.projectTags?.length ?? 0}`,
       raw,
     };
   }
@@ -523,7 +592,7 @@ function renderDetail() {
     detailMeta.append(
       createMetaItem("层级", "L2 时间"),
       createMetaItem("索引 ID", raw.l2IndexId || "-"),
-      createMetaItem("日期", raw.dateKey || "-"),
+      createMetaItem("时间桶", raw.dateKey || "-"),
       createMetaItem("更新时间", formatTime(raw.updatedAt)),
     );
     appendSection("摘要", raw.summary || "-");
@@ -550,7 +619,12 @@ function renderDetail() {
     detailMeta.append(
       createMetaItem("层级", "L1 窗口"),
       createMetaItem("索引 ID", raw.l1IndexId || "-"),
+      createMetaItem("Session", raw.sessionKey || "-"),
       createMetaItem("时间段", raw.timePeriod || "-"),
+    );
+    detailMeta.append(
+      createMetaItem("开始", formatTime(raw.startedAt)),
+      createMetaItem("结束", formatTime(raw.endedAt)),
       createMetaItem("创建时间", formatTime(raw.createdAt)),
     );
     appendSection("窗口摘要", raw.summary || "-");
@@ -695,6 +769,16 @@ async function fetchJson(path, init) {
   return response.json();
 }
 
+async function postJson(path, payload = {}) {
+  return fetchJson(path, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
 function resetLocalCache() {
   state.globalFact = createEmptyGlobalFact();
   setBaseLevelData("l2_time", []);
@@ -710,6 +794,7 @@ async function loadSnapshot() {
   const snapshot = await fetchJson("./api/snapshot?limit=30");
   state.globalFact = snapshot.globalFact || createEmptyGlobalFact();
   renderOverview(snapshot.overview || {});
+  applySettings(snapshot.settings || createDefaultSettings());
 
   setBaseLevelData("l2_time", snapshot.recentTimeIndexes || []);
   setBaseLevelData("l2_project", snapshot.recentProjectIndexes || []);
@@ -748,6 +833,38 @@ async function clearAllMemory() {
     retrieveSummary.textContent = `清空失败: ${String(error)}`;
   } finally {
     if (clearMemoryBtn) clearMemoryBtn.disabled = false;
+    if (refreshBtn) refreshBtn.disabled = false;
+  }
+}
+
+async function saveSettings() {
+  const payload = readSettingsForm();
+  if (saveSettingsBtn) saveSettingsBtn.disabled = true;
+  retrieveSummary.textContent = "保存设置中...";
+  try {
+    const settings = await postJson("./api/settings", payload);
+    applySettings(settings);
+    await loadSnapshot();
+    retrieveSummary.textContent =
+      `设置已保存 · 自动 ${settings.autoIndexIntervalMinutes} 分钟 / L1 ${
+        settings.l1WindowMode === "count" ? `${settings.l1WindowMaxL0} 条` : `${settings.l1WindowMinutes} 分钟`
+      } / L2 ${settings.l2TimeGranularity}`;
+  } finally {
+    if (saveSettingsBtn) saveSettingsBtn.disabled = false;
+  }
+}
+
+async function runIndexBuild() {
+  if (buildNowBtn) buildNowBtn.disabled = true;
+  if (refreshBtn) refreshBtn.disabled = true;
+  retrieveSummary.textContent = "正在构建索引...";
+  try {
+    const stats = await postJson("./api/index/run");
+    await loadSnapshot();
+    retrieveSummary.textContent =
+      `已构建 · L0 ${stats.l0Captured ?? 0} / L1 ${stats.l1Created ?? 0} / L2-Time ${stats.l2TimeUpdated ?? 0} / L2-Project ${stats.l2ProjectUpdated ?? 0}`;
+  } finally {
+    if (buildNowBtn) buildNowBtn.disabled = false;
     if (refreshBtn) refreshBtn.disabled = false;
   }
 }
@@ -875,6 +992,25 @@ refreshBtn?.addEventListener("click", () => {
     .catch((error) => {
       retrieveSummary.textContent = `刷新失败: ${String(error)}`;
     });
+});
+
+buildNowBtn?.addEventListener("click", () => {
+  runIndexBuild().catch((error) => {
+    retrieveSummary.textContent = `构建失败: ${String(error)}`;
+    if (buildNowBtn) buildNowBtn.disabled = false;
+    if (refreshBtn) refreshBtn.disabled = false;
+  });
+});
+
+saveSettingsBtn?.addEventListener("click", () => {
+  saveSettings().catch((error) => {
+    retrieveSummary.textContent = `保存设置失败: ${String(error)}`;
+    if (saveSettingsBtn) saveSettingsBtn.disabled = false;
+  });
+});
+
+l1WindowModeSelect?.addEventListener("change", () => {
+  renderL1WindowMode();
 });
 
 clearMemoryBtn?.addEventListener("click", () => {

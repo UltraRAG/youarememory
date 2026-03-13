@@ -23,6 +23,16 @@ export interface FactCandidate {
 }
 
 export type ProjectStatus = "planned" | "in_progress" | "blocked" | "on_hold" | "done" | "unknown";
+export type L2TimeGranularity = "day" | "half_day" | "hour";
+export type L1WindowMode = "time" | "count";
+
+export interface IndexingSettings {
+  autoIndexIntervalMinutes: number;
+  l1WindowMode: L1WindowMode;
+  l1WindowMinutes: number;
+  l1WindowMaxL0: number;
+  l2TimeGranularity: L2TimeGranularity;
+}
 
 export interface ProjectDetail {
   key: string;
@@ -35,7 +45,10 @@ export interface ProjectDetail {
 
 export interface L1WindowRecord {
   l1IndexId: string;
+  sessionKey: string;
   timePeriod: string;
+  startedAt: string;
+  endedAt: string;
   summary: string;
   facts: FactCandidate[];
   situationTimeInfo: string;
@@ -127,6 +140,7 @@ export interface RetrievalResult {
 
 export interface DashboardOverview {
   totalL0: number;
+  pendingL0: number;
   totalL1: number;
   totalL2Time: number;
   totalL2Project: number;
@@ -136,6 +150,7 @@ export interface DashboardOverview {
 
 export interface MemoryUiSnapshot {
   overview: DashboardOverview;
+  settings: IndexingSettings;
   recentTimeIndexes: L2TimeIndexRecord[];
   recentProjectIndexes: L2ProjectIndexRecord[];
   recentL1Windows: L1WindowRecord[];

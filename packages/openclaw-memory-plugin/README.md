@@ -5,7 +5,7 @@
 ## 能力概览
 
 - 采集完整 session 并写入 `L0`
-- heartbeat 构建 `L1`、`L2` 与 `GlobalFactRecord`
+- 按 session-window 聚合多个 `L0` 后，再构建 `L1`、`L2` 与 `GlobalFactRecord`
 - 在 `before_prompt_build` / `before_agent_start` 自动注入记忆上下文
 - 提供工具：
   - `memory_recall`
@@ -45,6 +45,11 @@ openclaw plugins install ./packages/openclaw-memory-plugin
           "includeAssistant": true,
           "maxMessageChars": 6000,
           "heartbeatBatchSize": 30,
+          "autoIndexIntervalMinutes": 60,
+          "l1WindowMode": "time",
+          "l1WindowMinutes": 120,
+          "l1WindowMaxL0": 8,
+          "l2TimeGranularity": "day",
           "recallEnabled": true,
           "addEnabled": true,
           "skillsDir": "",
@@ -71,8 +76,12 @@ openclaw plugins install ./packages/openclaw-memory-plugin
 
 配置说明：
 
-- `captureStrategy` 默认推荐 `full_session`，与 L0 “原始对话日志”定义一致
-- `last_turn` 仍可保留为轻量模式，但不再是默认
+- `captureStrategy` 仍保留 `full_session` 兜底，但日常索引会把连续的 `L0` 合并成 session-window 再建 `L1`
+- `autoIndexIntervalMinutes` 控制定时索引，默认每 60 分钟自动构建一次
+- `l1WindowMode` 规定 `L1` 按时间还是按条数切窗，二选一
+- `l1WindowMinutes` 仅在 `l1WindowMode = "time"` 时生效
+- `l1WindowMaxL0` 仅在 `l1WindowMode = "count"` 时生效
+- `l2TimeGranularity` 支持 `day / half_day / hour`
 - 动态事实现在写入单例 `global_fact_record`，旧版多行 `global_facts` 不会自动迁移
 
 ## UI
@@ -83,7 +92,7 @@ openclaw plugins install ./packages/openclaw-memory-plugin
 
 看板包含：
 
-- 左侧：导航、总览指标、重建操作
+- 左侧：导航、总览指标、索引设置、手动构建与重建操作
 - 中间：检索输入、推理轨迹、当前层级记录流
 - 右侧：所选记录详情与关联来源
 

@@ -4,6 +4,8 @@ import {
   MemoryRepository,
   ReasoningRetriever,
   loadSkillsRuntime,
+  type HeartbeatStats,
+  type IndexingSettings,
   type MemoryMessage,
   nowIso,
 } from "./core/index.js";
@@ -13,7 +15,7 @@ import type { OpenClawPluginApi, PluginLogger } from "./plugin-api.js";
 import { buildPluginTools } from "./tools.js";
 import { LocalUiServer } from "./ui-server.js";
 
-const MEMORY_REPAIR_VERSION = "2026-03-13-llm-index-v10";
+const MEMORY_REPAIR_VERSION = "2026-03-13-llm-reasoning-v12";
 
 function safeLog(logger: PluginLogger | undefined): PluginLogger {
   return logger ?? console;
@@ -57,7 +59,10 @@ function sanitizeStoredMessages(messages: MemoryMessage[]): MemoryMessage[] {
   return cleaned;
 }
 
-function sanitizeL0Record(record: { sessionKey: string; messages: unknown[] }, config: { includeAssistant: boolean; maxMessageChars: number }): MemoryMessage[] {
+function sanitizeL0Record(
+  record: { sessionKey: string; messages: unknown[] },
+  config: { includeAssistant: boolean; maxMessageChars: number },
+): MemoryMessage[] {
   if (record.sessionKey.startsWith("temp:")) return [];
   return sanitizeStoredMessages(normalizeMessages(record.messages, {
     captureStrategy: "last_turn",
@@ -69,6 +74,21 @@ function sanitizeL0Record(record: { sessionKey: string; messages: unknown[] }, c
     }
     return true;
   });
+}
+
+function shouldLogStats(stats: HeartbeatStats): boolean {
+  return stats.l0Captured > 0
+    || stats.l1Created > 0
+    || stats.l2TimeUpdated > 0
+    || stats.l2ProjectUpdated > 0
+    || stats.failed > 0;
+}
+
+function logIndexStats(logger: PluginLogger, reason: string, stats: HeartbeatStats): void {
+  if (!shouldLogStats(stats)) return;
+  logger.info?.(
+    `[youarememory] indexed reason=${reason} l0=${stats.l0Captured}, l1=${stats.l1Created}, l2_time=${stats.l2TimeUpdated}, l2_project=${stats.l2ProjectUpdated}, failed=${stats.failed}`,
+  );
 }
 
 const plugin = {
@@ -84,6 +104,7 @@ const plugin = {
       ? loadSkillsRuntime({ skillsDir: config.skillsDir, logger })
       : loadSkillsRuntime({ logger });
     const repository = new MemoryRepository(config.dbPath);
+    const persistedSettings = repository.getIndexingSettings(config.defaultIndexingSettings);
     const extractor = new LlmMemoryExtractor(
       api.config ?? {},
       api.runtime as Record<string, unknown> | undefined,
@@ -91,27 +112,76 @@ const plugin = {
     );
     const indexer = new HeartbeatIndexer(
       repository,
-      skills,
       extractor,
-      { batchSize: config.heartbeatBatchSize, source: "openclaw", logger },
+      {
+        batchSize: config.heartbeatBatchSize,
+        source: "openclaw",
+        settings: persistedSettings,
+        logger,
+      },
     );
-    const retriever = new ReasoningRetriever(repository, skills);
+    const retriever = new ReasoningRetriever(repository, skills, extractor);
+
+    let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
+    const rescheduleHeartbeat = (): void => {
+      if (heartbeatTimer) {
+        clearInterval(heartbeatTimer);
+        heartbeatTimer = undefined;
+      }
+      const intervalMinutes = indexer.getSettings().autoIndexIntervalMinutes;
+      if (intervalMinutes <= 0) return;
+      heartbeatTimer = setInterval(() => {
+        void indexNow("scheduled");
+      }, intervalMinutes * 60_000);
+    };
+
+    const applyIndexingSettings = (partial: Partial<IndexingSettings>): IndexingSettings => {
+      const merged = repository.saveIndexingSettings(
+        {
+          ...indexer.getSettings(),
+          ...partial,
+        },
+        config.defaultIndexingSettings,
+      );
+      indexer.setSettings(merged);
+      rescheduleHeartbeat();
+      return merged;
+    };
+
+    const indexNow = async (reason: string, sessionKeys?: string[]): Promise<HeartbeatStats> => {
+      const options = sessionKeys && sessionKeys.length > 0 ? { reason, sessionKeys } : { reason };
+      const stats = await indexer.runHeartbeat(options);
+      logIndexStats(logger, reason, stats);
+      return stats;
+    };
+
     const repairedVersion = repository.getPipelineState("repairVersion");
     if (repairedVersion !== MEMORY_REPAIR_VERSION) {
       const repair = repository.repairL0Sessions((record) => sanitizeL0Record(record, config));
       repository.resetDerivedIndexes();
-      const stats = await indexer.runHeartbeat();
+      const stats = await indexNow("repair");
       logger.info?.(
         `[youarememory] repaired l0 updated=${repair.updated} removed=${repair.removed}; rebuilt l1=${stats.l1Created}, l2_time=${stats.l2TimeUpdated}, l2_project=${stats.l2ProjectUpdated}, failed=${stats.failed}`,
       );
       repository.setPipelineState("repairVersion", MEMORY_REPAIR_VERSION);
     }
 
+    rescheduleHeartbeat();
+
     const tools = buildPluginTools(repository, retriever);
     api.registerTool?.(() => tools, { names: tools.map((tool) => tool.name) });
     const pendingBySession = new Map<string, MemoryMessage[]>();
+    let activeSessionKey: string | undefined;
 
     let uiServer: LocalUiServer | undefined;
+    const stopRuntime = (): void => {
+      if (heartbeatTimer) {
+        clearInterval(heartbeatTimer);
+        heartbeatTimer = undefined;
+      }
+      uiServer?.stop();
+      repository.close();
+    };
     if (config.uiEnabled) {
       uiServer = new LocalUiServer(
         repository,
@@ -121,30 +191,32 @@ const plugin = {
           port: config.uiPort,
           prefix: config.uiPathPrefix,
         },
+        {
+          getSettings: () => indexer.getSettings(),
+          saveSettings: (partial) => applyIndexingSettings(partial),
+          runIndexNow: () => indexNow("manual"),
+        },
         logger,
       );
-      if (api.registerService) {
-        api.registerService({
-          id: "youarememory-ui-server",
-          start: () => uiServer?.start(),
-          stop: () => {
-            uiServer?.stop();
-            repository.close();
-          },
-        });
-      } else {
+    }
+    if (api.registerService) {
+      api.registerService({
+        id: "youarememory-ui-server",
+        start: () => uiServer?.start(),
+        stop: stopRuntime,
+      });
+    } else if (uiServer) {
         uiServer.start();
-      }
     }
 
     api.on?.(
       "before_prompt_build",
-      (event) => {
+      async (event) => {
         if (!config.recallEnabled) return;
         const prompt = typeof event.prompt === "string" ? event.prompt : "";
         if (prompt.trim().length < 2) return;
         try {
-          const retrieved = retriever.retrieve(prompt, {
+          const retrieved = await retriever.retrieve(prompt, {
             l2Limit: 6,
             l1Limit: 6,
             l0Limit: 4,
@@ -182,6 +254,11 @@ const plugin = {
       if (shouldSkipCapture(event, ctx)) return;
 
       const sessionKey = resolveSessionKey(ctx);
+      if (activeSessionKey && activeSessionKey !== sessionKey) {
+        await indexNow("session_boundary", [activeSessionKey]);
+      }
+      activeSessionKey = sessionKey;
+
       const pending = pendingBySession.get(sessionKey) ?? [];
       pendingBySession.delete(sessionKey);
       let messages = sanitizeStoredMessages(pending);
@@ -192,15 +269,16 @@ const plugin = {
       if (messages.length === 0) return;
       if (!messages.some((message) => message.role === "user")) return;
 
-      indexer.captureL0Session({
+      const captured = indexer.captureL0Session({
         sessionKey,
         timestamp: typeof event.timestamp === "string" ? event.timestamp : nowIso(),
         messages,
       });
-      const stats = await indexer.runHeartbeat();
-      logger.info?.(
-        `[youarememory] indexed l0=${stats.l0Captured}, l1=${stats.l1Created}, l2_time=${stats.l2TimeUpdated}, l2_project=${stats.l2ProjectUpdated}, failed=${stats.failed}`,
-      );
+      if (captured) {
+        logger.info?.(
+          `[youarememory] captured l0 session=${sessionKey} indexed=pending trigger=timer|session_boundary|manual`,
+        );
+      }
     });
   },
 };

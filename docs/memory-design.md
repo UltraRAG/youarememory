@@ -170,8 +170,15 @@ YouAreMemory 通过多级索引升级 OpenClaw 的记忆机制，目标是保持
   // L1 唯一索引 ID
   "l1IndexId": "l1_g325gsa",
 
+  // 该窗口属于哪个 session
+  "sessionKey": "session-1741673212",
+
   // 时间窗口
-  "timePeriod": "2026-03-11:T16:00-18:00",
+  "timePeriod": "2026-03-11 16:00-17:42",
+
+  // 窗口起止时间
+  "startedAt": "2026-03-11T16:00:00+08:00",
+  "endedAt": "2026-03-11T17:42:00+08:00",
 
   // 窗口摘要
   "summary": "用户在调整 OpenClaw 记忆分层设计，并讨论 UI 改版。",
@@ -192,7 +199,7 @@ YouAreMemory 通过多级索引升级 OpenClaw 的记忆机制，目标是保持
   "projectTags": ["OpenClaw", "UltraRAG"],
 
   // 组成该窗口的 L0 来源
-  "l0Source": ["session_5f8a9b2c_raw"],
+  "l0Source": ["session_5f8a9b2c_raw", "session_8cb23ca_raw"],
 
   // 首次落库时间
   "createdAt": "2026-03-11T07:54:18.456Z"
@@ -301,17 +308,32 @@ YouAreMemory 通过多级索引升级 OpenClaw 的记忆机制，目标是保持
 
 ## 5. 索引构建过程
 
-heartbeat 每次消费一批未索引的 `L0`：
+heartbeat 每次消费一批未索引的 `L0`，但不再是“一条 L0 直接生成一条 L1”：
 
-1. 把 `L0` 结构化抽取得到 `L1`
-2. 基于 `L1.timePeriod + L1.summary` 更新 `L2Time`
-3. 基于 `L1.projectTags + L1.summary` 更新 `L2Project`
-4. 基于 `L1.facts` 更新 `GlobalFactRecord`
-5. 把 `L0.indexed` 标记为 `true`
+1. 先按 `sessionKey` 聚合未索引的 `L0`
+2. 再按 `L1` 窗口规则切分：
+   - `l1WindowMode = "time"` 时使用 `l1WindowMinutes`
+   - `l1WindowMode = "count"` 时使用 `l1WindowMaxL0`
+3. 每个窗口抽取得到一个 `L1`
+4. 基于 `L1.startedAt + L1.summary` 更新 `L2Time`
+5. 基于 `L1.projectDetails + L1.summary` 更新 `L2Project`
+6. 基于 `L1.facts` 更新 `GlobalFactRecord`
+7. 把该窗口覆盖到的 `L0.indexed` 标记为 `true`
+
+当前支持三种触发索引构建的方式：
+
+- 定时触发：`autoIndexIntervalMinutes`
+- 新 session 边界触发：用户在 OpenClaw 切到 `/new` 后，旧 session 的待索引 L0 会被立即消费
+- 看板手动触发：点击“立即构建”
 
 当前默认采集策略：
 
 - `captureStrategy = "full_session"`
+- `autoIndexIntervalMinutes = 60`
+- `l1WindowMode = "time"`
+- `l1WindowMinutes = 120`
+- `l1WindowMaxL0 = 8`
+- `l2TimeGranularity = "day"`
 
 原因：
 

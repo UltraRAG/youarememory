@@ -6,9 +6,9 @@ import type {
   L2SearchResult,
   RetrievalResult,
 } from "../types.js";
-import { classifyIntent } from "../skills/intent-skill.js";
+import { LlmMemoryExtractor } from "../skills/llm-extraction.js";
 import { MemoryRepository } from "../storage/sqlite.js";
-import { scoreMatch, truncate } from "../utils/text.js";
+import { truncate } from "../utils/text.js";
 import type { SkillsRuntime } from "../skills/types.js";
 
 export interface RetrievalOptions {
@@ -16,56 +16,6 @@ export interface RetrievalOptions {
   l1Limit?: number;
   l0Limit?: number;
   includeFacts?: boolean;
-}
-
-function normalizeScoredL1(query: string, items: ReturnType<MemoryRepository["searchL1"]>): L1SearchResult[] {
-  return items.map((item) => ({
-    score: Math.max(scoreMatch(query, item.summary), scoreMatch(query, item.situationTimeInfo)),
-    item,
-  }));
-}
-
-function normalizeScoredL0(query: string, items: ReturnType<MemoryRepository["searchL0"]>): L0SearchResult[] {
-  return items.map((item) => ({
-    score: scoreMatch(query, JSON.stringify(item.messages)),
-    item,
-  }));
-}
-
-function sortByScoreDesc<T extends { score: number }>(items: T[]): T[] {
-  return [...items].sort((a, b) => b.score - a.score);
-}
-
-function isEnoughAtL2(results: L2SearchResult[]): boolean {
-  const top = results[0];
-  if (!top) return false;
-  return top.score >= 0.78 && top.item.summary.length >= 24;
-}
-
-function isEnoughAtL1(results: L1SearchResult[]): boolean {
-  const top = results[0];
-  if (!top) return false;
-  return top.score >= 0.68 && top.item.summary.length >= 20;
-}
-
-function collectL1IdsFromL2(results: L2SearchResult[]): string[] {
-  const ids = new Set<string>();
-  for (const hit of results) {
-    for (const l1Id of hit.item.l1Source) {
-      ids.add(l1Id);
-    }
-  }
-  return Array.from(ids);
-}
-
-function collectL0IdsFromL1(results: L1SearchResult[]): string[] {
-  const ids = new Set<string>();
-  for (const hit of results) {
-    for (const l0Id of hit.item.l0Source) {
-      ids.add(l0Id);
-    }
-  }
-  return Array.from(ids);
 }
 
 function renderFacts(facts: GlobalFactItem[]): string {
@@ -132,89 +82,155 @@ function renderContextTemplate(
   return content.trim();
 }
 
+function toRankScore(index: number): number {
+  return Math.max(0.1, 1 - index * 0.1);
+}
+
+function coerceEnoughAt(
+  enoughAt: RetrievalResult["enoughAt"],
+  input: { l2: number; l1: number; l0: number },
+): RetrievalResult["enoughAt"] {
+  if (enoughAt === "l2" && input.l2 > 0) return "l2";
+  if (enoughAt === "l1" && input.l1 > 0) return "l1";
+  if (enoughAt === "l0" && input.l0 > 0) return "l0";
+  if (input.l2 > 0) return "l2";
+  if (input.l1 > 0) return "l1";
+  if (input.l0 > 0) return "l0";
+  return "none";
+}
+
 export class ReasoningRetriever {
   constructor(
     private readonly repository: MemoryRepository,
     private readonly skills: SkillsRuntime,
+    private readonly extractor: LlmMemoryExtractor,
   ) {}
 
-  searchL2(query: string, intent: IntentType, limit: number): L2SearchResult[] {
-    if (intent === "time") {
-      return sortByScoreDesc(this.repository.searchL2TimeIndexes(query, limit)).slice(0, limit);
-    }
-    if (intent === "project") {
-      return sortByScoreDesc(this.repository.searchL2ProjectIndexes(query, limit)).slice(0, limit);
-    }
-    const merged = sortByScoreDesc([
-      ...this.repository.searchL2ProjectIndexes(query, limit),
-      ...this.repository.searchL2TimeIndexes(query, limit),
-    ]);
-    return merged.slice(0, limit);
+  private async searchFacts(query: string, limit: number): Promise<GlobalFactItem[]> {
+    const facts = this.repository.listGlobalFacts(Math.max(10, limit * 4));
+    if (facts.length === 0 || limit <= 0) return [];
+    const selection = await this.extractor.reasonOverMemory({
+      query,
+      facts,
+      l2Time: [],
+      l2Projects: [],
+      l1Windows: [],
+      l0Sessions: [],
+      limits: { fact: limit, l2: 0, l1: 0, l0: 0 },
+    });
+    const byId = new Map(facts.map((fact) => [fact.factKey, fact]));
+    return selection.factKeys
+      .map((id) => byId.get(id))
+      .filter((fact): fact is GlobalFactItem => Boolean(fact))
+      .slice(0, limit);
   }
 
-  searchL1(query: string, relatedL1Ids: string[], limit: number): L1SearchResult[] {
-    const idHits = this.repository.getL1ByIds(relatedL1Ids);
-    const queryHits = this.repository.searchL1(query, limit);
-    const merged = new Map<string, L1SearchResult>();
-    for (const hit of normalizeScoredL1(query, [...idHits, ...queryHits])) {
-      const existing = merged.get(hit.item.l1IndexId);
-      if (!existing || existing.score < hit.score) {
-        merged.set(hit.item.l1IndexId, hit);
-      }
-    }
-    return sortByScoreDesc(Array.from(merged.values())).slice(0, limit);
+  async searchL2(_query: string, _intent: IntentType, limit: number): Promise<L2SearchResult[]> {
+    const facts = this.repository.listGlobalFacts(Math.max(6, limit * 3));
+    const l2Time = this.repository.listRecentL2Time(Math.max(12, limit * 4));
+    const l2Projects = this.repository.listRecentL2Projects(Math.max(12, limit * 4));
+    const selection = await this.extractor.reasonOverMemory({
+      query: _query,
+      facts,
+      l2Time,
+      l2Projects,
+      l1Windows: [],
+      l0Sessions: [],
+      limits: { fact: Math.min(3, facts.length), l2: limit, l1: 0, l0: 0 },
+    });
+    const byId = new Map<string, L2SearchResult>();
+    l2Time.forEach((item) => byId.set(item.l2IndexId, { level: "l2_time", score: 0, item }));
+    l2Projects.forEach((item) => byId.set(item.l2IndexId, { level: "l2_project", score: 0, item }));
+    return selection.l2Ids
+      .map((id, index) => {
+        const hit = byId.get(id);
+        return hit ? { ...hit, score: toRankScore(index) } : undefined;
+      })
+      .filter((hit): hit is L2SearchResult => Boolean(hit))
+      .slice(0, limit);
   }
 
-  searchL0(query: string, relatedL0Ids: string[], limit: number): L0SearchResult[] {
-    const idHits = this.repository.getL0ByIds(relatedL0Ids);
-    const queryHits = this.repository.searchL0(query, limit);
-    const merged = new Map<string, L0SearchResult>();
-    for (const hit of normalizeScoredL0(query, [...idHits, ...queryHits])) {
-      const existing = merged.get(hit.item.l0IndexId);
-      if (!existing || existing.score < hit.score) {
-        merged.set(hit.item.l0IndexId, hit);
-      }
-    }
-    return sortByScoreDesc(Array.from(merged.values())).slice(0, limit);
+  async searchL1(query: string, relatedL1Ids: string[], limit: number): Promise<L1SearchResult[]> {
+    const recent = this.repository.listRecentL1(Math.max(12, limit * 4));
+    const related = this.repository.getL1ByIds(relatedL1Ids);
+    const merged = new Map<string, (typeof recent)[number]>();
+    [...related, ...recent].forEach((item) => merged.set(item.l1IndexId, item));
+    const candidates = Array.from(merged.values());
+    const selection = await this.extractor.reasonOverMemory({
+      query,
+      facts: [],
+      l2Time: [],
+      l2Projects: [],
+      l1Windows: candidates,
+      l0Sessions: [],
+      limits: { fact: 0, l2: 0, l1: limit, l0: 0 },
+    });
+    const byId = new Map(candidates.map((item) => [item.l1IndexId, item]));
+    return selection.l1Ids
+      .map((id, index) => {
+        const item = byId.get(id);
+        return item ? { score: toRankScore(index), item } : undefined;
+      })
+      .filter((hit): hit is L1SearchResult => Boolean(hit))
+      .slice(0, limit);
   }
 
-  retrieve(query: string, options: RetrievalOptions = {}): RetrievalResult {
-    const intent = classifyIntent(query, this.skills);
+  async searchL0(query: string, relatedL0Ids: string[], limit: number): Promise<L0SearchResult[]> {
+    const recent = this.repository.listRecentL0(Math.max(12, limit * 4));
+    const related = this.repository.getL0ByIds(relatedL0Ids);
+    const merged = new Map<string, (typeof recent)[number]>();
+    [...related, ...recent].forEach((item) => merged.set(item.l0IndexId, item));
+    const candidates = Array.from(merged.values());
+    const selection = await this.extractor.reasonOverMemory({
+      query,
+      facts: [],
+      l2Time: [],
+      l2Projects: [],
+      l1Windows: [],
+      l0Sessions: candidates,
+      limits: { fact: 0, l2: 0, l1: 0, l0: limit },
+    });
+    const byId = new Map(candidates.map((item) => [item.l0IndexId, item]));
+    return selection.l0Ids
+      .map((id, index) => {
+        const item = byId.get(id);
+        return item ? { score: toRankScore(index), item } : undefined;
+      })
+      .filter((hit): hit is L0SearchResult => Boolean(hit))
+      .slice(0, limit);
+  }
+
+  async retrieve(query: string, options: RetrievalOptions = {}): Promise<RetrievalResult> {
     const l2Limit = options.l2Limit ?? 6;
     const l1Limit = options.l1Limit ?? 6;
     const l0Limit = options.l0Limit ?? 4;
+    const factLimit = options.includeFacts === false ? 0 : 5;
 
-    const l2Results = this.searchL2(query, intent, l2Limit);
-    const relatedL1Ids = collectL1IdsFromL2(l2Results);
-    const enoughL2 = isEnoughAtL2(l2Results);
+    const selectedFacts = factLimit > 0 ? await this.searchFacts(query, factLimit) : [];
+    const l2Results = await this.searchL2(query, "general", l2Limit);
+    const relatedL1Ids = Array.from(new Set(l2Results.flatMap((hit) => hit.item.l1Source)));
+    const l1Results = await this.searchL1(query, relatedL1Ids, l1Limit);
+    const relatedL0Ids = Array.from(new Set(l1Results.flatMap((hit) => hit.item.l0Source)));
+    const l0Results = await this.searchL0(query, relatedL0Ids, l0Limit);
 
-    let l1Results: L1SearchResult[] = [];
-    let l0Results: L0SearchResult[] = [];
-    let enoughAt: RetrievalResult["enoughAt"] = "none";
+    const coverage = await this.extractor.judgeCoverage({
+      query,
+      facts: selectedFacts,
+      l2Results,
+      l1Results: l1Results.map((hit) => hit.item),
+      l0Results: l0Results.map((hit) => hit.item),
+    });
 
-    if (enoughL2) {
-      enoughAt = "l2";
-    } else {
-      l1Results = this.searchL1(query, relatedL1Ids, l1Limit);
-      const enoughL1 = isEnoughAtL1(l1Results);
-      if (enoughL1) {
-        enoughAt = "l1";
-      } else {
-        const relatedL0Ids = collectL0IdsFromL1(l1Results);
-        l0Results = this.searchL0(query, relatedL0Ids, l0Limit);
-        enoughAt = l0Results.length > 0 ? "l0" : "none";
-      }
-    }
+    const enoughAt = coerceEnoughAt(coverage.enoughAt, {
+      l2: l2Results.length,
+      l1: l1Results.length,
+      l0: l0Results.length,
+    });
 
-    const facts = options.includeFacts === false
-      ? []
-      : intent === "fact"
-        ? this.repository.listGlobalFacts(5)
-        : this.repository.searchFacts(query, 5);
     const context = renderContextTemplate(this.skills.contextTemplate, {
-      intent,
+      intent: coverage.intent,
       enoughAt,
-      factsBlock: renderFacts(facts),
+      factsBlock: renderFacts(selectedFacts),
       l2Block: renderL2(l2Results),
       l1Block: renderL1(l1Results),
       l0Block: renderL0(l0Results),
@@ -222,7 +238,7 @@ export class ReasoningRetriever {
 
     return {
       query,
-      intent,
+      intent: coverage.intent,
       enoughAt,
       l2Results,
       l1Results,

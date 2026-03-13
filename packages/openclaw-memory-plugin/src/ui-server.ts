@@ -2,13 +2,24 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { MemoryRepository, ReasoningRetriever } from "./core/index.js";
+import {
+  type HeartbeatStats,
+  type IndexingSettings,
+  MemoryRepository,
+  ReasoningRetriever,
+} from "./core/index.js";
 import type { PluginLogger } from "./plugin-api.js";
 
 export interface UiServerOptions {
   host: string;
   port: number;
   prefix: string;
+}
+
+export interface UiServerControls {
+  getSettings: () => IndexingSettings;
+  saveSettings: (partial: Partial<IndexingSettings>) => IndexingSettings;
+  runIndexNow: () => Promise<HeartbeatStats>;
 }
 
 const CONTENT_TYPES: Record<string, string> = {
@@ -57,6 +68,12 @@ function sendRedirect(res: ServerResponse, location: string): void {
   res.end();
 }
 
+function sendError(res: ServerResponse, message: string): void {
+  res.statusCode = 500;
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.end(JSON.stringify({ error: message }));
+}
+
 function parseLimit(value: string | null, fallback: number): number {
   if (!value) return fallback;
   const parsed = Number.parseInt(value, 10);
@@ -70,14 +87,29 @@ function parsePath(pathname: string, prefix: string): string {
   return raw.startsWith("/") ? raw : `/${raw}`;
 }
 
+async function readJsonBody(req: IncomingMessage): Promise<Record<string, unknown>> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of req) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  if (chunks.length === 0) return {};
+  const raw = Buffer.concat(chunks).toString("utf-8").trim();
+  if (!raw) return {};
+  const parsed = JSON.parse(raw);
+  return typeof parsed === "object" && parsed !== null ? parsed as Record<string, unknown> : {};
+}
+
 export class LocalUiServer {
-  private server = createServer((req, res) => this.handle(req, res));
+  private server = createServer((req, res) => {
+    void this.handle(req, res);
+  });
   private readonly prefix: string;
 
   constructor(
     private readonly repository: MemoryRepository,
     private readonly retriever: ReasoningRetriever,
     private readonly options: UiServerOptions,
+    private readonly controls: UiServerControls,
     private readonly logger: PluginLogger,
   ) {
     this.prefix = withSlashPrefix(options.prefix).replace(/\/+$/, "");
@@ -95,25 +127,35 @@ export class LocalUiServer {
     this.server.close();
   }
 
-  private handle(req: IncomingMessage, res: ServerResponse): void {
-    if (!req.url) return sendNotFound(res);
-    const url = new URL(req.url, `http://${this.options.host}:${this.options.port}`);
-    if (url.pathname === this.prefix) {
-      const redirectUrl = new URL(`${this.prefix}/`, url);
-      redirectUrl.search = url.search;
-      return sendRedirect(res, redirectUrl.pathname + redirectUrl.search);
-    }
-    const relativePath = parsePath(url.pathname, this.prefix);
-    if (!relativePath) return sendNotFound(res);
+  private async handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    try {
+      if (!req.url) return sendNotFound(res);
+      const url = new URL(req.url, `http://${this.options.host}:${this.options.port}`);
+      if (url.pathname === this.prefix) {
+        const redirectUrl = new URL(`${this.prefix}/`, url);
+        redirectUrl.search = url.search;
+        return sendRedirect(res, redirectUrl.pathname + redirectUrl.search);
+      }
+      const relativePath = parsePath(url.pathname, this.prefix);
+      if (!relativePath) return sendNotFound(res);
 
-    if (relativePath.startsWith("/api/")) {
-      return this.handleApi(relativePath, req.method ?? "GET", url, res);
+      if (relativePath.startsWith("/api/")) {
+        return await this.handleApi(relativePath, req, url, res);
+      }
+      return this.handleStatic(relativePath, res);
+    } catch (error) {
+      this.logger.warn?.(`[youarememory] ui request failed: ${String(error)}`);
+      return sendError(res, String(error));
     }
-    return this.handleStatic(relativePath, res);
   }
 
-  private handleApi(relativePath: string, method: string, url: URL, res: ServerResponse): void {
-    const upperMethod = method.toUpperCase();
+  private async handleApi(
+    relativePath: string,
+    req: IncomingMessage,
+    url: URL,
+    res: ServerResponse,
+  ): Promise<void> {
+    const upperMethod = (req.method ?? "GET").toUpperCase();
     const query = url.searchParams.get("q") ?? "";
     const limit = parseLimit(url.searchParams.get("limit"), 20);
     if (relativePath === "/api/clear") {
@@ -123,8 +165,23 @@ export class LocalUiServer {
     if (relativePath === "/api/overview") {
       return sendJson(res, this.repository.getOverview());
     }
+    if (relativePath === "/api/settings") {
+      if (upperMethod === "GET") {
+        return sendJson(res, this.controls.getSettings());
+      }
+      if (upperMethod !== "POST") return sendMethodNotAllowed(res, "GET, POST");
+      const body = await readJsonBody(req);
+      return sendJson(res, this.controls.saveSettings(body as Partial<IndexingSettings>));
+    }
+    if (relativePath === "/api/index/run") {
+      if (upperMethod !== "POST") return sendMethodNotAllowed(res, "POST");
+      return sendJson(res, await this.controls.runIndexNow());
+    }
     if (relativePath === "/api/snapshot") {
-      return sendJson(res, this.repository.getUiSnapshot(limit));
+      return sendJson(res, {
+        ...this.repository.getUiSnapshot(limit),
+        settings: this.controls.getSettings(),
+      });
     }
     if (relativePath === "/api/l2/time") {
       return sendJson(res, this.repository.searchL2TimeIndexes(query, limit));
@@ -142,7 +199,14 @@ export class LocalUiServer {
       return sendJson(res, this.repository.searchFacts(query, limit));
     }
     if (relativePath === "/api/retrieve") {
-      return sendJson(res, this.retriever.retrieve(query, { l2Limit: limit, l1Limit: limit, l0Limit: Math.max(3, limit / 2) }));
+      return sendJson(
+        res,
+        await this.retriever.retrieve(query, {
+          l2Limit: limit,
+          l1Limit: limit,
+          l0Limit: Math.max(3, Math.floor(limit / 2)),
+        }),
+      );
     }
     return sendNotFound(res);
   }

@@ -1,3 +1,4 @@
+import type { IndexingSettings, L1WindowMode, L2TimeGranularity } from "./core/types.js";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -9,6 +10,7 @@ export interface PluginRuntimeConfig {
   includeAssistant: boolean;
   maxMessageChars: number;
   heartbeatBatchSize: number;
+  defaultIndexingSettings: IndexingSettings;
   recallEnabled: boolean;
   addEnabled: boolean;
   uiEnabled: boolean;
@@ -36,6 +38,16 @@ function toInteger(value: unknown, fallback: number): number {
   return fallback;
 }
 
+function toL2TimeGranularity(value: unknown, fallback: L2TimeGranularity): L2TimeGranularity {
+  if (value === "day" || value === "half_day" || value === "hour") return value;
+  return fallback;
+}
+
+function toL1WindowMode(value: unknown, fallback: L1WindowMode): L1WindowMode {
+  if (value === "time" || value === "count") return value;
+  return fallback;
+}
+
 export function buildPluginConfig(raw: unknown): PluginRuntimeConfig {
   const cfg = (raw ?? {}) as Record<string, unknown>;
   const dataDir = typeof cfg.dataDir === "string" && cfg.dataDir.trim()
@@ -54,6 +66,13 @@ export function buildPluginConfig(raw: unknown): PluginRuntimeConfig {
     includeAssistant: toBoolean(cfg.includeAssistant, true),
     maxMessageChars: toInteger(cfg.maxMessageChars, 6000),
     heartbeatBatchSize: Math.max(1, toInteger(cfg.heartbeatBatchSize, 30)),
+    defaultIndexingSettings: {
+      autoIndexIntervalMinutes: Math.max(0, toInteger(cfg.autoIndexIntervalMinutes, 60)),
+      l1WindowMode: toL1WindowMode(cfg.l1WindowMode, "time"),
+      l1WindowMinutes: Math.max(0, toInteger(cfg.l1WindowMinutes, 120)),
+      l1WindowMaxL0: Math.max(0, toInteger(cfg.l1WindowMaxL0, 8)),
+      l2TimeGranularity: toL2TimeGranularity(cfg.l2TimeGranularity, "day"),
+    },
     recallEnabled: toBoolean(cfg.recallEnabled, true),
     addEnabled: toBoolean(cfg.addEnabled, true),
     uiEnabled: toBoolean(cfg.uiEnabled, true),
