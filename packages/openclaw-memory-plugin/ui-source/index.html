@@ -1,8 +1,9 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="light">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
     <title>YouAreMemory</title>
     <link rel="stylesheet" href="./app.css" />
   </head>
@@ -19,56 +20,74 @@
               <h1>YouAreMemory</h1>
             </div>
           </div>
-          <button id="navCloseBtn" class="icon-btn nav-close" type="button">关闭</button>
+          <button id="navCloseBtn" class="drawer-close nav-close" type="button" aria-label="Close">&#x2715;</button>
         </div>
 
         <nav id="levelTabs" class="nav-list">
           <button class="nav-item active" data-level="l1" type="button">
-            <span class="nav-label">L1 窗口</span>
+            <span class="nav-label" data-i18n="nav.l1">L1 窗口</span>
             <span class="nav-count" data-count-for="l1">0</span>
           </button>
           <button class="nav-item" data-level="l2_project" type="button">
-            <span class="nav-label">L2 项目</span>
+            <span class="nav-label" data-i18n="nav.l2_project">L2 项目</span>
             <span class="nav-count" data-count-for="l2_project">0</span>
           </button>
           <button class="nav-item" data-level="l2_time" type="button">
-            <span class="nav-label">L2 时间</span>
+            <span class="nav-label" data-i18n="nav.l2_time">L2 时间</span>
             <span class="nav-count" data-count-for="l2_time">0</span>
           </button>
           <button class="nav-item" data-level="l0" type="button">
-            <span class="nav-label">L0 会话</span>
+            <span class="nav-label" data-i18n="nav.l0">L0 会话</span>
             <span class="nav-count" data-count-for="l0">0</span>
           </button>
           <button class="nav-item" data-level="profile" type="button">
-            <span class="nav-label">全局画像</span>
+            <span class="nav-label" data-i18n="nav.profile">全局画像</span>
             <span class="nav-count" data-count-for="profile">0</span>
           </button>
         </nav>
 
         <div class="nav-footer">
-          <span class="nav-footer-label">最近索引</span>
-          <strong id="navLastIndexed">等待索引</strong>
+          <span class="nav-footer-label" data-i18n="nav.lastIndexed">最近索引</span>
+          <strong id="navLastIndexed" data-i18n="nav.waiting">等待索引</strong>
         </div>
       </aside>
 
       <main class="workspace">
         <header class="topbar">
           <div class="topbar-leading">
-            <button id="navToggleBtn" class="icon-btn nav-toggle" type="button">菜单</button>
+            <button id="navToggleBtn" class="icon-btn nav-toggle" type="button" aria-label="Menu">☰</button>
             <div>
-              <p class="overline">Dashboard</p>
-              <h2>记忆看板</h2>
-              <p id="activityText" class="activity-text">等待操作</p>
+              <h2 data-i18n="topbar.title">记忆看板</h2>
+              <p id="activityText" class="activity-text" data-i18n="topbar.idle">等待操作</p>
             </div>
           </div>
 
           <div class="toolbar">
-            <span id="statusPill" class="status-pill">等待索引</span>
-            <button id="refreshBtn" class="tool-btn" type="button">刷新</button>
-            <button id="buildNowBtn" class="tool-btn primary" type="button">立即构建</button>
-            <button id="settingsToggleBtn" class="tool-btn" type="button">设置</button>
-            <button id="retrieveToggleBtn" class="tool-btn" type="button">检索调试</button>
-            <button id="detailToggleBtn" class="tool-btn" type="button">详情</button>
+            <span id="statusPill" class="status-pill" data-i18n="nav.waiting">等待索引</span>
+            <button id="refreshBtn" class="tool-btn" type="button" data-i18n="topbar.refresh">刷新</button>
+            <button id="buildNowBtn" class="tool-btn primary" type="button" data-i18n="topbar.build">立即构建</button>
+            <button id="settingsToggleBtn" class="tool-btn" type="button" data-i18n="topbar.settings">设置</button>
+            <button id="retrieveToggleBtn" class="tool-btn" type="button" data-i18n="topbar.retrieve">检索</button>
+            <button id="detailToggleBtn" class="tool-btn" type="button" data-i18n="topbar.detail">详情</button>
+
+            <span class="toolbar-sep"></span>
+
+            <div class="theme-toggle" id="themeToggle">
+              <button data-theme-value="light" type="button" class="active" title="Light">☀</button>
+              <button data-theme-value="dark" type="button" title="Dark">☽</button>
+              <button data-theme-value="auto" type="button" title="Auto">◑</button>
+            </div>
+
+            <div class="lang-dropdown" id="langDropdown">
+              <button class="lang-dropdown-trigger" id="langTrigger" type="button">
+                <span id="langCurrentLabel">简体中文</span>
+                <span class="lang-arrow">▾</span>
+              </button>
+              <div class="lang-dropdown-menu" id="langMenu">
+                <button class="lang-option active" data-locale="zh" type="button">简体中文</button>
+                <button class="lang-option" data-locale="en" type="button">English</button>
+              </div>
+            </div>
           </div>
         </header>
 
@@ -76,9 +95,9 @@
 
         <section class="stream-panel">
           <div class="panel-head">
-            <div>
+            <div class="panel-title-row">
               <h3 id="browserTitle">L1 窗口</h3>
-              <p id="browserMeta" class="panel-meta">0 条</p>
+              <span id="browserMeta" class="panel-meta">0</span>
             </div>
 
             <div class="search-row">
@@ -86,9 +105,11 @@
                 id="listQueryInput"
                 type="text"
                 autocomplete="off"
+                data-i18n="stream.searchPlaceholder"
+                data-i18n-attr="placeholder"
                 placeholder="搜索当前层级"
               />
-              <button id="listSearchBtn" class="tool-btn" type="button">搜索</button>
+              <button id="listSearchBtn" class="tool-btn" type="button" data-i18n="stream.search">搜索</button>
             </div>
           </div>
 
@@ -99,11 +120,8 @@
 
     <aside class="side-drawer detail-drawer" id="detailPanel">
       <div class="drawer-header">
-        <div>
-          <p class="overline">Detail</p>
-          <h3 id="detailTitle">记录详情</h3>
-        </div>
-        <button id="detailCloseBtn" class="icon-btn" type="button">关闭</button>
+        <h3 id="detailTitle" data-i18n="detail.title">记录详情</h3>
+        <button id="detailCloseBtn" class="drawer-close" type="button" aria-label="Close">&#x2715;</button>
       </div>
       <div id="detailMeta" class="detail-meta"></div>
       <div id="detailBody" class="detail-body"></div>
@@ -111,36 +129,30 @@
 
     <aside class="side-drawer settings-drawer" id="settingsPanel">
       <div class="drawer-header">
-        <div>
-          <p class="overline">Settings</p>
-          <h3>索引设置</h3>
-        </div>
-        <button id="settingsCloseBtn" class="icon-btn" type="button">关闭</button>
+        <h3 data-i18n="settings.title">索引设置</h3>
+        <button id="settingsCloseBtn" class="drawer-close" type="button" aria-label="Close">&#x2715;</button>
       </div>
 
       <div class="drawer-section">
         <label class="settings-field">
-          <span>自动构建间隔（分钟）</span>
+          <span data-i18n="settings.interval">自动构建间隔（分钟）</span>
           <input id="autoIndexIntervalInput" type="number" min="0" step="1" placeholder="60" />
         </label>
       </div>
 
       <div class="drawer-actions">
-        <button id="saveSettingsBtn" class="tool-btn primary wide" type="button">保存设置</button>
+        <button id="saveSettingsBtn" class="tool-btn primary wide" type="button" data-i18n="settings.save">保存设置</button>
       </div>
 
       <div class="drawer-section drawer-danger">
-        <button id="clearMemoryBtn" class="tool-btn danger wide" type="button">清空并重建</button>
+        <button id="clearMemoryBtn" class="tool-btn danger wide" type="button" data-i18n="settings.clear">清空并重建</button>
       </div>
     </aside>
 
     <aside class="side-drawer retrieve-drawer" id="retrievePanel">
       <div class="drawer-header">
-        <div>
-          <p class="overline">Recall</p>
-          <h3>检索调试</h3>
-        </div>
-        <button id="retrieveCloseBtn" class="icon-btn" type="button">关闭</button>
+        <h3 data-i18n="retrieve.title">检索调试</h3>
+        <button id="retrieveCloseBtn" class="drawer-close" type="button" aria-label="Close">&#x2715;</button>
       </div>
 
       <div class="drawer-section">
@@ -148,17 +160,19 @@
           <textarea
             id="queryInput"
             rows="4"
+            data-i18n="retrieve.placeholder"
+            data-i18n-attr="placeholder"
             placeholder="输入问题，例如：这个项目最近进展到哪一步了？"
           ></textarea>
-          <button id="retrieveBtn" class="tool-btn primary wide" type="button">开始检索</button>
+          <button id="retrieveBtn" class="tool-btn primary wide" type="button" data-i18n="retrieve.run">开始检索</button>
         </div>
       </div>
 
       <div class="drawer-section">
-        <div id="retrieveSummary" class="summary-chip">尚未检索</div>
+        <div id="retrieveSummary" class="summary-chip" data-i18n="retrieve.notYet">尚未检索</div>
         <div id="retrieveTimeline" class="retrieval-timeline"></div>
         <details class="context-block">
-          <summary>上下文</summary>
+          <summary data-i18n="retrieve.context">上下文</summary>
           <pre id="retrieveResult"></pre>
         </details>
       </div>

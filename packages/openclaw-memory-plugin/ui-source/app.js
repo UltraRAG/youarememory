@@ -1,4 +1,278 @@
-const $ = (selector) => document.querySelector(selector);
+/* ── i18n ────────────────────────────────────────────────── */
+
+const LOCALES = {
+  zh: {
+    "nav.l1": "L1 窗口",
+    "nav.l2_project": "L2 项目",
+    "nav.l2_time": "L2 时间",
+    "nav.l0": "L0 会话",
+    "nav.profile": "全局画像",
+    "nav.lastIndexed": "最近索引",
+    "nav.waiting": "等待索引",
+    "topbar.title": "记忆看板",
+    "topbar.idle": "等待操作",
+    "topbar.refresh": "刷新",
+    "topbar.build": "立即构建",
+    "topbar.settings": "设置",
+    "topbar.retrieve": "检索",
+    "topbar.detail": "详情",
+    "stream.searchPlaceholder": "搜索当前层级",
+    "stream.search": "搜索",
+    "stream.items": "{0} 条",
+    "detail.title": "记录详情",
+    "detail.empty": "选择左侧记录查看详情",
+    "settings.title": "索引设置",
+    "settings.interval": "自动构建间隔（分钟）",
+    "settings.save": "保存设置",
+    "settings.clear": "清空并重建",
+    "retrieve.title": "检索调试",
+    "retrieve.placeholder": "输入问题，例如：这个项目最近进展到哪一步了？",
+    "retrieve.run": "开始检索",
+    "retrieve.notYet": "尚未检索",
+    "retrieve.context": "上下文",
+    "status.refreshing": "刷新中…",
+    "status.refreshed": "已刷新",
+    "status.building": "构建中…",
+    "status.built": "已构建 · L0 {0} / L1 {1} / L2T {2} / L2P {3} / 画像 {4}",
+    "status.clearing": "清空中…",
+    "status.cleared": "已清空本地记忆",
+    "status.searching": "搜索中…",
+    "status.searched": "搜索完成",
+    "status.retrieving": "检索中…",
+    "status.retrieved": "检索完成",
+    "status.loading": "加载中…",
+    "status.ready": "已就绪",
+    "status.loadFail": "加载失败：{0}",
+    "status.queryRequired": "请输入检索问题",
+    "status.settingsSaved": "设置已保存 · 间隔 {0} 分钟",
+    "status.pending": "待索引 {0} · 开放 {1}",
+    "level.l1.label": "L1 话题窗口",
+    "level.l2_project.label": "L2 项目",
+    "level.l2_time.label": "L2 时间",
+    "level.l0.label": "L0 会话",
+    "level.profile.label": "全局画像",
+    "level.l1.empty": "暂无 L1 记录",
+    "level.l2_project.empty": "暂无 L2 项目索引",
+    "level.l2_time.empty": "暂无 L2 时间索引",
+    "level.l0.empty": "暂无 L0 会话",
+    "level.profile.empty": "暂无全局画像",
+    "detail.summary": "摘要",
+    "detail.situation": "时间情景",
+    "detail.projects": "项目",
+    "detail.facts": "事实",
+    "detail.sourceL0": "来源 L0",
+    "detail.sourceWindows": "来源窗口",
+    "detail.progress": "最近进展",
+    "detail.messages": "消息流",
+    "detail.profileSummary": "画像摘要",
+    "detail.noSummary": "暂无摘要",
+    "detail.noSituation": "暂无情景摘要",
+    "detail.noProjects": "暂无项目",
+    "detail.noFacts": "暂无事实",
+    "detail.noProgress": "暂无进展",
+    "detail.noProfile": "暂无画像摘要",
+    "detail.noMessages": "暂无用户消息",
+    "entry.unnamed.time": "未命名时间桶",
+    "entry.unnamed.project": "未命名项目",
+    "entry.unnamed.window": "未命名窗口",
+    "entry.unnamed.session": "未命名会话",
+    "entry.globalProfile": "全局画像",
+    "project.planned": "计划中",
+    "project.in_progress": "进行中",
+    "project.blocked": "阻塞",
+    "project.on_hold": "暂停",
+    "project.done": "已完成",
+    "project.unknown": "未知",
+    "project.statusLabel": "状态：{0}",
+    "meta.date": "日期",
+    "meta.source": "来源",
+    "meta.update": "更新",
+    "meta.projectKey": "项目键",
+    "meta.status": "状态",
+    "meta.session": "Session",
+    "meta.start": "开始",
+    "meta.end": "结束",
+    "meta.time": "时间",
+    "meta.messages": "消息",
+    "meta.l1Count": "{0} 条 L1",
+    "meta.sourceCount": "来源 {0}",
+    "meta.l0Count": "L0 {0}",
+    "meta.projectCount": "项目 {0}",
+    "meta.msgCount": "{0} 条",
+    "retrieve.noResult": "无结果",
+  },
+  en: {
+    "nav.l1": "L1 Window",
+    "nav.l2_project": "L2 Project",
+    "nav.l2_time": "L2 Time",
+    "nav.l0": "L0 Session",
+    "nav.profile": "Profile",
+    "nav.lastIndexed": "Last indexed",
+    "nav.waiting": "Waiting",
+    "topbar.title": "Memory Board",
+    "topbar.idle": "Idle",
+    "topbar.refresh": "Refresh",
+    "topbar.build": "Build",
+    "topbar.settings": "Settings",
+    "topbar.retrieve": "Retrieve",
+    "topbar.detail": "Detail",
+    "stream.searchPlaceholder": "Search current level",
+    "stream.search": "Search",
+    "stream.items": "{0} items",
+    "detail.title": "Detail",
+    "detail.empty": "Select a record to view details",
+    "settings.title": "Index Settings",
+    "settings.interval": "Auto-build interval (min)",
+    "settings.save": "Save",
+    "settings.clear": "Clear & Rebuild",
+    "retrieve.title": "Retrieve Debug",
+    "retrieve.placeholder": "Enter a question, e.g. What's the latest progress?",
+    "retrieve.run": "Run",
+    "retrieve.notYet": "Not yet retrieved",
+    "retrieve.context": "Context",
+    "status.refreshing": "Refreshing…",
+    "status.refreshed": "Refreshed",
+    "status.building": "Building…",
+    "status.built": "Built · L0 {0} / L1 {1} / L2T {2} / L2P {3} / Profile {4}",
+    "status.clearing": "Clearing…",
+    "status.cleared": "Local memory cleared",
+    "status.searching": "Searching…",
+    "status.searched": "Search complete",
+    "status.retrieving": "Retrieving…",
+    "status.retrieved": "Retrieval complete",
+    "status.loading": "Loading…",
+    "status.ready": "Ready",
+    "status.loadFail": "Load failed: {0}",
+    "status.queryRequired": "Please enter a query",
+    "status.settingsSaved": "Saved · interval {0} min",
+    "status.pending": "Pending {0} · Open {1}",
+    "level.l1.label": "L1 Topic Window",
+    "level.l2_project.label": "L2 Project",
+    "level.l2_time.label": "L2 Time",
+    "level.l0.label": "L0 Session",
+    "level.profile.label": "Global Profile",
+    "level.l1.empty": "No L1 records",
+    "level.l2_project.empty": "No L2 project indexes",
+    "level.l2_time.empty": "No L2 time indexes",
+    "level.l0.empty": "No L0 sessions",
+    "level.profile.empty": "No profile data",
+    "detail.summary": "Summary",
+    "detail.situation": "Situation",
+    "detail.projects": "Projects",
+    "detail.facts": "Facts",
+    "detail.sourceL0": "Source L0",
+    "detail.sourceWindows": "Source Windows",
+    "detail.progress": "Latest Progress",
+    "detail.messages": "Messages",
+    "detail.profileSummary": "Profile Summary",
+    "detail.noSummary": "No summary",
+    "detail.noSituation": "No situation info",
+    "detail.noProjects": "No projects",
+    "detail.noFacts": "No facts",
+    "detail.noProgress": "No progress",
+    "detail.noProfile": "No profile summary",
+    "detail.noMessages": "No user messages",
+    "entry.unnamed.time": "Unnamed time bucket",
+    "entry.unnamed.project": "Unnamed project",
+    "entry.unnamed.window": "Unnamed window",
+    "entry.unnamed.session": "Unnamed session",
+    "entry.globalProfile": "Global Profile",
+    "project.planned": "Planned",
+    "project.in_progress": "In Progress",
+    "project.blocked": "Blocked",
+    "project.on_hold": "On Hold",
+    "project.done": "Done",
+    "project.unknown": "Unknown",
+    "project.statusLabel": "Status: {0}",
+    "meta.date": "Date",
+    "meta.source": "Source",
+    "meta.update": "Updated",
+    "meta.projectKey": "Project Key",
+    "meta.status": "Status",
+    "meta.session": "Session",
+    "meta.start": "Start",
+    "meta.end": "End",
+    "meta.time": "Time",
+    "meta.messages": "Messages",
+    "meta.l1Count": "{0} L1",
+    "meta.sourceCount": "Source {0}",
+    "meta.l0Count": "L0 {0}",
+    "meta.projectCount": "Projects {0}",
+    "meta.msgCount": "{0} msgs",
+    "retrieve.noResult": "No results",
+  },
+};
+
+let currentLocale = localStorage.getItem("ym-locale") || "zh";
+
+function t(key, ...args) {
+  const dict = LOCALES[currentLocale] || LOCALES.zh;
+  let str = dict[key] ?? LOCALES.zh[key] ?? key;
+  for (let i = 0; i < args.length; i++) {
+    str = str.replace(`{${i}}`, args[i]);
+  }
+  return str;
+}
+
+function translatePage() {
+  document.documentElement.lang = currentLocale === "zh" ? "zh-CN" : "en";
+  document.querySelectorAll("[data-i18n]").forEach((el) => {
+    const key = el.getAttribute("data-i18n");
+    const attr = el.getAttribute("data-i18n-attr");
+    if (attr) {
+      el[attr] = t(key);
+    } else {
+      el.textContent = t(key);
+    }
+  });
+  updateLangDropdown();
+}
+
+function updateLangDropdown() {
+  const labels = { zh: "简体中文", en: "English" };
+  if (langCurrentLabel) langCurrentLabel.textContent = labels[currentLocale] || labels.zh;
+  document.querySelectorAll(".lang-option").forEach((opt) => {
+    opt.classList.toggle("active", opt.dataset.locale === currentLocale);
+  });
+}
+
+function setLocale(locale) {
+  currentLocale = locale;
+  localStorage.setItem("ym-locale", locale);
+  translatePage();
+  refreshRenderedContent();
+}
+
+/* ── Theme ───────────────────────────────────────────────── */
+
+function getEffectiveTheme(pref) {
+  if (pref === "auto") {
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+  return pref;
+}
+
+function applyTheme(pref) {
+  localStorage.setItem("ym-theme", pref);
+  const effective = getEffectiveTheme(pref);
+  document.documentElement.dataset.theme = effective;
+  document.querySelectorAll("#themeToggle button").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.themeValue === pref);
+  });
+}
+
+function initTheme() {
+  const pref = localStorage.getItem("ym-theme") || "light";
+  applyTheme(pref);
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+    const current = localStorage.getItem("ym-theme") || "light";
+    if (current === "auto") applyTheme("auto");
+  });
+}
+
+/* ── DOM refs ────────────────────────────────────────────── */
+
+const $ = (sel) => document.querySelector(sel);
 
 const appScrim = $("#appScrim");
 const navRail = $("#navRail");
@@ -42,33 +316,30 @@ const retrieveSummary = $("#retrieveSummary");
 const retrieveTimeline = $("#retrieveTimeline");
 const retrieveResult = $("#retrieveResult");
 
-const LEVEL_CONFIG = {
-  l1: {
-    label: "L1 话题窗口",
-    endpoint: "./api/l1",
-    emptyText: "暂无 L1 记录。",
-  },
-  l2_project: {
-    label: "L2 项目",
-    endpoint: "./api/l2/project",
-    emptyText: "暂无 L2 项目索引。",
-  },
-  l2_time: {
-    label: "L2 时间",
-    endpoint: "./api/l2/time",
-    emptyText: "暂无 L2 时间索引。",
-  },
-  l0: {
-    label: "L0 会话",
-    endpoint: "./api/l0",
-    emptyText: "暂无 L0 会话。",
-  },
-  profile: {
-    label: "全局画像",
-    endpoint: "./api/profile",
-    emptyText: "暂无全局画像。",
-  },
-};
+const themeToggle = $("#themeToggle");
+const langDropdown = $("#langDropdown");
+const langTrigger = $("#langTrigger");
+const langCurrentLabel = $("#langCurrentLabel");
+const langMenu = $("#langMenu");
+
+/* ── Level config ────────────────────────────────────────── */
+
+const LEVEL_KEYS = ["l1", "l2_project", "l2_time", "l0", "profile"];
+
+function getLevelConfig(level) {
+  const endpoints = {
+    l1: "./api/l1",
+    l2_project: "./api/l2/project",
+    l2_time: "./api/l2/time",
+    l0: "./api/l0",
+    profile: "./api/profile",
+  };
+  return {
+    label: t(`level.${level}.label`),
+    endpoint: endpoints[level],
+    emptyText: t(`level.${level}.empty`),
+  };
+}
 
 const OVERVIEW_KEYS = {
   l1: "totalL1",
@@ -78,77 +349,45 @@ const OVERVIEW_KEYS = {
   profile: "totalProfiles",
 };
 
-const PROJECT_STATUS_LABELS = {
-  planned: "计划中",
-  in_progress: "进行中",
-  blocked: "阻塞",
-  on_hold: "暂停",
-  done: "已完成",
-  unknown: "未知",
-};
+function formatStatus(value) {
+  return t(`project.${value}`) || value || "-";
+}
+
+/* ── State ───────────────────────────────────────────────── */
 
 const state = {
   activeLevel: "l1",
   activePanel: null,
   overview: {},
-  settings: createDefaultSettings(),
-  globalProfile: createEmptyProfile(),
-  baseRaw: {
-    l2_time: [],
-    l2_project: [],
-    l1: [],
-    l0: [],
-    profile: [],
-  },
-  baseItems: {
-    l2_time: [],
-    l2_project: [],
-    l1: [],
-    l0: [],
-    profile: [],
-  },
+  settings: { autoIndexIntervalMinutes: 60 },
+  globalProfile: { recordId: "global_profile_record", profileText: "", sourceL1Ids: [], createdAt: "", updatedAt: "" },
+  baseRaw: { l2_time: [], l2_project: [], l1: [], l0: [], profile: [] },
+  baseItems: { l2_time: [], l2_project: [], l1: [], l0: [], profile: [] },
   visibleItems: [],
   selectedIndex: -1,
 };
 
-function createEmptyProfile() {
-  return {
-    recordId: "global_profile_record",
-    profileText: "",
-    sourceL1Ids: [],
-    createdAt: "",
-    updatedAt: "",
-  };
-}
-
-function createDefaultSettings() {
-  return {
-    autoIndexIntervalMinutes: 60,
-  };
-}
+/* ── Helpers ──────────────────────────────────────────────── */
 
 function shortText(value, max = 140) {
   const text = String(value || "").trim();
   if (!text) return "";
-  if (text.length <= max) return text;
-  return `${text.slice(0, max)}...`;
+  return text.length <= max ? text : `${text.slice(0, max)}…`;
 }
 
 function formatTime(value) {
   if (!value) return "-";
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return String(value);
-  return parsed.toLocaleString("zh-CN", { hour12: false });
-}
-
-function formatStatus(value) {
-  return PROJECT_STATUS_LABELS[value] || value || "-";
+  const locale = currentLocale === "en" ? "en-US" : "zh-CN";
+  return parsed.toLocaleString(locale, { hour12: false });
 }
 
 function getOverviewCount(level) {
-  const key = OVERVIEW_KEYS[level];
-  return Number(state.overview?.[key] ?? 0);
+  return Number(state.overview?.[OVERVIEW_KEYS[level]] ?? 0);
 }
+
+/* ── Panel / nav state ───────────────────────────────────── */
 
 function setPanel(name) {
   state.activePanel = name || null;
@@ -164,15 +403,12 @@ function togglePanel(name) {
 }
 
 function setNavOpen(open) {
-  if (open) {
-    document.body.dataset.nav = "open";
-  } else {
-    delete document.body.dataset.nav;
-  }
+  if (open) document.body.dataset.nav = "open";
+  else delete document.body.dataset.nav;
 }
 
 function isNavDrawerLayout() {
-  return window.matchMedia("(max-width: 1080px)").matches;
+  return window.matchMedia("(max-width: 960px)").matches;
 }
 
 function closeTransientUi() {
@@ -180,40 +416,43 @@ function closeTransientUi() {
   setNavOpen(false);
 }
 
-function setActivity(message, tone = "idle") {
-  activityText.textContent = message;
+function setActivity(key, tone = "idle", ...args) {
+  activityText.textContent = t(key, ...args);
   activityText.dataset.tone = tone;
 }
+
+/* ── Status pill ─────────────────────────────────────────── */
 
 function updateStatusPill(overview = {}) {
   const pending = Number(overview.pendingL0 ?? 0);
   const openTopics = Number(overview.openTopics ?? 0);
-  const lastIndexed = overview.lastIndexedAt ? formatTime(overview.lastIndexedAt) : "等待索引";
-  const status = pending > 0
-    ? `待索引 ${pending} · 开放话题 ${openTopics}`
-    : `${lastIndexed}`;
-  statusPill.textContent = status;
+  const lastIndexed = overview.lastIndexedAt ? formatTime(overview.lastIndexedAt) : t("nav.waiting");
+  statusPill.textContent = pending > 0
+    ? t("status.pending", pending, openTopics)
+    : lastIndexed;
   statusPill.dataset.tone = pending > 0 ? "pending" : "ready";
   navLastIndexed.textContent = lastIndexed;
 }
+
+/* ── Overview ────────────────────────────────────────────── */
 
 function createMetricCard(label, value, note) {
   const card = document.createElement("section");
   card.className = "metric-card";
 
-  const metricLabel = document.createElement("div");
-  metricLabel.className = "metric-label";
-  metricLabel.textContent = label;
+  const lbl = document.createElement("div");
+  lbl.className = "metric-label";
+  lbl.textContent = label;
 
-  const metricValue = document.createElement("div");
-  metricValue.className = "metric-value";
-  metricValue.textContent = String(value ?? 0);
+  const val = document.createElement("div");
+  val.className = "metric-value";
+  val.textContent = String(value ?? 0);
 
-  const metricNote = document.createElement("div");
-  metricNote.className = "metric-note";
-  metricNote.textContent = note;
+  const nt = document.createElement("div");
+  nt.className = "metric-note";
+  nt.textContent = note;
 
-  card.append(metricLabel, metricValue, metricNote);
+  card.append(lbl, val, nt);
   return card;
 }
 
@@ -222,41 +461,40 @@ function renderOverview(overview = {}) {
   updateStatusPill(state.overview);
   overviewCards.innerHTML = "";
   overviewCards.append(
-    createMetricCard("L0", overview.totalL0 ?? 0, "会话"),
-    createMetricCard("待索引", overview.pendingL0 ?? 0, "等待处理"),
-    createMetricCard("开放话题", overview.openTopics ?? 0, "未闭合"),
-    createMetricCard("L1", overview.totalL1 ?? 0, "话题窗口"),
-    createMetricCard("L2 时间", overview.totalL2Time ?? 0, "按天"),
-    createMetricCard("L2 项目", overview.totalL2Project ?? 0, "项目"),
-    createMetricCard("画像", overview.totalProfiles ?? 0, overview.lastIndexedAt ? "已更新" : "未生成"),
+    createMetricCard("L0", overview.totalL0 ?? 0, t("nav.l0")),
+    createMetricCard(t("status.pending", "", "").split("·")[0].trim() || "Pending", overview.pendingL0 ?? 0, ""),
+    createMetricCard("L1", overview.totalL1 ?? 0, t("nav.l1")),
+    createMetricCard("L2T", overview.totalL2Time ?? 0, t("nav.l2_time")),
+    createMetricCard("L2P", overview.totalL2Project ?? 0, t("nav.l2_project")),
+    createMetricCard(t("nav.profile"), overview.totalProfiles ?? 0, overview.lastIndexedAt ? "✓" : "–"),
   );
   renderNavCounts();
 }
 
+/* ── Settings ────────────────────────────────────────────── */
+
 function applySettings(settings = {}) {
-  state.settings = {
-    ...createDefaultSettings(),
-    ...(settings || {}),
-  };
+  state.settings = { autoIndexIntervalMinutes: 60, ...(settings || {}) };
   autoIndexIntervalInput.value = String(state.settings.autoIndexIntervalMinutes ?? 60);
 }
 
 function readSettingsForm() {
   const parsed = Number.parseInt(String(autoIndexIntervalInput.value || "").trim(), 10);
   return {
-    autoIndexIntervalMinutes: Number.isFinite(parsed)
-      ? Math.max(0, parsed)
-      : state.settings.autoIndexIntervalMinutes,
+    autoIndexIntervalMinutes: Number.isFinite(parsed) ? Math.max(0, parsed) : state.settings.autoIndexIntervalMinutes,
   };
 }
+
+/* ── Nav counts ──────────────────────────────────────────── */
 
 function renderNavCounts() {
   levelTabs.querySelectorAll("[data-count-for]").forEach((node) => {
     const level = node.getAttribute("data-count-for");
-    if (!level) return;
-    node.textContent = String(getOverviewCount(level));
+    if (level) node.textContent = String(getOverviewCount(level));
   });
 }
+
+/* ── Entry normalization ─────────────────────────────────── */
 
 function unwrapRaw(level, raw) {
   if (!raw) return raw;
@@ -280,11 +518,9 @@ function normalizeEntry(level, rawInput) {
 
   if (level === "l2_time") {
     return {
-      level,
-      id: getRawId(level, raw),
-      badge: "time",
-      title: raw.dateKey || "未命名时间桶",
-      subtitle: raw.summary || "暂无摘要",
+      level, id: getRawId(level, raw), badge: "time",
+      title: raw.dateKey || t("entry.unnamed.time"),
+      subtitle: raw.summary || t("detail.noSummary"),
       meta: `L1 ${raw.l1Source?.length ?? 0} · ${formatTime(raw.updatedAt)}`,
       raw,
     };
@@ -292,36 +528,30 @@ function normalizeEntry(level, rawInput) {
 
   if (level === "l2_project") {
     return {
-      level,
-      id: getRawId(level, raw),
-      badge: formatStatus(raw.currentStatus),
-      title: raw.projectName || "未命名项目",
-      subtitle: raw.latestProgress || raw.summary || "暂无进展",
-      meta: `来源 ${raw.l1Source?.length ?? 0} · ${formatTime(raw.updatedAt)}`,
+      level, id: getRawId(level, raw), badge: formatStatus(raw.currentStatus),
+      title: raw.projectName || t("entry.unnamed.project"),
+      subtitle: raw.latestProgress || raw.summary || t("detail.noProgress"),
+      meta: `${t("meta.sourceCount", raw.l1Source?.length ?? 0)} · ${formatTime(raw.updatedAt)}`,
       raw,
     };
   }
 
   if (level === "l1") {
     return {
-      level,
-      id: getRawId(level, raw),
-      badge: "topic",
-      title: raw.timePeriod || "未命名窗口",
-      subtitle: raw.summary || "暂无摘要",
-      meta: `L0 ${raw.l0Source?.length ?? 0} · 项目 ${raw.projectDetails?.length ?? 0}`,
+      level, id: getRawId(level, raw), badge: "topic",
+      title: raw.timePeriod || t("entry.unnamed.window"),
+      subtitle: raw.summary || t("detail.noSummary"),
+      meta: `${t("meta.l0Count", raw.l0Source?.length ?? 0)} · ${t("meta.projectCount", raw.projectDetails?.length ?? 0)}`,
       raw,
     };
   }
 
   if (level === "l0") {
-    const userMessages = (raw.messages || []).filter((message) => message.role === "user").map((message) => message.content);
+    const userMsgs = (raw.messages || []).filter((m) => m.role === "user").map((m) => m.content);
     return {
-      level,
-      id: getRawId(level, raw),
-      badge: "raw",
-      title: raw.sessionKey || "未命名会话",
-      subtitle: shortText(userMessages[userMessages.length - 1] || "暂无用户消息", 180),
+      level, id: getRawId(level, raw), badge: "raw",
+      title: raw.sessionKey || t("entry.unnamed.session"),
+      subtitle: shortText(userMsgs[userMsgs.length - 1] || t("detail.noMessages"), 180),
       meta: formatTime(raw.timestamp),
       raw,
     };
@@ -329,11 +559,9 @@ function normalizeEntry(level, rawInput) {
 
   if (level === "profile") {
     return {
-      level,
-      id: getRawId(level, raw),
-      badge: "profile",
-      title: "全局画像",
-      subtitle: raw.profileText || "暂无画像摘要",
+      level, id: getRawId(level, raw), badge: "profile",
+      title: t("entry.globalProfile"),
+      subtitle: raw.profileText || t("detail.noProfile"),
       meta: `L1 ${raw.sourceL1Ids?.length ?? 0} · ${formatTime(raw.updatedAt)}`,
       raw,
     };
@@ -343,39 +571,42 @@ function normalizeEntry(level, rawInput) {
 }
 
 function normalizeEntryList(level, raws = []) {
-  return (raws || [])
-    .map((raw) => normalizeEntry(level, raw))
-    .filter(Boolean);
+  return (raws || []).map((r) => normalizeEntry(level, r)).filter(Boolean);
 }
 
+/* ── Empty state ─────────────────────────────────────────── */
+
 function createEmptyState(text) {
-  const empty = document.createElement("div");
-  empty.className = "empty-state";
-  empty.textContent = text;
-  return empty;
+  const el = document.createElement("div");
+  el.className = "empty-state";
+  el.textContent = text;
+  return el;
 }
+
+/* ── Entry list render ───────────────────────────────────── */
 
 function renderEntryList() {
   entryList.innerHTML = "";
+  const config = getLevelConfig(state.activeLevel);
   if (state.visibleItems.length === 0) {
-    entryList.append(createEmptyState(LEVEL_CONFIG[state.activeLevel].emptyText));
+    entryList.append(createEmptyState(config.emptyText));
     state.selectedIndex = -1;
     renderDetail();
-    browserMeta.textContent = "0 条";
+    browserMeta.textContent = "0";
     return;
   }
 
-  browserMeta.textContent = `${state.visibleItems.length} 条`;
+  browserMeta.textContent = t("stream.items", state.visibleItems.length);
   if (state.selectedIndex < 0 || state.selectedIndex >= state.visibleItems.length) {
     state.selectedIndex = 0;
   }
 
-  state.visibleItems.forEach((item, index) => {
+  state.visibleItems.forEach((item, idx) => {
     const li = document.createElement("li");
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "entry-card";
-    if (index === state.selectedIndex) button.classList.add("active");
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "entry-card";
+    if (idx === state.selectedIndex) btn.classList.add("active");
 
     const topline = document.createElement("div");
     topline.className = "entry-topline";
@@ -398,43 +629,45 @@ function renderEntryList() {
     meta.className = "entry-meta";
     meta.textContent = item.meta;
 
-    button.append(topline, subtitle, meta);
-    button.addEventListener("click", () => {
-      state.selectedIndex = index;
+    btn.append(topline, subtitle, meta);
+    btn.addEventListener("click", () => {
+      state.selectedIndex = idx;
       renderEntryList();
       renderDetail();
       setPanel("detail");
       if (isNavDrawerLayout()) setNavOpen(false);
     });
-    li.append(button);
+    li.append(btn);
     entryList.append(li);
   });
 
   renderDetail();
 }
 
+/* ── Detail render helpers ───────────────────────────────── */
+
 function createMetaChip(label, value) {
   const chip = document.createElement("span");
   chip.className = "meta-chip";
-  const metaLabel = document.createElement("span");
-  metaLabel.className = "meta-label";
-  metaLabel.textContent = label;
+  const lbl = document.createElement("span");
+  lbl.className = "meta-label";
+  lbl.textContent = label;
   const strong = document.createElement("strong");
   strong.textContent = value;
-  chip.append(metaLabel, strong);
+  chip.append(lbl, strong);
   return chip;
 }
 
 function createDetailSection(title, body) {
   const section = document.createElement("section");
   section.className = "detail-section";
-  const heading = document.createElement("h4");
-  heading.textContent = title;
-  section.append(heading);
+  const h = document.createElement("h4");
+  h.textContent = title;
+  section.append(h);
   if (typeof body === "string") {
-    const paragraph = document.createElement("p");
-    paragraph.textContent = body;
-    section.append(paragraph);
+    const p = document.createElement("p");
+    p.textContent = body;
+    section.append(p);
   } else if (body) {
     section.append(body);
   }
@@ -456,18 +689,21 @@ function createTagList(items = []) {
 function createProjectStack(projects = []) {
   const stack = document.createElement("div");
   stack.className = "project-stack";
-  projects.forEach((project) => {
+  projects.forEach((proj) => {
     const card = document.createElement("div");
     card.className = "project-card";
     const title = document.createElement("strong");
-    title.textContent = project.name || "未命名项目";
+    title.textContent = proj.name || t("entry.unnamed.project");
     const status = document.createElement("p");
-    status.textContent = `状态：${formatStatus(project.status)}`;
+    status.textContent = t("project.statusLabel", formatStatus(proj.status));
     const summary = document.createElement("p");
-    summary.textContent = project.summary || "暂无摘要";
-    const progress = document.createElement("p");
-    progress.textContent = project.latestProgress || "暂无进展";
-    card.append(title, status, summary, progress);
+    summary.textContent = proj.summary || t("detail.noSummary");
+    card.append(title, status, summary);
+    if (proj.latestProgress) {
+      const progress = document.createElement("p");
+      progress.textContent = proj.latestProgress;
+      card.append(progress);
+    }
     stack.append(card);
   });
   return stack;
@@ -476,19 +712,23 @@ function createProjectStack(projects = []) {
 function createMessageList(messages = []) {
   const list = document.createElement("div");
   list.className = "message-list";
-  messages.forEach((message) => {
+  messages.forEach((msg) => {
     const item = document.createElement("div");
-    item.className = "message-item";
+    const roleClass = msg.role === "user" ? " is-user" : msg.role === "assistant" ? " is-assistant" : "";
+    item.className = `message-item${roleClass}`;
     const role = document.createElement("div");
     role.className = "message-role";
-    role.textContent = message.role;
-    const paragraph = document.createElement("p");
-    paragraph.textContent = message.content || "";
-    item.append(role, paragraph);
+    role.textContent = msg.role;
+    const content = document.createElement("p");
+    content.className = "message-content";
+    content.textContent = msg.content || "";
+    item.append(role, content);
     list.append(item);
   });
   return list;
 }
+
+/* ── Detail render ───────────────────────────────────────── */
 
 function renderDetail() {
   detailMeta.innerHTML = "";
@@ -496,8 +736,8 @@ function renderDetail() {
 
   const entry = state.visibleItems[state.selectedIndex];
   if (!entry) {
-    detailTitle.textContent = "记录详情";
-    detailBody.append(createEmptyState("选择左侧记录查看详情。"));
+    detailTitle.textContent = t("detail.title");
+    detailBody.append(createEmptyState(t("detail.empty")));
     return;
   }
 
@@ -506,160 +746,177 @@ function renderDetail() {
 
   if (level === "l2_time") {
     detailMeta.append(
-      createMetaChip("日期", raw.dateKey || "-"),
-      createMetaChip("来源", `${raw.l1Source?.length ?? 0} 条 L1`),
-      createMetaChip("更新", formatTime(raw.updatedAt)),
+      createMetaChip(t("meta.date"), raw.dateKey || "-"),
+      createMetaChip(t("meta.source"), t("meta.l1Count", raw.l1Source?.length ?? 0)),
+      createMetaChip(t("meta.update"), formatTime(raw.updatedAt)),
     );
     detailBody.append(
-      createDetailSection("摘要", raw.summary || "暂无摘要"),
-      createDetailSection("来源窗口", createTagList(raw.l1Source || [])),
+      createDetailSection(t("detail.summary"), raw.summary || t("detail.noSummary")),
+      createDetailSection(t("detail.sourceWindows"), createTagList(raw.l1Source || [])),
     );
     return;
   }
 
   if (level === "l2_project") {
     detailMeta.append(
-      createMetaChip("项目键", raw.projectKey || "-"),
-      createMetaChip("状态", formatStatus(raw.currentStatus)),
-      createMetaChip("更新", formatTime(raw.updatedAt)),
+      createMetaChip(t("meta.projectKey"), raw.projectKey || "-"),
+      createMetaChip(t("meta.status"), formatStatus(raw.currentStatus)),
+      createMetaChip(t("meta.update"), formatTime(raw.updatedAt)),
     );
     detailBody.append(
-      createDetailSection("摘要", raw.summary || "暂无摘要"),
-      createDetailSection("最近进展", raw.latestProgress || "暂无进展"),
-      createDetailSection("来源窗口", createTagList(raw.l1Source || [])),
+      createDetailSection(t("detail.summary"), raw.summary || t("detail.noSummary")),
+      createDetailSection(t("detail.progress"), raw.latestProgress || t("detail.noProgress")),
+      createDetailSection(t("detail.sourceWindows"), createTagList(raw.l1Source || [])),
     );
     return;
   }
 
   if (level === "l1") {
     detailMeta.append(
-      createMetaChip("Session", raw.sessionKey || "-"),
-      createMetaChip("开始", formatTime(raw.startedAt)),
-      createMetaChip("结束", formatTime(raw.endedAt)),
+      createMetaChip(t("meta.session"), raw.sessionKey || "-"),
+      createMetaChip(t("meta.start"), formatTime(raw.startedAt)),
+      createMetaChip(t("meta.end"), formatTime(raw.endedAt)),
     );
     detailBody.append(
-      createDetailSection("摘要", raw.summary || "暂无摘要"),
-      createDetailSection("时间情景", raw.situationTimeInfo || "暂无情景摘要"),
-      createDetailSection("项目", raw.projectDetails?.length ? createProjectStack(raw.projectDetails) : "暂无项目"),
+      createDetailSection(t("detail.summary"), raw.summary || t("detail.noSummary")),
+      createDetailSection(t("detail.situation"), raw.situationTimeInfo || t("detail.noSituation")),
+      createDetailSection(t("detail.projects"), raw.projectDetails?.length ? createProjectStack(raw.projectDetails) : t("detail.noProjects")),
       createDetailSection(
-        "事实",
-        raw.facts?.length
-          ? createTagList(raw.facts.map((fact) => `${fact.factKey}: ${fact.factValue}`))
-          : "暂无事实",
+        t("detail.facts"),
+        raw.facts?.length ? createTagList(raw.facts.map((f) => `${f.factKey}: ${f.factValue}`)) : t("detail.noFacts"),
       ),
-      createDetailSection("来源 L0", createTagList(raw.l0Source || [])),
+      createDetailSection(t("detail.sourceL0"), createTagList(raw.l0Source || [])),
     );
     return;
   }
 
   if (level === "l0") {
     detailMeta.append(
-      createMetaChip("Session", raw.sessionKey || "-"),
-      createMetaChip("时间", formatTime(raw.timestamp)),
-      createMetaChip("消息", `${raw.messages?.length ?? 0} 条`),
+      createMetaChip(t("meta.session"), raw.sessionKey || "-"),
+      createMetaChip(t("meta.time"), formatTime(raw.timestamp)),
+      createMetaChip(t("meta.messages"), t("meta.msgCount", raw.messages?.length ?? 0)),
     );
     detailBody.append(
-      createDetailSection("消息流", createMessageList(raw.messages || [])),
+      createDetailSection(t("detail.messages"), createMessageList(raw.messages || [])),
     );
     return;
   }
 
   if (level === "profile") {
     detailMeta.append(
-      createMetaChip("来源", `${raw.sourceL1Ids?.length ?? 0} 条 L1`),
-      createMetaChip("更新", formatTime(raw.updatedAt)),
+      createMetaChip(t("meta.source"), t("meta.l1Count", raw.sourceL1Ids?.length ?? 0)),
+      createMetaChip(t("meta.update"), formatTime(raw.updatedAt)),
     );
     detailBody.append(
-      createDetailSection("画像摘要", raw.profileText || "暂无画像摘要"),
-      createDetailSection("来源窗口", createTagList(raw.sourceL1Ids || [])),
+      createDetailSection(t("detail.profileSummary"), raw.profileText || t("detail.noProfile")),
+      createDetailSection(t("detail.sourceWindows"), createTagList(raw.sourceL1Ids || [])),
     );
   }
 }
 
+/* ── Nav ─────────────────────────────────────────────────── */
+
 function renderActiveNav() {
-  levelTabs.querySelectorAll("[data-level]").forEach((button) => {
-    const level = button.getAttribute("data-level");
-    button.classList.toggle("active", level === state.activeLevel);
+  levelTabs.querySelectorAll("[data-level]").forEach((btn) => {
+    btn.classList.toggle("active", btn.getAttribute("data-level") === state.activeLevel);
   });
 }
 
+/* ── API ─────────────────────────────────────────────────── */
+
 async function fetchJson(url) {
-  const response = await fetch(url, { cache: "no-store" });
-  if (!response.ok) {
-    throw new Error(`${response.status} ${response.statusText}`);
-  }
-  return response.json();
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  return res.json();
 }
 
 async function postJson(url, body) {
-  const response = await fetch(url, {
+  const res = await fetch(url, {
     method: "POST",
     cache: "no-store",
     headers: body ? { "content-type": "application/json" } : undefined,
     body: body ? JSON.stringify(body) : undefined,
   });
-  if (!response.ok) {
-    throw new Error(`${response.status} ${response.statusText}`);
-  }
-  return response.json();
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  return res.json();
 }
 
+/* ── Data loading ────────────────────────────────────────── */
+
 function syncBaseItems() {
-  Object.keys(state.baseRaw).forEach((level) => {
+  for (const level of Object.keys(state.baseRaw)) {
     state.baseItems[level] = normalizeEntryList(level, state.baseRaw[level]);
-  });
+  }
 }
 
 async function loadSnapshot() {
-  const snapshot = await fetchJson("./api/snapshot?limit=24");
-  renderOverview(snapshot.overview || {});
-  applySettings(snapshot.settings || {});
-  state.globalProfile = snapshot.globalProfile || createEmptyProfile();
-  state.baseRaw.l2_time = snapshot.recentTimeIndexes || [];
-  state.baseRaw.l2_project = snapshot.recentProjectIndexes || [];
-  state.baseRaw.l1 = snapshot.recentL1Windows || [];
-  state.baseRaw.l0 = snapshot.recentSessions || [];
+  const snap = await fetchJson("./api/snapshot?limit=24");
+  renderOverview(snap.overview || {});
+  applySettings(snap.settings || {});
+  state.globalProfile = snap.globalProfile || state.globalProfile;
+  state.baseRaw.l2_time = snap.recentTimeIndexes || [];
+  state.baseRaw.l2_project = snap.recentProjectIndexes || [];
+  state.baseRaw.l1 = snap.recentL1Windows || [];
+  state.baseRaw.l0 = snap.recentSessions || [];
   state.baseRaw.profile = state.globalProfile.profileText ? [state.globalProfile] : [];
   syncBaseItems();
 }
 
 async function loadLevel(level, query = "") {
-  const config = LEVEL_CONFIG[level];
+  const config = getLevelConfig(level);
   browserTitle.textContent = config.label;
   renderActiveNav();
 
   if (query.trim()) {
-    const payload = await fetchJson(`${config.endpoint}?q=${encodeURIComponent(query)}&limit=40`);
-    state.visibleItems = normalizeEntryList(level, payload || []);
+    const data = await fetchJson(`${config.endpoint}?q=${encodeURIComponent(query)}&limit=40`);
+    state.visibleItems = normalizeEntryList(level, data || []);
   } else {
     state.visibleItems = state.baseItems[level] || [];
   }
   renderEntryList();
 }
 
-async function refreshDashboard(message = "已刷新", tone = "success") {
-  setActivity("刷新中…");
+async function refreshDashboard(msgKey = "status.refreshed", tone = "success", ...args) {
+  setActivity("status.refreshing");
   await loadSnapshot();
   await loadLevel(state.activeLevel, listQueryInput.value || "");
-  setActivity(message, tone);
+  setActivity(msgKey, tone, ...args);
 }
+
+function refreshRenderedContent() {
+  renderOverview(state.overview);
+  const config = getLevelConfig(state.activeLevel);
+  browserTitle.textContent = config.label;
+  syncBaseItems();
+  if (!listQueryInput.value.trim()) {
+    state.visibleItems = state.baseItems[state.activeLevel] || [];
+  }
+  renderEntryList();
+}
+
+/* ── Retrieve ────────────────────────────────────────────── */
 
 function renderRetrieveBlock(title, count, items) {
   const block = document.createElement("section");
   block.className = "retrieval-block";
   const head = document.createElement("div");
   head.className = "retrieval-head";
-  head.innerHTML = `<strong>${title}</strong><span class="retrieval-count">${count}</span>`;
+  const strong = document.createElement("strong");
+  strong.textContent = title;
+  const countEl = document.createElement("span");
+  countEl.className = "retrieval-count";
+  countEl.textContent = count;
+  head.append(strong, countEl);
   block.append(head);
   if (!items.length) {
-    block.append(createEmptyState("无结果"));
+    block.append(createEmptyState(t("retrieve.noResult")));
     return block;
   }
   const list = document.createElement("ul");
   list.className = "mini-list";
-  items.forEach((item) => {
+  items.forEach((text) => {
     const li = document.createElement("li");
-    li.textContent = item;
+    li.textContent = text;
     list.append(li);
   });
   block.append(list);
@@ -673,126 +930,85 @@ function renderRetrieveResult(data) {
 
   if (data.profile?.profileText) {
     retrieveTimeline.append(
-      renderRetrieveBlock("全局画像", 1, [shortText(data.profile.profileText, 180)]),
+      renderRetrieveBlock(t("nav.profile"), 1, [shortText(data.profile.profileText, 180)]),
     );
   }
 
   retrieveTimeline.append(
-    renderRetrieveBlock(
-      "L2",
-      data.l2Results?.length ?? 0,
-      (data.l2Results || []).map((item) => {
-        if (item.level === "l2_time") return `${item.item.dateKey} · ${shortText(item.item.summary, 120)}`;
-        return `${item.item.projectName} · ${shortText(item.item.latestProgress || item.item.summary, 120)}`;
-      }),
-    ),
-    renderRetrieveBlock(
-      "L1",
-      data.l1Results?.length ?? 0,
-      (data.l1Results || []).map((item) => `${item.item.timePeriod} · ${shortText(item.item.summary, 120)}`),
-    ),
-    renderRetrieveBlock(
-      "L0",
-      data.l0Results?.length ?? 0,
-      (data.l0Results || []).map((item) => {
-        const users = (item.item.messages || []).filter((message) => message.role === "user").map((message) => message.content);
-        return `${formatTime(item.item.timestamp)} · ${shortText(users[users.length - 1] || "", 120)}`;
-      }),
-    ),
+    renderRetrieveBlock("L2", data.l2Results?.length ?? 0,
+      (data.l2Results || []).map((r) =>
+        r.level === "l2_time"
+          ? `${r.item.dateKey} · ${shortText(r.item.summary, 120)}`
+          : `${r.item.projectName} · ${shortText(r.item.latestProgress || r.item.summary, 120)}`)),
+    renderRetrieveBlock("L1", data.l1Results?.length ?? 0,
+      (data.l1Results || []).map((r) => `${r.item.timePeriod} · ${shortText(r.item.summary, 120)}`)),
+    renderRetrieveBlock("L0", data.l0Results?.length ?? 0,
+      (data.l0Results || []).map((r) => {
+        const users = (r.item.messages || []).filter((m) => m.role === "user").map((m) => m.content);
+        return `${formatTime(r.item.timestamp)} · ${shortText(users[users.length - 1] || "", 120)}`;
+      })),
   );
 }
 
+/* ── Actions ─────────────────────────────────────────────── */
+
 async function runRetrieve() {
   const query = String(queryInput.value || "").trim();
-  if (!query) {
-    setActivity("请输入检索问题", "warning");
-    return;
-  }
-  setActivity("检索中…");
-  retrieveSummary.textContent = "检索中…";
+  if (!query) { setActivity("status.queryRequired", "warning"); return; }
+  setActivity("status.retrieving");
+  retrieveSummary.textContent = "…";
   retrieveTimeline.innerHTML = "";
   retrieveResult.textContent = "";
   const data = await fetchJson(`./api/retrieve?q=${encodeURIComponent(query)}&limit=6`);
   renderRetrieveResult(data);
-  setActivity("检索完成", "success");
+  setActivity("status.retrieved", "success");
 }
 
 async function saveSettings() {
   const payload = readSettingsForm();
   const settings = await postJson("./api/settings", payload);
   applySettings(settings);
-  setActivity(`设置已保存 · 自动构建 ${settings.autoIndexIntervalMinutes} 分钟`, "success");
+  setActivity("status.settingsSaved", "success", settings.autoIndexIntervalMinutes);
 }
 
 async function buildNow() {
-  setActivity("构建中…");
-  const stats = await postJson("./api/index/run");
-  await refreshDashboard(
-    `已构建 · L0 ${stats.l0Captured ?? 0} / L1 ${stats.l1Created ?? 0} / L2 时间 ${stats.l2TimeUpdated ?? 0} / L2 项目 ${stats.l2ProjectUpdated ?? 0} / 画像 ${stats.profileUpdated ?? 0}`,
-    "success",
-  );
+  setActivity("status.building");
+  const s = await postJson("./api/index/run");
+  await refreshDashboard("status.built", "success", s.l0Captured ?? 0, s.l1Created ?? 0, s.l2TimeUpdated ?? 0, s.l2ProjectUpdated ?? 0, s.profileUpdated ?? 0);
 }
 
 async function clearMemory() {
-  setActivity("清空并重建中…", "warning");
+  setActivity("status.clearing", "warning");
   await postJson("./api/clear");
-  await refreshDashboard("已清空本地记忆", "warning");
+  await refreshDashboard("status.cleared", "warning");
 }
 
 async function searchCurrentLevel() {
-  setActivity("搜索中…");
+  setActivity("status.searching");
   await loadLevel(state.activeLevel, listQueryInput.value || "");
-  setActivity("搜索完成", "success");
+  setActivity("status.searched", "success");
 }
 
-levelTabs.addEventListener("click", async (event) => {
-  const target = event.target instanceof Element ? event.target : null;
-  const button = target?.closest("[data-level]");
-  if (!button) return;
-  const level = button.getAttribute("data-level");
-  if (!level || !LEVEL_CONFIG[level]) return;
+/* ── Event listeners ─────────────────────────────────────── */
+
+levelTabs.addEventListener("click", async (e) => {
+  const btn = e.target instanceof Element ? e.target.closest("[data-level]") : null;
+  if (!btn) return;
+  const level = btn.getAttribute("data-level");
+  if (!level || !LEVEL_KEYS.includes(level)) return;
   state.activeLevel = level;
   if (isNavDrawerLayout()) setNavOpen(false);
   await loadLevel(level, listQueryInput.value || "");
 });
 
-refreshBtn.addEventListener("click", () => {
-  void refreshDashboard();
-});
-
-buildNowBtn.addEventListener("click", () => {
-  void buildNow();
-});
-
-saveSettingsBtn.addEventListener("click", () => {
-  void saveSettings();
-});
-
-clearMemoryBtn.addEventListener("click", () => {
-  void clearMemory();
-});
-
-listSearchBtn.addEventListener("click", () => {
-  void searchCurrentLevel();
-});
-
-listQueryInput.addEventListener("keydown", (event) => {
-  if (event.key === "Enter") {
-    event.preventDefault();
-    void searchCurrentLevel();
-  }
-});
-
-retrieveBtn.addEventListener("click", () => {
-  void runRetrieve();
-});
-
-queryInput.addEventListener("keydown", (event) => {
-  if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
-    event.preventDefault();
-    void runRetrieve();
-  }
-});
+refreshBtn.addEventListener("click", () => void refreshDashboard());
+buildNowBtn.addEventListener("click", () => void buildNow());
+saveSettingsBtn.addEventListener("click", () => void saveSettings());
+clearMemoryBtn.addEventListener("click", () => void clearMemory());
+listSearchBtn.addEventListener("click", () => void searchCurrentLevel());
+listQueryInput.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); void searchCurrentLevel(); } });
+retrieveBtn.addEventListener("click", () => void runRetrieve());
+queryInput.addEventListener("keydown", (e) => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); void runRetrieve(); } });
 
 settingsToggleBtn.addEventListener("click", () => togglePanel("settings"));
 retrieveToggleBtn.addEventListener("click", () => togglePanel("retrieve"));
@@ -803,19 +1019,44 @@ detailCloseBtn.addEventListener("click", () => setPanel(null));
 navToggleBtn.addEventListener("click", () => setNavOpen(true));
 navCloseBtn.addEventListener("click", () => setNavOpen(false));
 appScrim.addEventListener("click", () => closeTransientUi());
-window.addEventListener("resize", () => {
-  if (!isNavDrawerLayout()) setNavOpen(false);
+window.addEventListener("resize", () => { if (!isNavDrawerLayout()) setNavOpen(false); });
+
+themeToggle.addEventListener("click", (e) => {
+  const btn = e.target instanceof Element ? e.target.closest("[data-theme-value]") : null;
+  if (btn) applyTheme(btn.dataset.themeValue);
 });
 
+langTrigger.addEventListener("click", (e) => {
+  e.stopPropagation();
+  langDropdown.classList.toggle("open");
+});
+
+langMenu.addEventListener("click", (e) => {
+  const opt = e.target instanceof Element ? e.target.closest("[data-locale]") : null;
+  if (!opt) return;
+  langDropdown.classList.remove("open");
+  setLocale(opt.dataset.locale);
+});
+
+document.addEventListener("click", (e) => {
+  if (langDropdown && !langDropdown.contains(e.target)) {
+    langDropdown.classList.remove("open");
+  }
+});
+
+/* ── Bootstrap ───────────────────────────────────────────── */
+
 async function bootstrap() {
-  setActivity("加载中…");
+  initTheme();
+  translatePage();
+  setActivity("status.loading");
   await loadSnapshot();
   await loadLevel(state.activeLevel);
   renderDetail();
-  setActivity("已就绪", "success");
+  setActivity("status.ready", "success");
 }
 
-bootstrap().catch((error) => {
-  console.error(error);
-  setActivity(`加载失败：${String(error)}`, "danger");
+bootstrap().catch((err) => {
+  console.error(err);
+  setActivity("status.loadFail", "danger", String(err));
 });
