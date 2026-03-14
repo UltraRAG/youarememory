@@ -58,6 +58,9 @@ export function buildPluginConfig(raw: unknown): PluginRuntimeConfig {
     heartbeatBatchSize: Math.max(1, toInteger(cfg.heartbeatBatchSize, 30)),
     defaultIndexingSettings: {
       autoIndexIntervalMinutes: Math.max(0, toInteger(cfg.autoIndexIntervalMinutes, 60)),
+      recallBudgetMs: Math.max(100, toInteger(cfg.recallBudgetMs, 700)),
+      indexIdleDebounceMs: Math.max(200, toInteger(cfg.indexIdleDebounceMs, 2500)),
+      fastRecallFallbackEnabled: toBoolean(cfg.fastRecallFallbackEnabled, true),
     },
     recallEnabled: toBoolean(cfg.recallEnabled, true),
     addEnabled: toBoolean(cfg.addEnabled, true),

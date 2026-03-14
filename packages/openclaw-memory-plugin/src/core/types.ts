@@ -26,6 +26,9 @@ export type ProjectStatus = "planned" | "in_progress" | "blocked" | "on_hold" | 
 
 export interface IndexingSettings {
   autoIndexIntervalMinutes: number;
+  recallBudgetMs: number;
+  indexIdleDebounceMs: number;
+  fastRecallFallbackEnabled: boolean;
 }
 
 export interface ActiveTopicBufferRecord {
@@ -134,7 +137,14 @@ export interface RetrievalResult {
   l1Results: L1SearchResult[];
   l0Results: L0SearchResult[];
   context: string;
+  debug?: {
+    mode: "llm" | "local_fallback" | "none";
+    elapsedMs: number;
+    cacheHit: boolean;
+  };
 }
+
+export type RecallMode = "llm" | "local_fallback" | "none";
 
 export interface DashboardOverview {
   totalL0: number;
@@ -144,6 +154,10 @@ export interface DashboardOverview {
   totalL2Time: number;
   totalL2Project: number;
   totalProfiles: number;
+  queuedSessions: number;
+  lastRecallMs: number;
+  recallTimeouts: number;
+  lastRecallMode: RecallMode;
   lastIndexedAt?: string;
 }
 

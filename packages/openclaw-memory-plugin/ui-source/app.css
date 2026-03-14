@@ -808,6 +808,30 @@ body[data-panel="retrieve"] #retrievePanel {
   font-weight: 600;
 }
 
+.settings-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.settings-check input {
+  width: 16px;
+  height: 16px;
+}
+
+.settings-drawer details summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  list-style: none;
+}
+
+.settings-drawer details summary::-webkit-details-marker {
+  display: none;
+}
+
 .retrieve-input,
 .retrieval-timeline {
   display: flex;

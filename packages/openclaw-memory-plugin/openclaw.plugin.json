@@ -48,6 +48,18 @@
         "type": "integer",
         "default": 60
       },
+      "recallBudgetMs": {
+        "type": "integer",
+        "default": 700
+      },
+      "indexIdleDebounceMs": {
+        "type": "integer",
+        "default": 2500
+      },
+      "fastRecallFallbackEnabled": {
+        "type": "boolean",
+        "default": true
+      },
       "recallEnabled": {
         "type": "boolean",
         "default": true
@@ -90,6 +102,18 @@
     "autoIndexIntervalMinutes": {
       "label": "Auto Index Interval",
       "placeholder": "60"
+    },
+    "recallBudgetMs": {
+      "label": "Recall Budget (ms)",
+      "placeholder": "700"
+    },
+    "indexIdleDebounceMs": {
+      "label": "Idle Index Delay (ms)",
+      "placeholder": "2500"
+    },
+    "fastRecallFallbackEnabled": {
+      "label": "Fallback On Timeout",
+      "help": "When the fast memory selector times out, inject local profile/L2 memory instead of blocking the main reply."
     },
     "uiEnabled": {
       "label": "Enable Local UI",

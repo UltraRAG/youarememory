@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  type DashboardOverview,
   type HeartbeatStats,
   type IndexingSettings,
   MemoryRepository,
@@ -20,6 +21,7 @@ export interface UiServerControls {
   getSettings: () => IndexingSettings;
   saveSettings: (partial: Partial<IndexingSettings>) => IndexingSettings;
   runIndexNow: () => Promise<HeartbeatStats>;
+  getRuntimeOverview: () => Pick<DashboardOverview, "queuedSessions" | "lastRecallMs" | "recallTimeouts" | "lastRecallMode">;
 }
 
 const CONTENT_TYPES: Record<string, string> = {
@@ -178,12 +180,16 @@ export class LocalUiServer {
     const upperMethod = (req.method ?? "GET").toUpperCase();
     const query = url.searchParams.get("q") ?? "";
     const limit = parseLimit(url.searchParams.get("limit"), 20);
+    const overview = (): DashboardOverview => ({
+      ...this.repository.getOverview(),
+      ...this.controls.getRuntimeOverview(),
+    });
     if (relativePath === "/api/clear") {
       if (upperMethod !== "POST") return sendMethodNotAllowed(res, "POST");
       return sendJson(res, this.repository.clearAllMemoryData());
     }
     if (relativePath === "/api/overview") {
-      return sendJson(res, this.repository.getOverview());
+      return sendJson(res, overview());
     }
     if (relativePath === "/api/settings") {
       if (upperMethod === "GET") {
@@ -200,6 +206,7 @@ export class LocalUiServer {
     if (relativePath === "/api/snapshot") {
       return sendJson(res, {
         ...this.repository.getUiSnapshot(limit),
+        overview: overview(),
         settings: this.controls.getSettings(),
       });
     }

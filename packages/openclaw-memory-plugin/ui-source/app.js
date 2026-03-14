@@ -23,6 +23,10 @@ const LOCALES = {
     "detail.empty": "选择左侧记录查看详情",
     "settings.title": "索引设置",
     "settings.interval": "自动构建间隔（分钟）",
+    "settings.performance": "性能 / 高级",
+    "settings.recallBudget": "前台记忆预算（毫秒）",
+    "settings.idleDebounce": "空闲索引延迟（毫秒）",
+    "settings.fastFallback": "超时后启用本地降级",
     "settings.save": "保存设置",
     "settings.clear": "清空并重建",
     "retrieve.title": "检索调试",
@@ -100,6 +104,13 @@ const LOCALES = {
     "meta.projectCount": "项目 {0}",
     "meta.msgCount": "{0} 条",
     "retrieve.noResult": "无结果",
+    "overview.queued": "排队 Session",
+    "overview.recallMs": "最近召回",
+    "overview.recallMode": "召回模式",
+    "overview.recallTimeouts": "召回超时",
+    "recall.llm": "LLM 快选",
+    "recall.local_fallback": "本地降级",
+    "recall.none": "无注入",
   },
   en: {
     "nav.l1": "L1 Window",
@@ -123,6 +134,10 @@ const LOCALES = {
     "detail.empty": "Select a record to view details",
     "settings.title": "Index Settings",
     "settings.interval": "Auto-build interval (min)",
+    "settings.performance": "Performance / Advanced",
+    "settings.recallBudget": "Recall budget (ms)",
+    "settings.idleDebounce": "Idle indexing delay (ms)",
+    "settings.fastFallback": "Enable local fallback on timeout",
     "settings.save": "Save",
     "settings.clear": "Clear & Rebuild",
     "retrieve.title": "Retrieve Debug",
@@ -200,6 +215,13 @@ const LOCALES = {
     "meta.projectCount": "Projects {0}",
     "meta.msgCount": "{0} msgs",
     "retrieve.noResult": "No results",
+    "overview.queued": "Queued Sessions",
+    "overview.recallMs": "Last Recall",
+    "overview.recallMode": "Recall Mode",
+    "overview.recallTimeouts": "Recall Timeouts",
+    "recall.llm": "LLM Fast Path",
+    "recall.local_fallback": "Local Fallback",
+    "recall.none": "No Memory",
   },
 };
 
@@ -307,6 +329,9 @@ const settingsCloseBtn = $("#settingsCloseBtn");
 const saveSettingsBtn = $("#saveSettingsBtn");
 const clearMemoryBtn = $("#clearMemoryBtn");
 const autoIndexIntervalInput = $("#autoIndexIntervalInput");
+const recallBudgetInput = $("#recallBudgetInput");
+const indexIdleDebounceInput = $("#indexIdleDebounceInput");
+const fastRecallFallbackInput = $("#fastRecallFallbackInput");
 
 const retrievePanel = $("#retrievePanel");
 const retrieveCloseBtn = $("#retrieveCloseBtn");
@@ -359,7 +384,12 @@ const state = {
   activeLevel: "l1",
   activePanel: null,
   overview: {},
-  settings: { autoIndexIntervalMinutes: 60 },
+  settings: {
+    autoIndexIntervalMinutes: 60,
+    recallBudgetMs: 700,
+    indexIdleDebounceMs: 2500,
+    fastRecallFallbackEnabled: true,
+  },
   globalProfile: { recordId: "global_profile_record", profileText: "", sourceL1Ids: [], createdAt: "", updatedAt: "" },
   baseRaw: { l2_time: [], l2_project: [], l1: [], l0: [], profile: [] },
   baseItems: { l2_time: [], l2_project: [], l1: [], l0: [], profile: [] },
@@ -463,10 +493,14 @@ function renderOverview(overview = {}) {
   overviewCards.append(
     createMetricCard("L0", overview.totalL0 ?? 0, t("nav.l0")),
     createMetricCard(t("status.pending", "", "").split("·")[0].trim() || "Pending", overview.pendingL0 ?? 0, ""),
+    createMetricCard(t("overview.queued"), overview.queuedSessions ?? 0, ""),
     createMetricCard("L1", overview.totalL1 ?? 0, t("nav.l1")),
     createMetricCard("L2T", overview.totalL2Time ?? 0, t("nav.l2_time")),
     createMetricCard("L2P", overview.totalL2Project ?? 0, t("nav.l2_project")),
     createMetricCard(t("nav.profile"), overview.totalProfiles ?? 0, overview.lastIndexedAt ? "✓" : "–"),
+    createMetricCard(t("overview.recallMs"), overview.lastRecallMs ?? 0, "ms"),
+    createMetricCard(t("overview.recallMode"), t(`recall.${overview.lastRecallMode || "none"}`), ""),
+    createMetricCard(t("overview.recallTimeouts"), overview.recallTimeouts ?? 0, ""),
   );
   renderNavCounts();
 }
@@ -474,14 +508,28 @@ function renderOverview(overview = {}) {
 /* ── Settings ────────────────────────────────────────────── */
 
 function applySettings(settings = {}) {
-  state.settings = { autoIndexIntervalMinutes: 60, ...(settings || {}) };
+  state.settings = {
+    autoIndexIntervalMinutes: 60,
+    recallBudgetMs: 700,
+    indexIdleDebounceMs: 2500,
+    fastRecallFallbackEnabled: true,
+    ...(settings || {}),
+  };
   autoIndexIntervalInput.value = String(state.settings.autoIndexIntervalMinutes ?? 60);
+  recallBudgetInput.value = String(state.settings.recallBudgetMs ?? 700);
+  indexIdleDebounceInput.value = String(state.settings.indexIdleDebounceMs ?? 2500);
+  fastRecallFallbackInput.checked = Boolean(state.settings.fastRecallFallbackEnabled);
 }
 
 function readSettingsForm() {
   const parsed = Number.parseInt(String(autoIndexIntervalInput.value || "").trim(), 10);
+  const recallBudget = Number.parseInt(String(recallBudgetInput.value || "").trim(), 10);
+  const idleDebounce = Number.parseInt(String(indexIdleDebounceInput.value || "").trim(), 10);
   return {
     autoIndexIntervalMinutes: Number.isFinite(parsed) ? Math.max(0, parsed) : state.settings.autoIndexIntervalMinutes,
+    recallBudgetMs: Number.isFinite(recallBudget) ? Math.max(100, recallBudget) : state.settings.recallBudgetMs,
+    indexIdleDebounceMs: Number.isFinite(idleDebounce) ? Math.max(200, idleDebounce) : state.settings.indexIdleDebounceMs,
+    fastRecallFallbackEnabled: fastRecallFallbackInput.checked,
   };
 }
 
@@ -925,7 +973,10 @@ function renderRetrieveBlock(title, count, items) {
 
 function renderRetrieveResult(data) {
   retrieveTimeline.innerHTML = "";
-  retrieveSummary.textContent = `intent=${data.intent || "general"} · enoughAt=${data.enoughAt || "none"}`;
+  const debugBits = data.debug
+    ? ` · mode=${data.debug.mode} · ${data.debug.elapsedMs}ms${data.debug.cacheHit ? " · cache" : ""}`
+    : "";
+  retrieveSummary.textContent = `intent=${data.intent || "general"} · enoughAt=${data.enoughAt || "none"}${debugBits}`;
   retrieveResult.textContent = data.context || "";
 
   if (data.profile?.profileText) {

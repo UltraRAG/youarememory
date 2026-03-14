@@ -8,6 +8,7 @@ import type {
   GlobalProfileRecord,
   IndexingSettings,
   L0SessionRecord,
+  L1SearchResult,
   L1WindowRecord,
   L2ProjectIndexRecord,
   L2SearchResult,
@@ -19,6 +20,7 @@ import { buildLinkId, nowIso } from "../utils/id.js";
 import { safeJsonParse, scoreMatch } from "../utils/text.js";
 
 type DbRow = Record<string, unknown>;
+type SearchIdHit = { id: string; score: number };
 
 const GLOBAL_PROFILE_RECORD_ID = "global_profile_record" as const;
 const INDEXING_SETTINGS_STATE_KEY = "indexingSettings" as const;
@@ -156,11 +158,26 @@ function normalizeIndexingSettings(
   const autoIndexIntervalMinutes = typeof input?.autoIndexIntervalMinutes === "number" && Number.isFinite(input.autoIndexIntervalMinutes)
     ? Math.max(0, Math.floor(input.autoIndexIntervalMinutes))
     : defaults.autoIndexIntervalMinutes;
-  return { autoIndexIntervalMinutes };
+  const recallBudgetMs = typeof input?.recallBudgetMs === "number" && Number.isFinite(input.recallBudgetMs)
+    ? Math.max(100, Math.floor(input.recallBudgetMs))
+    : defaults.recallBudgetMs;
+  const indexIdleDebounceMs = typeof input?.indexIdleDebounceMs === "number" && Number.isFinite(input.indexIdleDebounceMs)
+    ? Math.max(200, Math.floor(input.indexIdleDebounceMs))
+    : defaults.indexIdleDebounceMs;
+  const fastRecallFallbackEnabled = typeof input?.fastRecallFallbackEnabled === "boolean"
+    ? input.fastRecallFallbackEnabled
+    : defaults.fastRecallFallbackEnabled;
+  return {
+    autoIndexIntervalMinutes,
+    recallBudgetMs,
+    indexIdleDebounceMs,
+    fastRecallFallbackEnabled,
+  };
 }
 
 export class MemoryRepository {
   private readonly db: DatabaseSync;
+  private ftsEnabled = false;
 
   constructor(private readonly dbPath: string) {
     mkdirSync(dirname(dbPath), { recursive: true });
@@ -214,6 +231,118 @@ export class MemoryRepository {
       JSON.stringify(record.sourceL1Ids),
       record.createdAt,
       record.updatedAt,
+    );
+    this.syncProfileFts(record);
+  }
+
+  private initFts(): void {
+    try {
+      this.db.exec(`
+        CREATE VIRTUAL TABLE IF NOT EXISTS global_profile_fts USING fts5(record_id UNINDEXED, content);
+        CREATE VIRTUAL TABLE IF NOT EXISTS l2_time_fts USING fts5(l2_index_id UNINDEXED, content);
+        CREATE VIRTUAL TABLE IF NOT EXISTS l2_project_fts USING fts5(l2_index_id UNINDEXED, content);
+        CREATE VIRTUAL TABLE IF NOT EXISTS l1_window_fts USING fts5(l1_index_id UNINDEXED, content);
+      `);
+      this.ftsEnabled = true;
+    } catch {
+      this.ftsEnabled = false;
+    }
+  }
+
+  private upsertFtsDocument(tableName: string, idColumn: string, id: string, content: string): void {
+    if (!this.ftsEnabled || !id.trim()) return;
+    const deleteStmt = this.db.prepare(`DELETE FROM ${tableName} WHERE ${idColumn} = ?`);
+    const insertStmt = this.db.prepare(`INSERT INTO ${tableName} (${idColumn}, content) VALUES (?, ?)`);
+    deleteStmt.run(id);
+    insertStmt.run(id, content.trim());
+  }
+
+  private deleteFtsDocument(tableName: string, idColumn: string, id: string): void {
+    if (!this.ftsEnabled || !id.trim()) return;
+    const stmt = this.db.prepare(`DELETE FROM ${tableName} WHERE ${idColumn} = ?`);
+    stmt.run(id);
+  }
+
+  private buildFtsQuery(query: string): string {
+    const tokens = tokenizeQuery(query).slice(0, 8);
+    if (tokens.length === 0) return "";
+    return tokens
+      .map((token) => `"${token.replace(/"/g, "\"\"")}"`)
+      .join(" OR ");
+  }
+
+  private searchFts(tableName: string, idColumn: string, query: string, limit: number): SearchIdHit[] {
+    if (!this.ftsEnabled) return [];
+    const ftsQuery = this.buildFtsQuery(query);
+    if (!ftsQuery) return [];
+    try {
+      const stmt = this.db.prepare(`
+        SELECT ${idColumn} AS id, bm25(${tableName}) AS rank
+        FROM ${tableName}
+        WHERE ${tableName} MATCH ?
+        ORDER BY rank ASC
+        LIMIT ?
+      `);
+      const rows = stmt.all(ftsQuery, limit) as Array<{ id?: string; rank?: number }>;
+      return rows
+        .filter((row) => typeof row.id === "string" && row.id.trim())
+        .map((row, index) => ({
+          id: String(row.id),
+          score: Math.max(0.2, 1 - Math.min(6, index) * 0.12),
+        }));
+    } catch {
+      return [];
+    }
+  }
+
+  private syncProfileFts(profile: GlobalProfileRecord): void {
+    this.upsertFtsDocument(
+      "global_profile_fts",
+      "record_id",
+      profile.recordId,
+      [profile.profileText, profile.sourceL1Ids.join(" ")].filter(Boolean).join("\n"),
+    );
+  }
+
+  private syncL1Fts(window: L1WindowRecord): void {
+    this.upsertFtsDocument(
+      "l1_window_fts",
+      "l1_index_id",
+      window.l1IndexId,
+      [
+        window.sessionKey,
+        window.timePeriod,
+        window.summary,
+        window.situationTimeInfo,
+        window.projectTags.join(" "),
+        window.projectDetails.map((project) => `${project.name} ${project.summary} ${project.latestProgress}`).join(" "),
+        window.facts.map((fact) => `${fact.factKey} ${fact.factValue}`).join(" "),
+      ].filter(Boolean).join("\n"),
+    );
+  }
+
+  private syncL2TimeFts(index: L2TimeIndexRecord): void {
+    this.upsertFtsDocument(
+      "l2_time_fts",
+      "l2_index_id",
+      index.l2IndexId,
+      [index.dateKey, index.summary, index.l1Source.join(" ")].filter(Boolean).join("\n"),
+    );
+  }
+
+  private syncL2ProjectFts(index: L2ProjectIndexRecord): void {
+    this.upsertFtsDocument(
+      "l2_project_fts",
+      "l2_index_id",
+      index.l2IndexId,
+      [
+        index.projectKey,
+        index.projectName,
+        index.summary,
+        index.latestProgress,
+        index.currentStatus,
+        index.l1Source.join(" "),
+      ].filter(Boolean).join("\n"),
     );
   }
 
@@ -315,6 +444,22 @@ export class MemoryRepository {
     this.ensureColumn("l1_windows", "project_details_json", "TEXT NOT NULL DEFAULT '[]'");
     this.ensureColumn("l2_project_indexes", "project_key", "TEXT NOT NULL DEFAULT ''");
     this.ensureGlobalProfileRecord();
+    this.initFts();
+    this.rebuildSearchIndexes();
+  }
+
+  private rebuildSearchIndexes(): void {
+    if (!this.ftsEnabled) return;
+    this.db.exec(`
+      DELETE FROM global_profile_fts;
+      DELETE FROM l2_time_fts;
+      DELETE FROM l2_project_fts;
+      DELETE FROM l1_window_fts;
+    `);
+    this.syncProfileFts(this.getGlobalProfileRecord());
+    for (const item of this.listRecentL2Time(10_000)) this.syncL2TimeFts(item);
+    for (const item of this.listRecentL2Projects(10_000)) this.syncL2ProjectFts(item);
+    for (const item of this.listRecentL1(10_000)) this.syncL1Fts(item);
   }
 
   insertL0Session(record: Omit<L0SessionRecord, "createdAt"> & { createdAt?: string }): void {
@@ -381,6 +526,13 @@ export class MemoryRepository {
       .sort((a, b) => b.score - a.score)
       .slice(0, limit)
       .map((hit) => hit.item);
+  }
+
+  getL0ByL1Ids(l1Ids: string[], limit = 4): L0SessionRecord[] {
+    if (l1Ids.length === 0) return [];
+    const l1Rows = this.getL1ByIds(l1Ids);
+    const l0Ids = Array.from(new Set(l1Rows.flatMap((item) => item.l0Source))).slice(0, limit * 3);
+    return this.getL0ByIds(l0Ids).slice(0, limit);
   }
 
   listRecentL0(limit = 20): L0SessionRecord[] {
@@ -467,6 +619,7 @@ export class MemoryRepository {
       JSON.stringify(window.l0Source),
       window.createdAt,
     );
+    this.syncL1Fts(window);
   }
 
   getL1ByIds(ids: string[]): L1WindowRecord[] {
@@ -478,30 +631,38 @@ export class MemoryRepository {
   }
 
   searchL1(query: string, limit = 10): L1WindowRecord[] {
-    const rows = this.listRecentL1(Math.max(60, limit * 10));
-    const scored = rows.map((item) => ({
-      item,
-      score: computeTokenScore(query, [
-        item.sessionKey,
-        item.timePeriod,
-        item.summary,
-        item.situationTimeInfo,
-        item.projectTags.join(" "),
-        item.projectDetails.map((project) => `${project.name} ${project.summary} ${project.latestProgress}`).join(" "),
-        JSON.stringify(item.facts),
-      ]),
-    }));
-    return scored
-      .filter((hit) => hit.score > 0.2)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, limit)
-      .map((hit) => hit.item);
+    return this.searchL1Hits(query, limit).map((hit) => hit.item);
   }
 
   listRecentL1(limit = 20): L1WindowRecord[] {
     const stmt = this.db.prepare("SELECT * FROM l1_windows ORDER BY ended_at DESC, created_at DESC LIMIT ?");
     const rows = stmt.all(limit) as DbRow[];
     return rows.map(parseL1Row);
+  }
+
+  searchL1Hits(query: string, limit = 10): L1SearchResult[] {
+    const recent = this.listRecentL1(Math.max(60, limit * 10));
+    const ftsHits = this.searchFts("l1_window_fts", "l1_index_id", query, limit * 2);
+    const ftsById = new Map(ftsHits.map((hit) => [hit.id, hit.score]));
+    const scored = recent.map((item) => ({
+      item,
+      score: Math.max(
+        ftsById.get(item.l1IndexId) ?? 0,
+        computeTokenScore(query, [
+          item.sessionKey,
+          item.timePeriod,
+          item.summary,
+          item.situationTimeInfo,
+          item.projectTags.join(" "),
+          item.projectDetails.map((project) => `${project.name} ${project.summary} ${project.latestProgress}`).join(" "),
+          JSON.stringify(item.facts),
+        ]),
+      ),
+    }));
+    return scored
+      .filter((hit) => hit.score > 0.15)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit);
   }
 
   getL2TimeByDate(dateKey: string): L2TimeIndexRecord | undefined {
@@ -521,6 +682,12 @@ export class MemoryRepository {
         WHERE l2_index_id = ?
       `);
       updateStmt.run(index.summary, JSON.stringify(mergedSources), now, previous.l2IndexId);
+      this.syncL2TimeFts({
+        ...previous,
+        summary: index.summary,
+        l1Source: mergedSources,
+        updatedAt: now,
+      });
       return;
     }
 
@@ -537,19 +704,15 @@ export class MemoryRepository {
       index.createdAt,
       now,
     );
+    this.syncL2TimeFts({
+      ...index,
+      l1Source: mergedSources,
+      updatedAt: now,
+    });
   }
 
   searchL2TimeIndexes(query: string, limit = 10): L2SearchResult[] {
-    const rows = this.listRecentL2Time(Math.max(50, limit * 10));
-    return rows
-      .map((item) => ({
-        level: "l2_time" as const,
-        score: computeTokenScore(query, [item.dateKey, item.summary]),
-        item,
-      }))
-      .filter((hit) => hit.score > 0.2)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, limit);
+    return this.searchL2Hits(query, limit).filter((hit) => hit.level === "l2_time");
   }
 
   listRecentL2Time(limit = 20): L2TimeIndexRecord[] {
@@ -583,6 +746,15 @@ export class MemoryRepository {
         now,
         previous.l2IndexId,
       );
+      this.syncL2ProjectFts({
+        ...previous,
+        projectName: index.projectName,
+        summary: index.summary,
+        currentStatus: index.currentStatus,
+        latestProgress: index.latestProgress,
+        l1Source: mergedSources,
+        updatedAt: now,
+      });
       return;
     }
 
@@ -602,25 +774,45 @@ export class MemoryRepository {
       index.createdAt,
       now,
     );
+    this.syncL2ProjectFts({
+      ...index,
+      l1Source: mergedSources,
+      updatedAt: now,
+    });
   }
 
   searchL2ProjectIndexes(query: string, limit = 10): L2SearchResult[] {
-    const rows = this.listRecentL2Projects(Math.max(50, limit * 10));
-    return rows
-      .map((item) => ({
-        level: "l2_project" as const,
-        score: computeTokenScore(query, [item.projectKey, item.projectName, item.summary, item.latestProgress]),
-        item,
-      }))
-      .filter((hit) => hit.score > 0.2)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, limit);
+    return this.searchL2Hits(query, limit).filter((hit) => hit.level === "l2_project");
   }
 
   listRecentL2Projects(limit = 20): L2ProjectIndexRecord[] {
     const stmt = this.db.prepare("SELECT * FROM l2_project_indexes ORDER BY updated_at DESC LIMIT ?");
     const rows = stmt.all(limit) as DbRow[];
     return rows.map(parseL2ProjectRow);
+  }
+
+  searchL2Hits(query: string, limit = 10): L2SearchResult[] {
+    const recentTime = this.listRecentL2Time(Math.max(50, limit * 8));
+    const recentProject = this.listRecentL2Projects(Math.max(50, limit * 8));
+    const timeFts = new Map(this.searchFts("l2_time_fts", "l2_index_id", query, limit * 2).map((hit) => [hit.id, hit.score]));
+    const projectFts = new Map(this.searchFts("l2_project_fts", "l2_index_id", query, limit * 2).map((hit) => [hit.id, hit.score]));
+    const timeHits = recentTime.map((item) => ({
+      level: "l2_time" as const,
+      score: Math.max(timeFts.get(item.l2IndexId) ?? 0, computeTokenScore(query, [item.dateKey, item.summary])),
+      item,
+    }));
+    const projectHits = recentProject.map((item) => ({
+      level: "l2_project" as const,
+      score: Math.max(
+        projectFts.get(item.l2IndexId) ?? 0,
+        computeTokenScore(query, [item.projectKey, item.projectName, item.summary, item.latestProgress]),
+      ),
+      item,
+    }));
+    const combined = [...timeHits, ...projectHits]
+      .filter((hit) => hit.score > 0.12)
+      .sort((a, b) => b.score - a.score);
+    return combined.slice(0, limit);
   }
 
   getGlobalProfileRecord(): GlobalProfileRecord {
@@ -649,6 +841,7 @@ export class MemoryRepository {
       updatedAt: now,
     };
     this.saveGlobalProfileRecord(next);
+    this.syncProfileFts(next);
     return next;
   }
 
@@ -664,6 +857,26 @@ export class MemoryRepository {
     if (!query.trim()) return [profile].slice(0, limit);
     const score = computeTokenScore(query, [profile.profileText, profile.sourceL1Ids.join(" ")]);
     return score > 0.15 ? [profile].slice(0, limit) : [];
+  }
+
+  shortlistGlobalProfile(query: string): { item: GlobalProfileRecord; score: number } | null {
+    const profile = this.getGlobalProfileRecord();
+    if (!profile.profileText.trim()) return null;
+    const ftsScore = this.searchFts("global_profile_fts", "record_id", query, 1)[0]?.score ?? 0;
+    const score = Math.max(ftsScore, computeTokenScore(query, [profile.profileText, profile.sourceL1Ids.join(" ")]));
+    if (query.trim() && score <= 0.1) return null;
+    return { item: profile, score: Math.max(score, query.trim() ? score : 0.2) };
+  }
+
+  getSnapshotVersion(): string {
+    const overview = this.getOverview();
+    return JSON.stringify({
+      lastIndexedAt: overview.lastIndexedAt ?? "",
+      totalL1: overview.totalL1,
+      totalL2Time: overview.totalL2Time,
+      totalL2Project: overview.totalL2Project,
+      totalProfiles: overview.totalProfiles,
+    });
   }
 
   insertLink(fromLevel: "l2" | "l1" | "l0", fromId: string, toLevel: "l2" | "l1" | "l0", toId: string): void {
@@ -696,6 +909,10 @@ export class MemoryRepository {
       totalL2Time: count("l2_time_indexes"),
       totalL2Project: count("l2_project_indexes"),
       totalProfiles: profile.profileText.trim() ? 1 : 0,
+      queuedSessions: 0,
+      lastRecallMs: 0,
+      recallTimeouts: 0,
+      lastRecallMode: "none",
     };
     if (state?.state_value) {
       overview.lastIndexedAt = state.state_value;
@@ -756,6 +973,7 @@ export class MemoryRepository {
         updatedAt: nowIso(),
       });
       this.db.exec("COMMIT");
+      this.rebuildSearchIndexes();
     } catch (error) {
       this.db.exec("ROLLBACK");
       throw error;
@@ -822,6 +1040,7 @@ export class MemoryRepository {
       }
 
       this.db.exec("COMMIT");
+      if (stats.rebuilt) this.rebuildSearchIndexes();
       return stats;
     } catch (error) {
       this.db.exec("ROLLBACK");
@@ -863,6 +1082,7 @@ export class MemoryRepository {
         this.setPipelineState(INDEXING_SETTINGS_STATE_KEY, indexingSettings);
       }
       this.db.exec("COMMIT");
+      this.rebuildSearchIndexes();
       return {
         cleared,
         clearedAt: resetAt,
@@ -878,6 +1098,9 @@ export class MemoryRepository {
       overview: this.getOverview(),
       settings: this.getIndexingSettings({
         autoIndexIntervalMinutes: 60,
+        recallBudgetMs: 700,
+        indexIdleDebounceMs: 2500,
+        fastRecallFallbackEnabled: true,
       }),
       recentTimeIndexes: this.listRecentL2Time(limit),
       recentProjectIndexes: this.listRecentL2Projects(limit),

@@ -1,4 +1,5 @@
 import {
+  type DashboardOverview,
   HeartbeatIndexer,
   LlmMemoryExtractor,
   MemoryRepository,
@@ -103,6 +104,17 @@ function emptyStats(): HeartbeatStats {
   };
 }
 
+function mergeStats(left: HeartbeatStats, right: HeartbeatStats): HeartbeatStats {
+  return {
+    l0Captured: left.l0Captured + right.l0Captured,
+    l1Created: left.l1Created + right.l1Created,
+    l2TimeUpdated: left.l2TimeUpdated + right.l2TimeUpdated,
+    l2ProjectUpdated: left.l2ProjectUpdated + right.l2ProjectUpdated,
+    profileUpdated: left.profileUpdated + right.profileUpdated,
+    failed: left.failed + right.failed,
+  };
+}
+
 function isGatewayRuntimeProcess(): boolean {
   return process.argv.some((value) => value === "gateway" || value.includes("openclaw-gateway"));
 }
@@ -138,9 +150,85 @@ const plugin = {
         logger,
       },
     );
-    const retriever = new ReasoningRetriever(repository, skills, extractor);
+    let indexingInProgress = false;
+    const retriever = new ReasoningRetriever(
+      repository,
+      skills,
+      extractor,
+      {
+        getSettings: () => indexer.getSettings(),
+        isBackgroundBusy: () => indexingInProgress,
+      },
+    );
 
     let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
+    const idleIndexTimers = new Map<string, ReturnType<typeof setTimeout>>();
+    const debouncedSessions = new Set<string>();
+    const queuedSessionKeys = new Set<string>();
+    let queuedFullRun = false;
+    let queuedReason = "";
+    let queuePromise: Promise<HeartbeatStats> | undefined;
+
+    const getRuntimeOverview = (): Pick<DashboardOverview, "queuedSessions" | "lastRecallMs" | "recallTimeouts" | "lastRecallMode"> => {
+      const queuedSessions = queuedFullRun
+        ? Math.max(1, debouncedSessions.size + queuedSessionKeys.size)
+        : new Set([...debouncedSessions, ...queuedSessionKeys]).size;
+      const stats = retriever.getRuntimeStats();
+      return {
+        queuedSessions,
+        lastRecallMs: stats.lastRecallMs,
+        recallTimeouts: stats.recallTimeouts,
+        lastRecallMode: stats.lastRecallMode,
+      };
+    };
+
+    const clearIdleTimer = (sessionKey: string): void => {
+      const timer = idleIndexTimers.get(sessionKey);
+      if (timer) {
+        clearTimeout(timer);
+        idleIndexTimers.delete(sessionKey);
+      }
+      debouncedSessions.delete(sessionKey);
+    };
+
+    const drainIndexQueue = async (): Promise<HeartbeatStats> => {
+      let aggregate = emptyStats();
+      try {
+        while (queuedFullRun || queuedSessionKeys.size > 0) {
+          const reason = queuedReason || "heartbeat";
+          const runAll = queuedFullRun;
+          const sessionKeys = runAll ? undefined : Array.from(queuedSessionKeys);
+          queuedFullRun = false;
+          queuedSessionKeys.clear();
+          queuedReason = "";
+
+          indexingInProgress = true;
+          const stats = runAll
+            ? await indexer.runHeartbeat({ reason })
+            : await indexer.runHeartbeat({ reason, sessionKeys: sessionKeys ?? [] });
+          aggregate = mergeStats(aggregate, stats);
+          logIndexStats(logger, reason, stats);
+        }
+      } finally {
+        indexingInProgress = false;
+        queuePromise = undefined;
+      }
+      return aggregate;
+    };
+
+    const requestIndexRun = (reason: string, sessionKeys?: string[]): Promise<HeartbeatStats> => {
+      if (sessionKeys && sessionKeys.length > 0) {
+        sessionKeys.filter(Boolean).forEach((sessionKey) => queuedSessionKeys.add(sessionKey));
+      } else {
+        queuedFullRun = true;
+      }
+      queuedReason = queuedReason ? `${queuedReason}+${reason}` : reason;
+      if (!queuePromise) {
+        queuePromise = drainIndexQueue();
+      }
+      return queuePromise;
+    };
+
     const rescheduleHeartbeat = (): void => {
       if (heartbeatTimer) {
         clearInterval(heartbeatTimer);
@@ -149,7 +237,12 @@ const plugin = {
       const intervalMinutes = indexer.getSettings().autoIndexIntervalMinutes;
       if (intervalMinutes <= 0) return;
       heartbeatTimer = setInterval(() => {
-        void indexNow("scheduled");
+        for (const sessionKey of Array.from(debouncedSessions)) {
+          clearIdleTimer(sessionKey);
+        }
+        void requestIndexRun("scheduled").catch((error) => {
+          logger.warn?.(`[youarememory] scheduled index failed: ${String(error)}`);
+        });
       }, intervalMinutes * 60_000);
     };
 
@@ -166,21 +259,30 @@ const plugin = {
       return merged;
     };
 
-    let indexingPromise: Promise<HeartbeatStats> | undefined;
-    const indexNow = async (reason: string, sessionKeys?: string[]): Promise<HeartbeatStats> => {
-      if (indexingPromise) {
-        logger.info?.(`[youarememory] skip overlapping index run reason=${reason}`);
-        return emptyStats();
+    const scheduleIdleIndex = (sessionKey: string): void => {
+      clearIdleTimer(sessionKey);
+      debouncedSessions.add(sessionKey);
+      const delayMs = indexer.getSettings().indexIdleDebounceMs;
+      const timer = setTimeout(() => {
+        idleIndexTimers.delete(sessionKey);
+        debouncedSessions.delete(sessionKey);
+        void requestIndexRun("message_capture", [sessionKey]).catch((error) => {
+          logger.warn?.(`[youarememory] async message_capture failed: ${String(error)}`);
+        });
+      }, delayMs);
+      idleIndexTimers.set(sessionKey, timer);
+    };
+
+    const flushSessionNow = (sessionKey: string, reason: string): Promise<HeartbeatStats> => {
+      clearIdleTimer(sessionKey);
+      return requestIndexRun(reason, [sessionKey]);
+    };
+
+    const flushAllNow = (reason: string): Promise<HeartbeatStats> => {
+      for (const sessionKey of Array.from(debouncedSessions)) {
+        clearIdleTimer(sessionKey);
       }
-      const options = sessionKeys && sessionKeys.length > 0 ? { reason, sessionKeys } : { reason };
-      indexingPromise = indexer.runHeartbeat(options);
-      try {
-        const stats = await indexingPromise;
-        logIndexStats(logger, reason, stats);
-        return stats;
-      } finally {
-        indexingPromise = undefined;
-      }
+      return requestIndexRun(reason);
     };
 
     const tools = buildPluginTools(repository, retriever);
@@ -193,6 +295,9 @@ const plugin = {
       if (heartbeatTimer) {
         clearInterval(heartbeatTimer);
         heartbeatTimer = undefined;
+      }
+      for (const sessionKey of Array.from(idleIndexTimers.keys())) {
+        clearIdleTimer(sessionKey);
       }
       uiServer?.stop();
       repository.close();
@@ -209,7 +314,8 @@ const plugin = {
         {
           getSettings: () => indexer.getSettings(),
           saveSettings: (partial) => applyIndexingSettings(partial),
-          runIndexNow: () => indexNow("manual"),
+          runIndexNow: () => flushAllNow("manual"),
+          getRuntimeOverview,
         },
         logger,
       );
@@ -236,12 +342,12 @@ const plugin = {
             const startedAt = Date.now();
             const retrieved = await retriever.retrieve(prompt, {
               l2Limit: 4,
-              l1Limit: 4,
-              l0Limit: 2,
+              l1Limit: 2,
+              l0Limit: 1,
               includeFacts: true,
             });
             const elapsedMs = Date.now() - startedAt;
-            if (elapsedMs > 1500) {
+            if (elapsedMs > indexer.getSettings().recallBudgetMs + 300) {
               logger.warn?.(`[youarememory] recall slow query_ms=${elapsedMs} prompt_chars=${prompt.length}`);
             }
             if (!retrieved.context) return;
@@ -277,7 +383,9 @@ const plugin = {
 
         const sessionKey = resolveSessionKey(ctx);
         if (activeSessionKey && activeSessionKey !== sessionKey) {
-          void indexNow("session_boundary", [activeSessionKey]);
+          void flushSessionNow(activeSessionKey, "session_boundary").catch((error) => {
+            logger.warn?.(`[youarememory] session_boundary failed: ${String(error)}`);
+          });
         }
         activeSessionKey = sessionKey;
 
@@ -298,11 +406,9 @@ const plugin = {
         });
         if (captured) {
           logger.info?.(
-            `[youarememory] captured l0 session=${sessionKey} indexed=pending trigger=message_capture|timer|session_boundary|manual`,
+            `[youarememory] captured l0 session=${sessionKey} indexed=pending trigger=idle|timer|session_boundary|manual`,
           );
-          void indexNow("message_capture", [sessionKey]).catch((error) => {
-            logger.warn?.(`[youarememory] async message_capture failed: ${String(error)}`);
-          });
+          scheduleIdleIndex(sessionKey);
         }
       });
 
@@ -316,7 +422,7 @@ const plugin = {
         try {
           const repair = repository.repairL0Sessions((record) => sanitizeL0Record(record, config));
           repository.resetDerivedIndexes();
-          const stats = await indexNow("repair");
+          const stats = await flushAllNow("repair");
           logger.info?.(
             `[youarememory] repaired l0 updated=${repair.updated} removed=${repair.removed}; rebuilt l1=${stats.l1Created}, l2_time=${stats.l2TimeUpdated}, l2_project=${stats.l2ProjectUpdated}, profile=${stats.profileUpdated}, failed=${stats.failed}`,
           );

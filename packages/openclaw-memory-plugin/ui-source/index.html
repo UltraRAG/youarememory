@@ -140,6 +140,24 @@
         </label>
       </div>
 
+      <details class="drawer-section">
+        <summary data-i18n="settings.performance">性能 / 高级</summary>
+        <div class="drawer-section">
+          <label class="settings-field">
+            <span data-i18n="settings.recallBudget">前台记忆预算（毫秒）</span>
+            <input id="recallBudgetInput" type="number" min="100" step="50" placeholder="700" />
+          </label>
+          <label class="settings-field">
+            <span data-i18n="settings.idleDebounce">空闲索引延迟（毫秒）</span>
+            <input id="indexIdleDebounceInput" type="number" min="200" step="100" placeholder="2500" />
+          </label>
+          <label class="settings-check">
+            <input id="fastRecallFallbackInput" type="checkbox" />
+            <span data-i18n="settings.fastFallback">超时后启用本地降级</span>
+          </label>
+        </div>
+      </details>
+
       <div class="drawer-actions">
         <button id="saveSettingsBtn" class="tool-btn primary wide" type="button" data-i18n="settings.save">保存设置</button>
       </div>

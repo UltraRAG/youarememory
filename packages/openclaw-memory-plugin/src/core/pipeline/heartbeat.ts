@@ -149,20 +149,23 @@ async function canonicalizeL1Projects(
     });
   }
 
+  const existingProjects = Array.from(catalog.values()).map((item) => ({
+    l2IndexId: `catalog:${item.projectKey}`,
+    projectKey: item.projectKey,
+    projectName: item.projectName,
+    summary: item.summary,
+    currentStatus: item.currentStatus,
+    latestProgress: item.latestProgress,
+    l1Source: [],
+    createdAt: "",
+    updatedAt: "",
+  }));
+  const normalizedProjects = await extractor.resolveProjectIdentities({
+    projects,
+    existingProjects,
+  });
   const resolved = new Map<string, ProjectDetail>();
-  for (const project of projects) {
-    const existingProjects = Array.from(catalog.values()).map((item) => ({
-      l2IndexId: `catalog:${item.projectKey}`,
-      projectKey: item.projectKey,
-      projectName: item.projectName,
-      summary: item.summary,
-      currentStatus: item.currentStatus,
-      latestProgress: item.latestProgress,
-      l1Source: [],
-      createdAt: "",
-      updatedAt: "",
-    }));
-    const normalized = await extractor.resolveProjectIdentity({ project, existingProjects });
+  for (const normalized of normalizedProjects) {
     const merged = resolved.has(normalized.key)
       ? mergeProjectDetail(resolved.get(normalized.key)!, normalized)
       : normalized;
@@ -243,6 +246,28 @@ export class HeartbeatIndexer {
       l0Ids: [record.l0IndexId],
       lastL0Id: record.l0IndexId,
       createdAt: now,
+    };
+  }
+
+  private createTopicBufferFromBatch(
+    records: L0SessionRecord[],
+    incomingUserTurns: string[],
+    topicSummary?: string,
+  ): ActiveTopicBufferRecord {
+    const first = records[0]!;
+    const last = records[records.length - 1]!;
+    const seedTurns = incomingUserTurns.length > 0
+      ? incomingUserTurns
+      : records.flatMap((record) => userTurnsFromRecord(record));
+    return {
+      sessionKey: first.sessionKey,
+      startedAt: first.timestamp,
+      updatedAt: last.timestamp,
+      topicSummary: topicSummary?.trim() || summarizeTopicSeed(seedTurns),
+      userTurns: seedTurns,
+      l0Ids: records.map((record) => record.l0IndexId),
+      lastL0Id: last.l0IndexId,
+      createdAt: nowIso(),
     };
   }
 
@@ -361,6 +386,53 @@ export class HeartbeatIndexer {
     );
   }
 
+  private async processPendingSession(records: L0SessionRecord[], stats: HeartbeatStats, reason: string): Promise<void> {
+    if (records.length === 0) return;
+    const sessionKey = records[0]!.sessionKey;
+    await this.closeOtherSessionBuffers(sessionKey, stats, reason);
+
+    const buffer = this.repository.getActiveTopicBuffer(sessionKey);
+    if (!buffer) {
+      const mergedTurns = records.flatMap((record) => userTurnsFromRecord(record));
+      this.repository.upsertActiveTopicBuffer(this.createTopicBufferFromBatch(records, mergedTurns));
+      return;
+    }
+
+    let scratch = buffer;
+    let mergedIncomingTurns: string[] = [];
+    for (const record of records) {
+      const incomingUserTurns = extractIncomingUserTurns(record, scratch);
+      if (incomingUserTurns.length > 0) {
+        mergedIncomingTurns = mergeUniqueStrings(mergedIncomingTurns, incomingUserTurns);
+      }
+      scratch = this.extendTopicBuffer(scratch, record, incomingUserTurns);
+    }
+
+    if (mergedIncomingTurns.length === 0) {
+      this.repository.upsertActiveTopicBuffer(scratch);
+      return;
+    }
+
+    const decision = await this.extractor.judgeTopicShift({
+      currentTopicSummary: buffer.topicSummary,
+      recentUserTurns: buffer.userTurns.slice(-8),
+      incomingUserTurns: mergedIncomingTurns,
+    });
+
+    if (decision.topicChanged) {
+      await this.closeTopicBuffer(sessionKey, stats, `${reason}:topic_shift`);
+      this.repository.upsertActiveTopicBuffer(
+        this.createTopicBufferFromBatch(records, mergedIncomingTurns, decision.topicSummary),
+      );
+      return;
+    }
+
+    this.repository.upsertActiveTopicBuffer({
+      ...scratch,
+      topicSummary: decision.topicSummary?.trim() || scratch.topicSummary,
+    });
+  }
+
   async runHeartbeat(options: HeartbeatRunOptions = {}): Promise<HeartbeatStats> {
     const stats: HeartbeatStats = {
       l0Captured: 0,
@@ -383,14 +455,20 @@ export class HeartbeatIndexer {
       stats.l0Captured += pending.length;
 
       const indexedIds: string[] = [];
+      const grouped = new Map<string, L0SessionRecord[]>();
       for (const record of pending) {
+        const list = grouped.get(record.sessionKey) ?? [];
+        list.push(record);
+        grouped.set(record.sessionKey, list);
+      }
+      for (const records of grouped.values()) {
         try {
-          await this.processPendingRecord(record, stats, reason);
-          indexedIds.push(record.l0IndexId);
+          await this.processPendingSession(records, stats, reason);
+          indexedIds.push(...records.map((record) => record.l0IndexId));
         } catch (error) {
           stats.failed += 1;
           this.logger?.warn?.(
-            `[youarememory] heartbeat failed reason=${reason} session=${record.sessionKey} l0=${record.l0IndexId}: ${String(error)}`,
+            `[youarememory] heartbeat failed reason=${reason} session=${records[0]?.sessionKey ?? "unknown"} l0=${records[0]?.l0IndexId ?? "unknown"}: ${String(error)}`,
           );
         }
       }

@@ -57,6 +57,10 @@ interface RawProjectResolutionPayload {
   canonical_name?: unknown;
 }
 
+interface RawProjectBatchResolutionPayload {
+  projects?: unknown;
+}
+
 interface RawTopicShiftPayload {
   topic_changed?: unknown;
   topic_summary?: unknown;
@@ -129,6 +133,7 @@ export interface LlmReasoningInput {
     l1: number;
     l0: number;
   };
+  timeoutMs?: number;
   agentId?: string;
 }
 
@@ -139,6 +144,12 @@ export interface LlmReasoningSelection {
   l2Ids: string[];
   l1Ids: string[];
   l0Ids: string[];
+}
+
+export interface LlmProjectBatchResolutionInput {
+  projects: ProjectDetail[];
+  existingProjects: L2ProjectIndexRecord[];
+  agentId?: string;
 }
 
 const EXTRACTION_SYSTEM_PROMPT = `
@@ -202,6 +213,29 @@ Use this exact JSON shape:
   "matched_project_key": "existing project key or null",
   "canonical_key": "stable lower-kebab-case key",
   "canonical_name": "project name users would recognize"
+}
+`.trim();
+
+const PROJECT_BATCH_RESOLUTION_SYSTEM_PROMPT = `
+You resolve whether each incoming project memory should merge into an existing project memory.
+
+Rules:
+- Process all incoming projects together so duplicates inside the same batch can be merged.
+- Prefer merging duplicates caused by wording differences, synonyms, or different granularity of the same effort.
+- Reuse an existing project when possible.
+- Only create a new canonical project when none of the existing projects match.
+- Return JSON only.
+
+Use this exact JSON shape:
+{
+  "projects": [
+    {
+      "incoming_key": "original incoming project key",
+      "matched_project_key": "existing project key or null",
+      "canonical_key": "stable lower-kebab-case key",
+      "canonical_name": "project name users would recognize"
+    }
+  ]
 }
 `.trim();
 
@@ -1028,6 +1062,70 @@ export class LlmMemoryExtractor {
     }
   }
 
+  async resolveProjectIdentities(input: LlmProjectBatchResolutionInput): Promise<ProjectDetail[]> {
+    if (input.projects.length === 0 || input.existingProjects.length === 0) return input.projects;
+    const candidates = input.existingProjects.slice(0, 40).map((project) => ({
+      project_key: project.projectKey,
+      project_name: project.projectName,
+      summary: truncateForPrompt(project.summary, 140),
+      latest_progress: truncateForPrompt(project.latestProgress, 140),
+      status: project.currentStatus,
+    }));
+    try {
+      const raw = await this.callStructuredJson({
+        systemPrompt: PROJECT_BATCH_RESOLUTION_SYSTEM_PROMPT,
+        userPrompt: JSON.stringify({
+          incoming_projects: input.projects.map((project) => ({
+            incoming_key: project.key,
+            key: project.key,
+            name: project.name,
+            summary: truncateForPrompt(project.summary, 160),
+            latest_progress: truncateForPrompt(project.latestProgress, 160),
+            status: project.status,
+          })),
+          existing_projects: candidates,
+        }, null, 2),
+        requestLabel: "Project batch resolution",
+        timeoutMs: 15_000,
+        ...(input.agentId ? { agentId: input.agentId } : {}),
+      });
+      const parsed = JSON.parse(extractFirstJsonObject(raw)) as RawProjectBatchResolutionPayload;
+      const resolutions = Array.isArray(parsed.projects) ? parsed.projects : [];
+      const byIncomingKey = new Map<string, { matched?: string; canonicalKey?: string; canonicalName?: string }>();
+      for (const item of resolutions) {
+        if (!isRecord(item) || typeof item.incoming_key !== "string") continue;
+        const normalized: { matched?: string; canonicalKey?: string; canonicalName?: string } = {};
+        if (typeof item.matched_project_key === "string" && item.matched_project_key.trim()) {
+          normalized.matched = item.matched_project_key.trim();
+        }
+        if (typeof item.canonical_key === "string" && item.canonical_key.trim()) {
+          normalized.canonicalKey = item.canonical_key.trim();
+        }
+        if (typeof item.canonical_name === "string" && item.canonical_name.trim()) {
+          normalized.canonicalName = item.canonical_name.trim();
+        }
+        byIncomingKey.set(item.incoming_key.trim(), normalized);
+      }
+
+      return input.projects.map((project) => {
+        const resolution = byIncomingKey.get(project.key);
+        const matched = resolution?.matched
+          ? input.existingProjects.find((existing) => existing.projectKey === resolution.matched)
+          : undefined;
+        return {
+          ...project,
+          key: matched?.projectKey
+            ?? (resolution?.canonicalKey ? slugifyKeyPart(resolution.canonicalKey) : project.key),
+          name: matched?.projectName
+            ?? (resolution?.canonicalName ? truncateForPrompt(resolution.canonicalName, 80) : project.name),
+        };
+      });
+    } catch (error) {
+      this.logger?.warn?.(`[youarememory] project batch resolution fallback: ${String(error)}`);
+      return input.projects;
+    }
+  }
+
   async rewriteDailyTimeSummary(input: LlmDailyTimeSummaryInput): Promise<string> {
     try {
       const raw = await this.callStructuredJson({
@@ -1121,7 +1219,7 @@ export class LlmMemoryExtractor {
         limits: input.limits,
       }, null, 2),
       requestLabel: "Reasoning",
-      timeoutMs: 8_000,
+      timeoutMs: input.timeoutMs ?? 8_000,
       ...(input.agentId ? { agentId: input.agentId } : {}),
     });
     const parsed = JSON.parse(extractFirstJsonObject(raw)) as RawReasoningPayload;
