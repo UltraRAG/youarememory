@@ -773,6 +773,7 @@ export class LlmMemoryExtractor {
     userPrompt: string;
     agentId?: string;
     requestLabel: string;
+    timeoutMs?: number;
   }): Promise<string> {
     const selection = this.resolveSelection(input.agentId);
     if (!selection.baseUrl) {
@@ -810,11 +811,26 @@ export class LlmMemoryExtractor {
       };
     }
 
-    const execute = async (payloadBody: Record<string, unknown>): Promise<Response> => fetch(url, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(payloadBody),
-    });
+    const execute = async (payloadBody: Record<string, unknown>): Promise<Response> => {
+      const controller = new AbortController();
+      const timeoutMs = input.timeoutMs ?? 15_000;
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        return await fetch(url, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(payloadBody),
+          signal: controller.signal,
+        });
+      } catch (error) {
+        if (error instanceof Error && error.name === "AbortError") {
+          throw new Error(`${input.requestLabel} request timed out after ${timeoutMs}ms`);
+        }
+        throw error;
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    };
 
     let response = await execute(body);
     if (!response.ok && "response_format" in body) {
@@ -845,6 +861,7 @@ export class LlmMemoryExtractor {
           systemPrompt: EXTRACTION_SYSTEM_PROMPT,
           userPrompt: buildPrompt(input.timestamp, input.messages, extraInstruction),
           requestLabel: "Extraction",
+          timeoutMs: 20_000,
           ...(input.agentId ? { agentId: input.agentId } : {}),
         });
         parsed = JSON.parse(extractFirstJsonObject(rawText)) as RawExtractionPayload;
@@ -905,6 +922,7 @@ export class LlmMemoryExtractor {
         systemPrompt: PROJECT_COMPLETION_SYSTEM_PROMPT,
         userPrompt: buildProjectCompletionPrompt(input),
         requestLabel: "Project completion",
+        timeoutMs: 20_000,
         ...(input.agentId ? { agentId: input.agentId } : {}),
       });
       const parsed = JSON.parse(extractFirstJsonObject(raw)) as RawExtractionPayload;
@@ -941,6 +959,7 @@ export class LlmMemoryExtractor {
         systemPrompt: TOPIC_BOUNDARY_SYSTEM_PROMPT,
         userPrompt: buildTopicShiftPrompt(input),
         requestLabel: "Topic shift",
+        timeoutMs: 8_000,
         ...(input.agentId ? { agentId: input.agentId } : {}),
       });
       const parsed = JSON.parse(extractFirstJsonObject(raw)) as RawTopicShiftPayload;
@@ -982,6 +1001,7 @@ export class LlmMemoryExtractor {
           existing_projects: candidates,
         }, null, 2),
         requestLabel: "Project resolution",
+        timeoutMs: 15_000,
         ...(input.agentId ? { agentId: input.agentId } : {}),
       });
       const parsed = JSON.parse(extractFirstJsonObject(raw)) as RawProjectResolutionPayload;
@@ -1014,6 +1034,7 @@ export class LlmMemoryExtractor {
         systemPrompt: DAILY_TIME_SUMMARY_SYSTEM_PROMPT,
         userPrompt: buildDailyTimeSummaryPrompt(input),
         requestLabel: "Daily summary",
+        timeoutMs: 15_000,
         ...(input.agentId ? { agentId: input.agentId } : {}),
       });
       const parsed = JSON.parse(extractFirstJsonObject(raw)) as RawDailySummaryPayload;
@@ -1031,6 +1052,7 @@ export class LlmMemoryExtractor {
         systemPrompt: GLOBAL_PROFILE_SYSTEM_PROMPT,
         userPrompt: buildGlobalProfilePrompt(input),
         requestLabel: "Global profile",
+        timeoutMs: 15_000,
         ...(input.agentId ? { agentId: input.agentId } : {}),
       });
       const parsed = JSON.parse(extractFirstJsonObject(raw)) as RawProfilePayload;
@@ -1099,6 +1121,7 @@ export class LlmMemoryExtractor {
         limits: input.limits,
       }, null, 2),
       requestLabel: "Reasoning",
+      timeoutMs: 8_000,
       ...(input.agentId ? { agentId: input.agentId } : {}),
     });
     const parsed = JSON.parse(extractFirstJsonObject(raw)) as RawReasoningPayload;

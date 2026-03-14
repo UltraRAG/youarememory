@@ -245,20 +245,9 @@ export class ReasoningRetriever {
       .filter((hit): hit is L0SearchResult => Boolean(hit))
       .slice(0, l0Limit);
 
-    let selectedProfile = selection.useProfile ? profile : null;
-    if (!selectedProfile && options.includeFacts !== false) {
-      selectedProfile = await this.searchProfile(query);
-    }
-    if (l2Results.length === 0) {
-      l2Results = await this.searchL2(query, selection.intent, l2Limit);
-    }
-    if (l1Results.length === 0) {
-      const relatedL1Ids = Array.from(new Set(l2Results.flatMap((hit) => hit.item.l1Source)));
-      l1Results = await this.searchL1(query, relatedL1Ids, l1Limit);
-    }
-    if (l0Results.length === 0) {
-      const relatedL0Ids = Array.from(new Set(l1Results.flatMap((hit) => hit.item.l0Source)));
-      l0Results = await this.searchL0(query, relatedL0Ids, l0Limit);
+    const selectedProfile = selection.useProfile ? profile : null;
+    if (!selectedProfile && l2Results.length === 0 && l1Results.length === 0 && l0Results.length === 0) {
+      l2Results = await this.searchL2(query, selection.intent, Math.min(l2Limit, 4));
     }
 
     const enoughAt = coerceEnoughAt(selection.enoughAt, {

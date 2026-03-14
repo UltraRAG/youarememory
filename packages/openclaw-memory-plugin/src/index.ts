@@ -92,6 +92,21 @@ function logIndexStats(logger: PluginLogger, reason: string, stats: HeartbeatSta
   );
 }
 
+function emptyStats(): HeartbeatStats {
+  return {
+    l0Captured: 0,
+    l1Created: 0,
+    l2TimeUpdated: 0,
+    l2ProjectUpdated: 0,
+    profileUpdated: 0,
+    failed: 0,
+  };
+}
+
+function isGatewayRuntimeProcess(): boolean {
+  return process.argv.some((value) => value === "gateway" || value.includes("openclaw-gateway"));
+}
+
 const plugin = {
   id: "youarememory-openclaw",
   name: "YouAreMemory OpenClaw Plugin",
@@ -100,6 +115,8 @@ const plugin = {
 
   register(api: OpenClawPluginApi): void {
     const logger = safeLog(api.logger);
+    const runtimeHooksAvailable = typeof api.on === "function";
+    const liveRuntimeEnabled = runtimeHooksAvailable && isGatewayRuntimeProcess();
     const config = buildPluginConfig(api.pluginConfig);
     const skills = config.skillsDir
       ? loadSkillsRuntime({ skillsDir: config.skillsDir, logger })
@@ -149,11 +166,21 @@ const plugin = {
       return merged;
     };
 
+    let indexingPromise: Promise<HeartbeatStats> | undefined;
     const indexNow = async (reason: string, sessionKeys?: string[]): Promise<HeartbeatStats> => {
+      if (indexingPromise) {
+        logger.info?.(`[youarememory] skip overlapping index run reason=${reason}`);
+        return emptyStats();
+      }
       const options = sessionKeys && sessionKeys.length > 0 ? { reason, sessionKeys } : { reason };
-      const stats = await indexer.runHeartbeat(options);
-      logIndexStats(logger, reason, stats);
-      return stats;
+      indexingPromise = indexer.runHeartbeat(options);
+      try {
+        const stats = await indexingPromise;
+        logIndexStats(logger, reason, stats);
+        return stats;
+      } finally {
+        indexingPromise = undefined;
+      }
     };
 
     const tools = buildPluginTools(repository, retriever);
@@ -193,85 +220,94 @@ const plugin = {
         start: () => uiServer?.start(),
         stop: stopRuntime,
       });
-    } else {
+    }
+    if (liveRuntimeEnabled) {
       uiServer?.start();
     }
 
-    api.on?.(
-      "before_prompt_build",
-      async (event) => {
-        if (!config.recallEnabled) return;
-        const prompt = typeof event.prompt === "string" ? event.prompt : "";
-        if (prompt.trim().length < 2) return;
-        try {
-          const retrieved = await retriever.retrieve(prompt, {
-            l2Limit: 6,
-            l1Limit: 6,
-            l0Limit: 4,
-            includeFacts: true,
-          });
-          if (!retrieved.context) return;
-          return { prependSystemContext: retrieved.context };
-        } catch (error) {
-          logger.warn?.(`[youarememory] recall failed: ${String(error)}`);
-          return;
+    if (liveRuntimeEnabled) {
+      api.on?.(
+        "before_prompt_build",
+        async (event) => {
+          if (!config.recallEnabled) return;
+          const prompt = typeof event.prompt === "string" ? event.prompt : "";
+          if (prompt.trim().length < 2) return;
+          try {
+            const startedAt = Date.now();
+            const retrieved = await retriever.retrieve(prompt, {
+              l2Limit: 4,
+              l1Limit: 4,
+              l0Limit: 2,
+              includeFacts: true,
+            });
+            const elapsedMs = Date.now() - startedAt;
+            if (elapsedMs > 1500) {
+              logger.warn?.(`[youarememory] recall slow query_ms=${elapsedMs} prompt_chars=${prompt.length}`);
+            }
+            if (!retrieved.context) return;
+            return { prependSystemContext: retrieved.context };
+          } catch (error) {
+            logger.warn?.(`[youarememory] recall failed: ${String(error)}`);
+            return;
+          }
+        },
+        { priority: 60 },
+      );
+
+      api.on?.("before_message_write", (event, ctx) => {
+        const sessionKey = typeof ctx.sessionKey === "string" ? ctx.sessionKey.trim() : "";
+        if (!sessionKey || sessionKey.startsWith("temp:")) return;
+        const normalized = normalizeTranscriptMessage(event.message, {
+          includeAssistant: config.includeAssistant,
+          maxMessageChars: config.maxMessageChars,
+        });
+        if (!normalized) return;
+
+        const pending = pendingBySession.get(sessionKey) ?? [];
+        const previous = pending[pending.length - 1];
+        if (!previous || previous.role !== normalized.role || previous.content !== normalized.content) {
+          pending.push(normalized);
+          pendingBySession.set(sessionKey, pending);
         }
-      },
-      { priority: 60 },
-    );
-
-    api.on?.("before_message_write", (event, ctx) => {
-      const sessionKey = typeof ctx.sessionKey === "string" ? ctx.sessionKey.trim() : "";
-      if (!sessionKey || sessionKey.startsWith("temp:")) return;
-      const normalized = normalizeTranscriptMessage(event.message, {
-        includeAssistant: config.includeAssistant,
-        maxMessageChars: config.maxMessageChars,
       });
-      if (!normalized) return;
 
-      const pending = pendingBySession.get(sessionKey) ?? [];
-      const previous = pending[pending.length - 1];
-      if (!previous || previous.role !== normalized.role || previous.content !== normalized.content) {
-        pending.push(normalized);
-        pendingBySession.set(sessionKey, pending);
-      }
-    });
+      api.on?.("agent_end", async (event, ctx) => {
+        if (!config.addEnabled) return;
+        if (shouldSkipCapture(event, ctx)) return;
 
-    api.on?.("agent_end", async (event, ctx) => {
-      if (!config.addEnabled) return;
-      if (shouldSkipCapture(event, ctx)) return;
+        const sessionKey = resolveSessionKey(ctx);
+        if (activeSessionKey && activeSessionKey !== sessionKey) {
+          void indexNow("session_boundary", [activeSessionKey]);
+        }
+        activeSessionKey = sessionKey;
 
-      const sessionKey = resolveSessionKey(ctx);
-      if (activeSessionKey && activeSessionKey !== sessionKey) {
-        await indexNow("session_boundary", [activeSessionKey]);
-      }
-      activeSessionKey = sessionKey;
+        const pending = pendingBySession.get(sessionKey) ?? [];
+        pendingBySession.delete(sessionKey);
+        let messages = sanitizeStoredMessages(pending);
+        if (messages.length === 0) {
+          const rawMessages = Array.isArray(event.messages) ? event.messages : [];
+          messages = sanitizeL0Record({ sessionKey, messages: rawMessages }, config);
+        }
+        if (messages.length === 0) return;
+        if (!messages.some((message) => message.role === "user")) return;
 
-      const pending = pendingBySession.get(sessionKey) ?? [];
-      pendingBySession.delete(sessionKey);
-      let messages = sanitizeStoredMessages(pending);
-      if (messages.length === 0) {
-        const rawMessages = Array.isArray(event.messages) ? event.messages : [];
-        messages = sanitizeL0Record({ sessionKey, messages: rawMessages }, config);
-      }
-      if (messages.length === 0) return;
-      if (!messages.some((message) => message.role === "user")) return;
-
-      const captured = indexer.captureL0Session({
-        sessionKey,
-        timestamp: typeof event.timestamp === "string" ? event.timestamp : nowIso(),
-        messages,
+        const captured = indexer.captureL0Session({
+          sessionKey,
+          timestamp: typeof event.timestamp === "string" ? event.timestamp : nowIso(),
+          messages,
+        });
+        if (captured) {
+          logger.info?.(
+            `[youarememory] captured l0 session=${sessionKey} indexed=pending trigger=message_capture|timer|session_boundary|manual`,
+          );
+          void indexNow("message_capture", [sessionKey]).catch((error) => {
+            logger.warn?.(`[youarememory] async message_capture failed: ${String(error)}`);
+          });
+        }
       });
-      if (captured) {
-        logger.info?.(
-          `[youarememory] captured l0 session=${sessionKey} indexed=pending trigger=message_capture|timer|session_boundary|manual`,
-        );
-        const stats = await indexNow("message_capture", [sessionKey]);
-        logIndexStats(logger, "message_capture", stats);
-      }
-    });
 
-    rescheduleHeartbeat();
+      rescheduleHeartbeat();
+    }
 
     const startBackgroundRepair = (): void => {
       const repairedVersion = repository.getPipelineState("repairVersion");
@@ -291,7 +327,9 @@ const plugin = {
       })();
     };
 
-    startBackgroundRepair();
+    if (liveRuntimeEnabled) {
+      startBackgroundRepair();
+    }
   },
 };
 
