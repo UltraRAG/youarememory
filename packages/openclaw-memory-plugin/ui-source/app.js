@@ -13,20 +13,23 @@ const LOCALES = {
     "topbar.idle": "等待操作",
     "topbar.refresh": "刷新",
     "topbar.build": "立即构建",
+    "topbar.overview": "概览",
     "topbar.settings": "设置",
     "topbar.retrieve": "检索",
     "topbar.detail": "详情",
+    "overview.title": "运行概览",
+    "overview.scrollHint": "固定高度 · 可滚动",
     "stream.searchPlaceholder": "搜索当前层级",
     "stream.search": "搜索",
     "stream.items": "{0} 条",
     "detail.title": "记录详情",
     "detail.empty": "选择左侧记录查看详情",
     "settings.title": "索引设置",
-    "settings.interval": "自动构建间隔（分钟）",
-    "settings.performance": "性能 / 高级",
-    "settings.recallBudget": "前台记忆预算（毫秒）",
-    "settings.idleDebounce": "空闲索引延迟（毫秒）",
-    "settings.fastFallback": "超时后启用本地降级",
+    "settings.mode": "推理模式",
+    "settings.mode.help": "选择更快回答还是更深检索。",
+    "settings.mode.answer_first": "回答优先",
+    "settings.mode.accuracy_first": "准确优先",
+    "settings.maxLatency": "最大可接受时延（毫秒）",
     "settings.save": "保存设置",
     "settings.clear": "清空并重建",
     "retrieve.title": "检索调试",
@@ -48,7 +51,7 @@ const LOCALES = {
     "status.ready": "已就绪",
     "status.loadFail": "加载失败：{0}",
     "status.queryRequired": "请输入检索问题",
-    "status.settingsSaved": "设置已保存 · 间隔 {0} 分钟",
+    "status.settingsSaved": "设置已保存 · {0}",
     "status.pending": "待索引 {0} · 开放 {1}",
     "level.l1.label": "L1 话题窗口",
     "level.l2_project.label": "L2 项目",
@@ -107,10 +110,54 @@ const LOCALES = {
     "overview.queued": "排队 Session",
     "overview.recallMs": "最近召回",
     "overview.recallMode": "召回模式",
+    "overview.reasoningMode": "推理模式",
+    "overview.recallPath": "回答路径",
+    "overview.budgetStop": "预算截停",
+    "overview.shadowDeep": "后台备案",
     "overview.recallTimeouts": "召回超时",
+    "overview.recallInjected": "已注入记忆",
+    "overview.recallEnough": "命中层级",
+    "overview.slotOwner": "Memory Slot",
+    "overview.dynamicRuntime": "动态记忆运行时",
+    "overview.workspaceBootstrap": "Workspace Bootstrap",
+    "overview.runtimeIssues": "运行时问题",
     "recall.llm": "LLM 快选",
     "recall.local_fallback": "本地降级",
     "recall.none": "无注入",
+    "recall.path.auto": "自动回答",
+    "recall.path.explicit": "显式深检索",
+    "recall.path.shadow": "后台备案命中",
+    "reasoning.answer_first": "回答优先",
+    "reasoning.accuracy_first": "准确优先",
+    "boundary.healthy": "正常",
+    "boundary.conflicted": "未就绪",
+    "boundary.present": "已存在",
+    "boundary.absent": "未检测",
+    "boundary.injected": "是",
+    "boundary.notInjected": "否",
+    "boundary.cacheHit": "缓存命中",
+    "boundary.cacheMiss": "实时计算",
+    "boundary.budgetStopped": "已截停",
+    "boundary.budgetNotStopped": "未截停",
+    "boundary.shadowQueued": "已排队",
+    "boundary.shadowNotQueued": "未排队",
+    "boundary.ownerMissing": "未绑定",
+    "boundary.noConflict": "无问题",
+    "boundary.runtimeYouAreMemory": "YouAreMemory",
+    "boundary.runtimeMisconfigured": "配置异常",
+    "boundary.workspaceBootstrap": "这是 OpenClaw 宿主注入的静态 Project Context，不是插件冲突",
+    "boundary.conflictMemoryCore": "memory-core 还没完全关闭",
+    "boundary.conflictSessionHook": "session-memory hook 还没完全关闭",
+    "boundary.conflictMemorySearch": "OpenClaw 原生 memorySearch 还没关闭",
+    "boundary.conflictMemoryFlush": "OpenClaw 原生 memoryFlush 还没关闭",
+    "boundary.conflictPromptInjection": "插件 prompt 注入被宿主配置禁用了",
+    "boundary.conflictRecallDisabled": "插件 recallEnabled 被关闭了",
+    "status.conflictsDetected": "检测到动态记忆运行时问题 {0} 项",
+    "enough.l2": "L2",
+    "enough.l1": "L1",
+    "enough.l0": "L0",
+    "enough.profile": "画像",
+    "enough.none": "无",
   },
   en: {
     "nav.l1": "L1 Window",
@@ -124,20 +171,23 @@ const LOCALES = {
     "topbar.idle": "Idle",
     "topbar.refresh": "Refresh",
     "topbar.build": "Build",
+    "topbar.overview": "Overview",
     "topbar.settings": "Settings",
     "topbar.retrieve": "Retrieve",
     "topbar.detail": "Detail",
+    "overview.title": "Runtime Overview",
+    "overview.scrollHint": "Fixed height · Scrollable",
     "stream.searchPlaceholder": "Search current level",
     "stream.search": "Search",
     "stream.items": "{0} items",
     "detail.title": "Detail",
     "detail.empty": "Select a record to view details",
     "settings.title": "Index Settings",
-    "settings.interval": "Auto-build interval (min)",
-    "settings.performance": "Performance / Advanced",
-    "settings.recallBudget": "Recall budget (ms)",
-    "settings.idleDebounce": "Idle indexing delay (ms)",
-    "settings.fastFallback": "Enable local fallback on timeout",
+    "settings.mode": "Reasoning mode",
+    "settings.mode.help": "Choose faster replies or deeper memory retrieval.",
+    "settings.mode.answer_first": "Answer first",
+    "settings.mode.accuracy_first": "Accuracy first",
+    "settings.maxLatency": "Max acceptable latency (ms)",
     "settings.save": "Save",
     "settings.clear": "Clear & Rebuild",
     "retrieve.title": "Retrieve Debug",
@@ -159,7 +209,7 @@ const LOCALES = {
     "status.ready": "Ready",
     "status.loadFail": "Load failed: {0}",
     "status.queryRequired": "Please enter a query",
-    "status.settingsSaved": "Saved · interval {0} min",
+    "status.settingsSaved": "Saved · {0}",
     "status.pending": "Pending {0} · Open {1}",
     "level.l1.label": "L1 Topic Window",
     "level.l2_project.label": "L2 Project",
@@ -218,10 +268,54 @@ const LOCALES = {
     "overview.queued": "Queued Sessions",
     "overview.recallMs": "Last Recall",
     "overview.recallMode": "Recall Mode",
+    "overview.reasoningMode": "Reasoning Mode",
+    "overview.recallPath": "Reply Path",
+    "overview.budgetStop": "Budget Stop",
+    "overview.shadowDeep": "Shadow Deep",
     "overview.recallTimeouts": "Recall Timeouts",
+    "overview.recallInjected": "Memory Injected",
+    "overview.recallEnough": "Enough At",
+    "overview.slotOwner": "Memory Slot",
+    "overview.dynamicRuntime": "Dynamic Memory Runtime",
+    "overview.workspaceBootstrap": "Workspace Bootstrap",
+    "overview.runtimeIssues": "Runtime Issues",
     "recall.llm": "LLM Fast Path",
     "recall.local_fallback": "Local Fallback",
     "recall.none": "No Memory",
+    "recall.path.auto": "Auto reply",
+    "recall.path.explicit": "Explicit deep recall",
+    "recall.path.shadow": "Shadow cache hit",
+    "reasoning.answer_first": "Answer first",
+    "reasoning.accuracy_first": "Accuracy first",
+    "boundary.healthy": "Healthy",
+    "boundary.conflicted": "Misconfigured",
+    "boundary.present": "Present",
+    "boundary.absent": "Absent",
+    "boundary.injected": "Yes",
+    "boundary.notInjected": "No",
+    "boundary.cacheHit": "Cache hit",
+    "boundary.cacheMiss": "Live",
+    "boundary.budgetStopped": "Stopped",
+    "boundary.budgetNotStopped": "Not stopped",
+    "boundary.shadowQueued": "Queued",
+    "boundary.shadowNotQueued": "Not queued",
+    "boundary.ownerMissing": "Unbound",
+    "boundary.noConflict": "No issues",
+    "boundary.runtimeYouAreMemory": "YouAreMemory",
+    "boundary.runtimeMisconfigured": "Misconfigured",
+    "boundary.workspaceBootstrap": "This is OpenClaw host Project Context, not a plugin conflict",
+    "boundary.conflictMemoryCore": "memory-core is still enabled somewhere",
+    "boundary.conflictSessionHook": "session-memory hook is still enabled somewhere",
+    "boundary.conflictMemorySearch": "Native memorySearch is still enabled somewhere",
+    "boundary.conflictMemoryFlush": "Native memoryFlush is still enabled somewhere",
+    "boundary.conflictPromptInjection": "Prompt injection is disabled for the plugin",
+    "boundary.conflictRecallDisabled": "Plugin recallEnabled is disabled",
+    "status.conflictsDetected": "Detected {0} dynamic-memory runtime issues",
+    "enough.l2": "L2",
+    "enough.l1": "L1",
+    "enough.l0": "L0",
+    "enough.profile": "Profile",
+    "enough.none": "None",
   },
 };
 
@@ -305,7 +399,10 @@ const navLastIndexed = $("#navLastIndexed");
 
 const statusPill = $("#statusPill");
 const activityText = $("#activityText");
+const overviewToggleBtn = $("#overviewToggleBtn");
+const overviewCloseBtn = $("#overviewCloseBtn");
 const overviewCards = $("#overviewCards");
+const overviewScroll = $("#overviewScroll");
 const browserTitle = $("#browserTitle");
 const browserMeta = $("#browserMeta");
 const listQueryInput = $("#listQueryInput");
@@ -328,10 +425,9 @@ const settingsPanel = $("#settingsPanel");
 const settingsCloseBtn = $("#settingsCloseBtn");
 const saveSettingsBtn = $("#saveSettingsBtn");
 const clearMemoryBtn = $("#clearMemoryBtn");
-const autoIndexIntervalInput = $("#autoIndexIntervalInput");
-const recallBudgetInput = $("#recallBudgetInput");
-const indexIdleDebounceInput = $("#indexIdleDebounceInput");
-const fastRecallFallbackInput = $("#fastRecallFallbackInput");
+const reasoningModeInput = $("#reasoningModeInput");
+const maxAutoReplyLatencyInput = $("#maxAutoReplyLatencyInput");
+const latencyFieldWrap = $("#latencyFieldWrap");
 
 const retrievePanel = $("#retrievePanel");
 const retrieveCloseBtn = $("#retrieveCloseBtn");
@@ -385,10 +481,8 @@ const state = {
   activePanel: null,
   overview: {},
   settings: {
-    autoIndexIntervalMinutes: 60,
-    recallBudgetMs: 700,
-    indexIdleDebounceMs: 2500,
-    fastRecallFallbackEnabled: true,
+    reasoningMode: "answer_first",
+    maxAutoReplyLatencyMs: 1800,
   },
   globalProfile: { recordId: "global_profile_record", profileText: "", sourceL1Ids: [], createdAt: "", updatedAt: "" },
   baseRaw: { l2_time: [], l2_project: [], l1: [], l0: [], profile: [] },
@@ -457,18 +551,37 @@ function updateStatusPill(overview = {}) {
   const pending = Number(overview.pendingL0 ?? 0);
   const openTopics = Number(overview.openTopics ?? 0);
   const lastIndexed = overview.lastIndexedAt ? formatTime(overview.lastIndexedAt) : t("nav.waiting");
-  statusPill.textContent = pending > 0
-    ? t("status.pending", pending, openTopics)
-    : lastIndexed;
-  statusPill.dataset.tone = pending > 0 ? "pending" : "ready";
+  const conflictCount = Array.isArray(overview.runtimeIssues) ? overview.runtimeIssues.length : 0;
+  if (conflictCount > 0) {
+    statusPill.textContent = t("status.conflictsDetected", conflictCount);
+    statusPill.dataset.tone = "warning";
+  } else {
+    statusPill.textContent = pending > 0
+      ? t("status.pending", pending, openTopics)
+      : lastIndexed;
+    statusPill.dataset.tone = pending > 0 ? "pending" : "ready";
+  }
   navLastIndexed.textContent = lastIndexed;
+}
+
+function formatConflictSummary(conflict) {
+  const text = String(conflict || "");
+  if (!text) return t("boundary.noConflict");
+  if (text.includes("allowPromptInjection")) return t("boundary.conflictPromptInjection");
+  if (text.includes("recallEnabled=false")) return t("boundary.conflictRecallDisabled");
+  if (text.includes("plugins.entries.memory-core.enabled")) return t("boundary.conflictMemoryCore");
+  if (text.includes("session-memory")) return t("boundary.conflictSessionHook");
+  if (text.includes("memorySearch")) return t("boundary.conflictMemorySearch");
+  if (text.includes("memoryFlush")) return t("boundary.conflictMemoryFlush");
+  return text;
 }
 
 /* ── Overview ────────────────────────────────────────────── */
 
-function createMetricCard(label, value, note) {
+function createMetricCard(label, value, note, tone = "default") {
   const card = document.createElement("section");
   card.className = "metric-card";
+  card.dataset.tone = tone;
 
   const lbl = document.createElement("div");
   lbl.className = "metric-label";
@@ -490,6 +603,21 @@ function renderOverview(overview = {}) {
   state.overview = overview || {};
   updateStatusPill(state.overview);
   overviewCards.innerHTML = "";
+  const runtimeIssues = Array.isArray(overview.runtimeIssues)
+    ? overview.runtimeIssues.filter(Boolean)
+    : [];
+  const memoryRuntimeHealthy = Boolean(overview.memoryRuntimeHealthy);
+  const slotOwner = String(overview.slotOwner || "").trim();
+  const dynamicMemoryRuntime = String(overview.dynamicMemoryRuntime || "").trim();
+  const workspaceBootstrapPresent = Boolean(overview.workspaceBootstrapPresent);
+  const lastRecallInjected = Boolean(overview.lastRecallInjected);
+  const lastRecallEnoughAt = overview.lastRecallEnoughAt || "none";
+  const lastRecallCacheHit = Boolean(overview.lastRecallCacheHit);
+  const lastRecallPath = overview.lastRecallPath || "explicit";
+  const currentReasoningMode = overview.currentReasoningMode || state.settings.reasoningMode || "answer_first";
+  const lastRecallBudgetLimited = Boolean(overview.lastRecallBudgetLimited);
+  const lastShadowDeepQueued = Boolean(overview.lastShadowDeepQueued);
+  const primaryConflict = formatConflictSummary(runtimeIssues[0]);
   overviewCards.append(
     createMetricCard("L0", overview.totalL0 ?? 0, t("nav.l0")),
     createMetricCard(t("status.pending", "", "").split("·")[0].trim() || "Pending", overview.pendingL0 ?? 0, ""),
@@ -498,10 +626,62 @@ function renderOverview(overview = {}) {
     createMetricCard("L2T", overview.totalL2Time ?? 0, t("nav.l2_time")),
     createMetricCard("L2P", overview.totalL2Project ?? 0, t("nav.l2_project")),
     createMetricCard(t("nav.profile"), overview.totalProfiles ?? 0, overview.lastIndexedAt ? "✓" : "–"),
+    createMetricCard(t("overview.reasoningMode"), t(`reasoning.${currentReasoningMode}`), ""),
     createMetricCard(t("overview.recallMs"), overview.lastRecallMs ?? 0, "ms"),
     createMetricCard(t("overview.recallMode"), t(`recall.${overview.lastRecallMode || "none"}`), ""),
+    createMetricCard(t("overview.recallPath"), t(`recall.path.${lastRecallPath}`), ""),
+    createMetricCard(
+      t("overview.budgetStop"),
+      lastRecallBudgetLimited ? t("boundary.budgetStopped") : t("boundary.budgetNotStopped"),
+      "",
+      lastRecallBudgetLimited ? "warning" : "default",
+    ),
+    createMetricCard(
+      t("overview.shadowDeep"),
+      lastShadowDeepQueued ? t("boundary.shadowQueued") : t("boundary.shadowNotQueued"),
+      "",
+      lastShadowDeepQueued ? "warning" : "default",
+    ),
     createMetricCard(t("overview.recallTimeouts"), overview.recallTimeouts ?? 0, ""),
+    createMetricCard(
+      t("overview.recallInjected"),
+      lastRecallInjected ? t("boundary.injected") : t("boundary.notInjected"),
+      lastRecallCacheHit ? t("boundary.cacheHit") : t("boundary.cacheMiss"),
+      lastRecallInjected ? "success" : "default",
+    ),
+    createMetricCard(
+      t("overview.recallEnough"),
+      t(`enough.${lastRecallEnoughAt}`),
+      "",
+    ),
+    createMetricCard(
+      t("overview.slotOwner"),
+      slotOwner || t("boundary.ownerMissing"),
+      memoryRuntimeHealthy ? t("boundary.healthy") : t("boundary.conflicted"),
+      memoryRuntimeHealthy ? "success" : "danger",
+    ),
+    createMetricCard(
+      t("overview.dynamicRuntime"),
+      dynamicMemoryRuntime || t("boundary.runtimeMisconfigured"),
+      memoryRuntimeHealthy ? t("boundary.runtimeYouAreMemory") : primaryConflict,
+      memoryRuntimeHealthy ? "success" : "danger",
+    ),
+    createMetricCard(
+      t("overview.workspaceBootstrap"),
+      workspaceBootstrapPresent ? t("boundary.present") : t("boundary.absent"),
+      workspaceBootstrapPresent ? t("boundary.workspaceBootstrap") : "",
+      "default",
+    ),
+    createMetricCard(
+      t("overview.runtimeIssues"),
+      runtimeIssues.length,
+      primaryConflict,
+      runtimeIssues.length > 0 ? "danger" : "default",
+    ),
   );
+  if (overviewScroll) {
+    overviewScroll.scrollTop = 0;
+  }
   renderNavCounts();
 }
 
@@ -509,28 +689,31 @@ function renderOverview(overview = {}) {
 
 function applySettings(settings = {}) {
   state.settings = {
-    autoIndexIntervalMinutes: 60,
-    recallBudgetMs: 700,
-    indexIdleDebounceMs: 2500,
-    fastRecallFallbackEnabled: true,
+    reasoningMode: "answer_first",
+    maxAutoReplyLatencyMs: 1800,
     ...(settings || {}),
   };
-  autoIndexIntervalInput.value = String(state.settings.autoIndexIntervalMinutes ?? 60);
-  recallBudgetInput.value = String(state.settings.recallBudgetMs ?? 700);
-  indexIdleDebounceInput.value = String(state.settings.indexIdleDebounceMs ?? 2500);
-  fastRecallFallbackInput.checked = Boolean(state.settings.fastRecallFallbackEnabled);
+  reasoningModeInput.value = state.settings.reasoningMode || "answer_first";
+  maxAutoReplyLatencyInput.value = String(state.settings.maxAutoReplyLatencyMs ?? 1800);
+  updateSettingsVisibility();
 }
 
 function readSettingsForm() {
-  const parsed = Number.parseInt(String(autoIndexIntervalInput.value || "").trim(), 10);
-  const recallBudget = Number.parseInt(String(recallBudgetInput.value || "").trim(), 10);
-  const idleDebounce = Number.parseInt(String(indexIdleDebounceInput.value || "").trim(), 10);
+  const parsedLatency = Number.parseInt(String(maxAutoReplyLatencyInput.value || "").trim(), 10);
+  const reasoningMode = reasoningModeInput.value === "accuracy_first" ? "accuracy_first" : "answer_first";
   return {
-    autoIndexIntervalMinutes: Number.isFinite(parsed) ? Math.max(0, parsed) : state.settings.autoIndexIntervalMinutes,
-    recallBudgetMs: Number.isFinite(recallBudget) ? Math.max(100, recallBudget) : state.settings.recallBudgetMs,
-    indexIdleDebounceMs: Number.isFinite(idleDebounce) ? Math.max(200, idleDebounce) : state.settings.indexIdleDebounceMs,
-    fastRecallFallbackEnabled: fastRecallFallbackInput.checked,
+    reasoningMode,
+    maxAutoReplyLatencyMs: Number.isFinite(parsedLatency)
+      ? Math.max(300, parsedLatency)
+      : state.settings.maxAutoReplyLatencyMs,
   };
+}
+
+function updateSettingsVisibility() {
+  const answerFirst = (reasoningModeInput?.value || state.settings.reasoningMode) === "answer_first";
+  if (latencyFieldWrap) {
+    latencyFieldWrap.hidden = !answerFirst;
+  }
 }
 
 /* ── Nav counts ──────────────────────────────────────────── */
@@ -974,7 +1157,7 @@ function renderRetrieveBlock(title, count, items) {
 function renderRetrieveResult(data) {
   retrieveTimeline.innerHTML = "";
   const debugBits = data.debug
-    ? ` · mode=${data.debug.mode} · ${data.debug.elapsedMs}ms${data.debug.cacheHit ? " · cache" : ""}`
+    ? ` · mode=${data.debug.mode} · path=${data.debug.path || "explicit"} · ${data.debug.elapsedMs}ms${data.debug.cacheHit ? " · cache" : ""}${data.debug.budgetLimited ? " · budget" : ""}`
     : "";
   retrieveSummary.textContent = `intent=${data.intent || "general"} · enoughAt=${data.enoughAt || "none"}${debugBits}`;
   retrieveResult.textContent = data.context || "";
@@ -1019,7 +1202,11 @@ async function saveSettings() {
   const payload = readSettingsForm();
   const settings = await postJson("./api/settings", payload);
   applySettings(settings);
-  setActivity("status.settingsSaved", "success", settings.autoIndexIntervalMinutes);
+  const modeLabel = t(`reasoning.${settings.reasoningMode || "answer_first"}`);
+  const summary = settings.reasoningMode === "answer_first"
+    ? `${modeLabel} · ${settings.maxAutoReplyLatencyMs}ms`
+    : modeLabel;
+  setActivity("status.settingsSaved", "success", summary);
 }
 
 async function buildNow() {
@@ -1054,6 +1241,7 @@ levelTabs.addEventListener("click", async (e) => {
 
 refreshBtn.addEventListener("click", () => void refreshDashboard());
 buildNowBtn.addEventListener("click", () => void buildNow());
+overviewToggleBtn.addEventListener("click", () => togglePanel("overview"));
 saveSettingsBtn.addEventListener("click", () => void saveSettings());
 clearMemoryBtn.addEventListener("click", () => void clearMemory());
 listSearchBtn.addEventListener("click", () => void searchCurrentLevel());
@@ -1064,6 +1252,8 @@ queryInput.addEventListener("keydown", (e) => { if ((e.metaKey || e.ctrlKey) && 
 settingsToggleBtn.addEventListener("click", () => togglePanel("settings"));
 retrieveToggleBtn.addEventListener("click", () => togglePanel("retrieve"));
 detailToggleBtn.addEventListener("click", () => togglePanel("detail"));
+reasoningModeInput.addEventListener("change", () => updateSettingsVisibility());
+overviewCloseBtn.addEventListener("click", () => setPanel(null));
 settingsCloseBtn.addEventListener("click", () => setPanel(null));
 retrieveCloseBtn.addEventListener("click", () => setPanel(null));
 detailCloseBtn.addEventListener("click", () => setPanel(null));
@@ -1104,7 +1294,11 @@ async function bootstrap() {
   await loadSnapshot();
   await loadLevel(state.activeLevel);
   renderDetail();
-  setActivity("status.ready", "success");
+  if ((state.overview.runtimeIssues || []).length > 0) {
+    setActivity("status.conflictsDetected", "warning", state.overview.runtimeIssues.length);
+  } else {
+    setActivity("status.ready", "success");
+  }
 }
 
 bootstrap().catch((err) => {

@@ -10,6 +10,8 @@ export interface PluginRuntimeConfig {
   includeAssistant: boolean;
   maxMessageChars: number;
   heartbeatBatchSize: number;
+  autoIndexIntervalMinutes: number;
+  indexIdleDebounceMs: number;
   defaultIndexingSettings: IndexingSettings;
   recallEnabled: boolean;
   addEnabled: boolean;
@@ -48,6 +50,15 @@ export function buildPluginConfig(raw: unknown): PluginRuntimeConfig {
     : join(dataDir, "memory.sqlite");
   const skillsDir = typeof cfg.skillsDir === "string" && cfg.skillsDir.trim() ? cfg.skillsDir : undefined;
 
+  const configuredLatency = typeof cfg.maxAutoReplyLatencyMs === "number" && Number.isFinite(cfg.maxAutoReplyLatencyMs)
+    ? Math.floor(cfg.maxAutoReplyLatencyMs)
+    : typeof cfg.maxAutoReplyLatencyMs === "string" && cfg.maxAutoReplyLatencyMs.trim()
+      ? Number.parseInt(cfg.maxAutoReplyLatencyMs, 10)
+      : typeof cfg.recallBudgetMs === "number" && Number.isFinite(cfg.recallBudgetMs)
+        ? Math.floor(cfg.recallBudgetMs)
+        : typeof cfg.recallBudgetMs === "string" && cfg.recallBudgetMs.trim()
+          ? Number.parseInt(cfg.recallBudgetMs, 10)
+          : 1800;
   const captureStrategy = cfg.captureStrategy === "last_turn" ? "last_turn" : "full_session";
   const runtime: PluginRuntimeConfig = {
     dataDir,
@@ -56,11 +67,11 @@ export function buildPluginConfig(raw: unknown): PluginRuntimeConfig {
     includeAssistant: toBoolean(cfg.includeAssistant, true),
     maxMessageChars: toInteger(cfg.maxMessageChars, 6000),
     heartbeatBatchSize: Math.max(1, toInteger(cfg.heartbeatBatchSize, 30)),
+    autoIndexIntervalMinutes: Math.max(0, toInteger(cfg.autoIndexIntervalMinutes, 60)),
+    indexIdleDebounceMs: Math.max(200, toInteger(cfg.indexIdleDebounceMs, 2500)),
     defaultIndexingSettings: {
-      autoIndexIntervalMinutes: Math.max(0, toInteger(cfg.autoIndexIntervalMinutes, 60)),
-      recallBudgetMs: Math.max(100, toInteger(cfg.recallBudgetMs, 700)),
-      indexIdleDebounceMs: Math.max(200, toInteger(cfg.indexIdleDebounceMs, 2500)),
-      fastRecallFallbackEnabled: toBoolean(cfg.fastRecallFallbackEnabled, true),
+      reasoningMode: cfg.reasoningMode === "accuracy_first" ? "accuracy_first" : "answer_first",
+      maxAutoReplyLatencyMs: Math.max(300, Number.isFinite(configuredLatency) ? configuredLatency : 1800),
     },
     recallEnabled: toBoolean(cfg.recallEnabled, true),
     addEnabled: toBoolean(cfg.addEnabled, true),

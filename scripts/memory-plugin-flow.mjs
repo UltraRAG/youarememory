@@ -218,6 +218,26 @@ async function verifyPluginEnabled() {
   return config?.plugins?.entries?.[PLUGIN_ID]?.enabled === true;
 }
 
+async function verifyMemoryCoreDisabled() {
+  const config = await readOpenClawConfig();
+  return config?.plugins?.entries?.["memory-core"]?.enabled === false;
+}
+
+async function verifySessionMemoryDisabled() {
+  const config = await readOpenClawConfig();
+  return config?.hooks?.internal?.entries?.["session-memory"]?.enabled === false;
+}
+
+async function verifyAgentMemorySearchDisabled() {
+  const config = await readOpenClawConfig();
+  return config?.agents?.defaults?.memorySearch?.enabled === false;
+}
+
+async function verifyCompactionMemoryFlushDisabled() {
+  const config = await readOpenClawConfig();
+  return config?.agents?.defaults?.compaction?.memoryFlush?.enabled === false;
+}
+
 async function ensurePluginLoadPath(pluginPath) {
   printStep("Register plugin source path");
   const config = (await readOpenClawConfig()) ?? {};
@@ -318,6 +338,34 @@ async function runReloadFlow(repoRoot, options = {}) {
     "openclaw",
     ["plugins", "enable", PLUGIN_ID],
     verifyPluginEnabled,
+  );
+  await runConfigMutation(
+    repoRoot,
+    "Disable memory-core",
+    "openclaw",
+    ["config", "set", "plugins.entries.memory-core.enabled", JSON.stringify(false)],
+    verifyMemoryCoreDisabled,
+  );
+  await runConfigMutation(
+    repoRoot,
+    "Disable session-memory hook",
+    "openclaw",
+    ["config", "set", "hooks.internal.entries.session-memory.enabled", JSON.stringify(false)],
+    verifySessionMemoryDisabled,
+  );
+  await runConfigMutation(
+    repoRoot,
+    "Disable native memorySearch",
+    "openclaw",
+    ["config", "set", "agents.defaults.memorySearch.enabled", JSON.stringify(false)],
+    verifyAgentMemorySearchDisabled,
+  );
+  await runConfigMutation(
+    repoRoot,
+    "Disable compaction memoryFlush",
+    "openclaw",
+    ["config", "set", "agents.defaults.compaction.memoryFlush.enabled", JSON.stringify(false)],
+    verifyCompactionMemoryFlushDisabled,
   );
 
   printStep("Restart gateway");

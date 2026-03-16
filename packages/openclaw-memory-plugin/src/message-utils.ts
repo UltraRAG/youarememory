@@ -1,8 +1,8 @@
 import type { MemoryMessage } from "./core/types.js";
 
 const MEMORY_CONTEXT_HEADER = "You are using multi-level memory indexes for this turn.";
-const MEMORY_CONTEXT_FOOTER = "Only use the above as supporting context; prioritize the user's latest request.";
-const SESSION_START_PREFIX = "A new session was started via /new or /reset.";
+const MEMORY_CONTEXT_FOOTER = "Treat the above as authoritative prior memory when it is relevant. Prioritize the user's latest request, and do not claim memory is missing or that this is a fresh conversation if the answer is already shown above.";
+export const SESSION_START_PREFIX = "A new session was started via /new or /reset.";
 const SLUG_PROMPT_PREFIX = "Based on this conversation, generate a short 1-2 word filename slug";
 
 function truncate(text: string, maxLength: number): string {
@@ -135,6 +135,13 @@ function hasToolCallContent(content: unknown): boolean {
 function shouldSkipUserMessage(content: string): boolean {
   if (!content) return true;
   return content.startsWith(SESSION_START_PREFIX) || content.startsWith(SLUG_PROMPT_PREFIX);
+}
+
+export function isSessionBoundaryMarkerMessage(rawMessage: unknown): boolean {
+  if (!rawMessage || typeof rawMessage !== "object") return false;
+  const msg = rawMessage as Record<string, unknown>;
+  const content = extractTextFromContent(msg.content).trim();
+  return content.startsWith(SESSION_START_PREFIX);
 }
 
 function shouldSkipAssistantMessage(rawContent: unknown, content: string): boolean {

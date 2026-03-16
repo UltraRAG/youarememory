@@ -12,14 +12,53 @@ import {
 } from "./core/index.js";
 import type { PluginHookAgentEndEvent, PluginHookAgentContext, PluginHookBeforeMessageWriteEvent, PluginHookBeforePromptBuildEvent, PluginHookBeforePromptBuildResult, PluginHookBeforeResetEvent, PluginLogger, PluginRuntimeLike } from "./plugin-api.js";
 import { buildPluginConfig, type PluginRuntimeConfig } from "./config.js";
-import { normalizeMessages, normalizeTranscriptMessage } from "./message-utils.js";
+import { isSessionBoundaryMarkerMessage, normalizeMessages, normalizeTranscriptMessage } from "./message-utils.js";
 import { buildPluginTools } from "./tools.js";
 import { LocalUiServer } from "./ui-server.js";
+import { existsSync } from "node:fs";
+import { homedir } from "node:os";
+import { join, resolve } from "node:path";
 
 const MEMORY_REPAIR_VERSION = "2026-03-13-topic-driven-memory-v13";
+const INDEXING_SETTINGS_MIGRATION_VERSION = "2026-03-16-reasoning-mode-settings-v1";
+const PLUGIN_ID = "youarememory-openclaw";
+
+interface MemoryBoundaryDiagnostics {
+  slotOwner: string;
+  dynamicMemoryRuntime: string;
+  workspaceBootstrapPresent: boolean;
+  memoryRuntimeHealthy: boolean;
+  runtimeIssues: string[];
+}
 
 function safeLog(logger: PluginLogger | undefined): PluginLogger {
   return logger ?? console;
+}
+
+function asObject(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : undefined;
+}
+
+function getConfigValue(root: Record<string, unknown> | undefined, path: string[]): unknown {
+  let current: unknown = root;
+  for (const part of path) {
+    const object = asObject(current);
+    if (!object) return undefined;
+    current = object[part];
+  }
+  return current;
+}
+
+function getConfigString(root: Record<string, unknown> | undefined, path: string[]): string {
+  const value = getConfigValue(root, path);
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function getConfigBoolean(root: Record<string, unknown> | undefined, path: string[]): boolean | undefined {
+  const value = getConfigValue(root, path);
+  return typeof value === "boolean" ? value : undefined;
 }
 
 function resolveSessionKey(ctx: Record<string, unknown>): string {
@@ -115,6 +154,18 @@ function mergeStats(left: HeartbeatStats, right: HeartbeatStats): HeartbeatStats
   };
 }
 
+function buildMemoryRuntimeSystemContext(evidenceBlock: string): string {
+  return [
+    "## YouAreMemory Runtime",
+    "Dynamic conversation memory for this turn is provided by the active YouAreMemory memory-slot plugin.",
+    "For questions about prior chats, people, preferences, projects, timelines, or past recommendations:",
+    "- Treat YouAreMemory injected evidence as the authoritative dynamic memory source for this turn.",
+    "- Do not inspect USER.md, MEMORY.md, or memory/*.md to decide whether memory exists or whether this is a fresh conversation.",
+    "- Only inspect workspace files when the user explicitly asks to read, edit, or debug those files.",
+    evidenceBlock.trim() ? `\n${evidenceBlock.trim()}` : "",
+  ].join("\n").trim();
+}
+
 export interface MemoryPluginRuntimeOptions {
   apiConfig: Record<string, unknown> | undefined;
   pluginRuntime: PluginRuntimeLike | undefined;
@@ -129,10 +180,13 @@ export class MemoryPluginRuntime {
   readonly indexer: HeartbeatIndexer;
   readonly retriever: ReasoningRetriever;
 
+  private readonly apiConfig: Record<string, unknown> | undefined;
   private readonly pendingBySession = new Map<string, MemoryMessage[]>();
   private readonly idleIndexTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly debouncedSessions = new Set<string>();
   private readonly queuedSessionKeys = new Set<string>();
+  private readonly effectiveSessionKeyByRawSession = new Map<string, string>();
+  private readonly conversationGenerationByRawSession = new Map<string, number>();
 
   private heartbeatTimer: ReturnType<typeof setInterval> | undefined;
   private uiServer: LocalUiServer | undefined;
@@ -146,6 +200,7 @@ export class MemoryPluginRuntime {
 
   constructor(options: MemoryPluginRuntimeOptions) {
     this.logger = safeLog(options.logger);
+    this.apiConfig = options.apiConfig;
     this.config = buildPluginConfig(options.pluginConfig);
 
     const skills = this.config.skillsDir
@@ -153,6 +208,7 @@ export class MemoryPluginRuntime {
       : loadSkillsRuntime({ logger: this.logger });
     this.repository = new MemoryRepository(this.config.dbPath);
     const persistedSettings = this.repository.getIndexingSettings(this.config.defaultIndexingSettings);
+    const migratedSettings = this.maybeUpgradeIndexingSettings(persistedSettings);
     const extractor = new LlmMemoryExtractor(
       options.apiConfig ?? {},
       options.pluginRuntime as Record<string, unknown> | undefined,
@@ -164,7 +220,7 @@ export class MemoryPluginRuntime {
       {
         batchSize: this.config.heartbeatBatchSize,
         source: "openclaw",
-        settings: persistedSettings,
+        settings: migratedSettings,
         logger: this.logger,
       },
     );
@@ -198,6 +254,14 @@ export class MemoryPluginRuntime {
     }
   }
 
+  private maybeUpgradeIndexingSettings(settings: IndexingSettings): IndexingSettings {
+    const migrationState = this.repository.getPipelineState("indexingSettingsMigration");
+    if (migrationState === INDEXING_SETTINGS_MIGRATION_VERSION) return settings;
+    const normalized = this.repository.saveIndexingSettings(settings, this.config.defaultIndexingSettings);
+    this.repository.setPipelineState("indexingSettingsMigration", INDEXING_SETTINGS_MIGRATION_VERSION);
+    return normalized;
+  }
+
   getTools() {
     return buildPluginTools(this.repository, this.retriever);
   }
@@ -208,6 +272,7 @@ export class MemoryPluginRuntime {
     this.rescheduleHeartbeat();
     this.uiServer?.start();
     this.startBackgroundRepair();
+    this.logMemoryBoundaryDiagnostics();
   }
 
   stop(): void {
@@ -222,8 +287,54 @@ export class MemoryPluginRuntime {
       this.clearIdleTimer(sessionKey);
     }
     this.pendingBySession.clear();
+    this.effectiveSessionKeyByRawSession.clear();
+    this.conversationGenerationByRawSession.clear();
     this.uiServer?.stop();
     this.repository.close();
+  }
+
+  private getEffectiveSessionKey(rawSessionKey: string): string {
+    const trimmed = rawSessionKey.trim();
+    if (!trimmed) return trimmed;
+    const cached = this.effectiveSessionKeyByRawSession.get(trimmed);
+    if (cached) return cached;
+    this.effectiveSessionKeyByRawSession.set(trimmed, trimmed);
+    this.conversationGenerationByRawSession.set(trimmed, 0);
+    return trimmed;
+  }
+
+  private rotateConversationWindow(rawSessionKey: string, reason: string): void {
+    const trimmed = rawSessionKey.trim();
+    if (!trimmed || trimmed.startsWith("temp:")) return;
+    const previousSessionKey = this.getEffectiveSessionKey(trimmed);
+    const pending = this.pendingBySession.get(previousSessionKey) ?? [];
+    const pendingMessages = sanitizeStoredMessages(pending);
+    if (pendingMessages.length > 0 && pendingMessages.some((message) => message.role === "user")) {
+      const captured = this.indexer.captureL0Session({
+        sessionKey: previousSessionKey,
+        timestamp: nowIso(),
+        messages: pendingMessages,
+      });
+      if (captured) {
+        this.logger.info?.(`[youarememory] captured pending l0 before ${reason} session=${previousSessionKey}`);
+      }
+    }
+    const nextGeneration = (this.conversationGenerationByRawSession.get(trimmed) ?? 0) + 1;
+    const nextSessionKey = `${trimmed}#window:${nextGeneration}`;
+    this.conversationGenerationByRawSession.set(trimmed, nextGeneration);
+    this.effectiveSessionKeyByRawSession.set(trimmed, nextSessionKey);
+
+    this.pendingBySession.delete(previousSessionKey);
+    if (this.activeSessionKey === previousSessionKey) {
+      this.activeSessionKey = undefined;
+    }
+
+    void this.flushSessionNow(previousSessionKey, reason).catch((error) => {
+      this.logger.warn?.(`[youarememory] ${reason} failed session=${previousSessionKey}: ${String(error)}`);
+    });
+    this.logger.info?.(
+      `[youarememory] opened new conversation window raw_session=${trimmed} previous=${previousSessionKey} next=${nextSessionKey} reason=${reason}`,
+    );
   }
 
   handleBeforePromptBuild = async (
@@ -236,20 +347,27 @@ export class MemoryPluginRuntime {
     try {
       const startedAt = Date.now();
       const retrieved = await this.retriever.retrieve(prompt, {
+        retrievalMode: "auto",
         l2Limit: 4,
         l1Limit: 2,
         l0Limit: 1,
         includeFacts: true,
       });
       const elapsedMs = Date.now() - startedAt;
-      if (elapsedMs > this.indexer.getSettings().recallBudgetMs + 300) {
+      if (
+        this.indexer.getSettings().reasoningMode === "answer_first"
+        && elapsedMs > this.indexer.getSettings().maxAutoReplyLatencyMs + 300
+      ) {
         this.logger.warn?.(`[youarememory] recall slow query_ms=${elapsedMs} prompt_chars=${prompt.length}`);
       }
-      if (!retrieved.context) return;
-      return { prependSystemContext: retrieved.context };
+      const injected = Boolean(retrieved.context?.trim());
+      this.logger.info?.(
+        `[youarememory] recall mode=${retrieved.debug?.mode ?? "none"} enough_at=${retrieved.enoughAt} injected=${injected} elapsed_ms=${retrieved.debug?.elapsedMs ?? elapsedMs} cache_hit=${retrieved.debug?.cacheHit ? "1" : "0"}`,
+      );
+      return { appendSystemContext: buildMemoryRuntimeSystemContext(retrieved.context) };
     } catch (error) {
       this.logger.warn?.(`[youarememory] recall failed: ${String(error)}`);
-      return;
+      return { appendSystemContext: buildMemoryRuntimeSystemContext("") };
     }
   };
 
@@ -257,8 +375,14 @@ export class MemoryPluginRuntime {
     event: PluginHookBeforeMessageWriteEvent,
     ctx: { agentId?: string; sessionKey?: string },
   ): void => {
-    const sessionKey = typeof ctx.sessionKey === "string" ? ctx.sessionKey.trim() : "";
-    if (!sessionKey || sessionKey.startsWith("temp:")) return;
+    const rawSessionKey = typeof ctx.sessionKey === "string" ? ctx.sessionKey.trim() : "";
+    if (!rawSessionKey || rawSessionKey.startsWith("temp:")) return;
+    if (isSessionBoundaryMarkerMessage(event.message)) {
+      this.rotateConversationWindow(rawSessionKey, "session_boundary_marker");
+      return;
+    }
+
+    const sessionKey = this.getEffectiveSessionKey(rawSessionKey);
     const normalized = normalizeTranscriptMessage(event.message, {
       includeAssistant: this.config.includeAssistant,
       maxMessageChars: this.config.maxMessageChars,
@@ -277,7 +401,8 @@ export class MemoryPluginRuntime {
     if (!this.config.addEnabled) return;
     if (shouldSkipCapture(event as unknown as Record<string, unknown>, ctx as Record<string, unknown>)) return;
 
-    const sessionKey = resolveSessionKey(ctx as Record<string, unknown>);
+    const rawSessionKey = resolveSessionKey(ctx as Record<string, unknown>);
+    const sessionKey = this.getEffectiveSessionKey(rawSessionKey);
     if (this.activeSessionKey && this.activeSessionKey !== sessionKey) {
       void this.flushSessionNow(this.activeSessionKey, "session_boundary").catch((error) => {
         this.logger.warn?.(`[youarememory] session_boundary failed: ${String(error)}`);
@@ -310,10 +435,10 @@ export class MemoryPluginRuntime {
 
   handleBeforeReset = async (event: PluginHookBeforeResetEvent, ctx: PluginHookAgentContext): Promise<void> => {
     if (!this.config.addEnabled) return;
-    const fallbackSession = typeof ctx.sessionKey === "string" && ctx.sessionKey.trim()
-      ? ctx.sessionKey
+    const fallbackRawSession = typeof ctx.sessionKey === "string" && ctx.sessionKey.trim()
+      ? this.getEffectiveSessionKey(ctx.sessionKey)
       : this.activeSessionKey;
-    const sessionKey = fallbackSession?.trim() ?? "";
+    const sessionKey = fallbackRawSession?.trim() ?? "";
     if (!sessionKey || sessionKey.startsWith("temp:")) return;
 
     try {
@@ -342,16 +467,47 @@ export class MemoryPluginRuntime {
     }
   };
 
-  private getRuntimeOverview(): Pick<DashboardOverview, "queuedSessions" | "lastRecallMs" | "recallTimeouts" | "lastRecallMode"> {
+  private getRuntimeOverview(): Pick<
+    DashboardOverview,
+    | "queuedSessions"
+    | "lastRecallMs"
+    | "recallTimeouts"
+    | "lastRecallMode"
+    | "currentReasoningMode"
+    | "lastRecallPath"
+    | "lastRecallBudgetLimited"
+    | "lastShadowDeepQueued"
+    | "lastRecallInjected"
+    | "lastRecallEnoughAt"
+    | "lastRecallCacheHit"
+    | "slotOwner"
+    | "dynamicMemoryRuntime"
+    | "workspaceBootstrapPresent"
+    | "memoryRuntimeHealthy"
+    | "runtimeIssues"
+  > {
     const queuedSessions = this.queuedFullRun
       ? Math.max(1, this.debouncedSessions.size + this.queuedSessionKeys.size)
       : new Set([...this.debouncedSessions, ...this.queuedSessionKeys]).size;
     const stats = this.retriever.getRuntimeStats();
+    const diagnostics = this.collectMemoryBoundaryDiagnostics();
     return {
       queuedSessions,
       lastRecallMs: stats.lastRecallMs,
       recallTimeouts: stats.recallTimeouts,
       lastRecallMode: stats.lastRecallMode,
+      currentReasoningMode: this.indexer.getSettings().reasoningMode,
+      lastRecallPath: stats.lastRecallPath,
+      lastRecallBudgetLimited: stats.lastRecallBudgetLimited,
+      lastShadowDeepQueued: stats.lastShadowDeepQueued,
+      lastRecallInjected: stats.lastRecallInjected,
+      lastRecallEnoughAt: stats.lastRecallEnoughAt,
+      lastRecallCacheHit: stats.lastRecallCacheHit,
+      slotOwner: diagnostics.slotOwner,
+      dynamicMemoryRuntime: diagnostics.dynamicMemoryRuntime,
+      workspaceBootstrapPresent: diagnostics.workspaceBootstrapPresent,
+      memoryRuntimeHealthy: diagnostics.memoryRuntimeHealthy,
+      runtimeIssues: diagnostics.runtimeIssues,
     };
   }
 
@@ -407,7 +563,7 @@ export class MemoryPluginRuntime {
       clearInterval(this.heartbeatTimer);
       this.heartbeatTimer = undefined;
     }
-    const intervalMinutes = this.indexer.getSettings().autoIndexIntervalMinutes;
+    const intervalMinutes = this.config.autoIndexIntervalMinutes;
     if (intervalMinutes <= 0) return;
     this.heartbeatTimer = setInterval(() => {
       for (const sessionKey of Array.from(this.debouncedSessions)) {
@@ -435,7 +591,7 @@ export class MemoryPluginRuntime {
   private scheduleIdleIndex(sessionKey: string): void {
     this.clearIdleTimer(sessionKey);
     this.debouncedSessions.add(sessionKey);
-    const delayMs = this.indexer.getSettings().indexIdleDebounceMs;
+    const delayMs = this.config.indexIdleDebounceMs;
     const timer = setTimeout(() => {
       this.idleIndexTimers.delete(sessionKey);
       this.debouncedSessions.delete(sessionKey);
@@ -474,5 +630,67 @@ export class MemoryPluginRuntime {
         this.logger.warn?.(`[youarememory] startup repair failed: ${String(error)}`);
       }
     })();
+  }
+
+  private resolveWorkspaceDir(): string {
+    const configured = getConfigString(this.apiConfig, ["agents", "defaults", "workspace"]);
+    return resolve(configured || join(homedir(), ".openclaw", "workspace"));
+  }
+
+  private collectMemoryBoundaryDiagnostics(): MemoryBoundaryDiagnostics {
+    const runtimeIssues: string[] = [];
+    const slotOwner = getConfigString(this.apiConfig, ["plugins", "slots", "memory"]);
+    if (slotOwner !== PLUGIN_ID) {
+      runtimeIssues.push(`plugins.slots.memory=${slotOwner || "(empty)"}`);
+    }
+    if (getConfigBoolean(this.apiConfig, ["plugins", "entries", "memory-core", "enabled"]) !== false) {
+      runtimeIssues.push("plugins.entries.memory-core.enabled should be false");
+    }
+    if (getConfigBoolean(this.apiConfig, ["hooks", "internal", "entries", "session-memory", "enabled"]) !== false) {
+      runtimeIssues.push("hooks.internal.entries.session-memory.enabled should be false");
+    }
+    if (getConfigBoolean(this.apiConfig, ["agents", "defaults", "memorySearch", "enabled"]) !== false) {
+      runtimeIssues.push("agents.defaults.memorySearch.enabled should be false");
+    }
+    if (getConfigBoolean(this.apiConfig, ["agents", "defaults", "compaction", "memoryFlush", "enabled"]) !== false) {
+      runtimeIssues.push("agents.defaults.compaction.memoryFlush.enabled should be false");
+    }
+    if (getConfigBoolean(this.apiConfig, ["plugins", "entries", PLUGIN_ID, "hooks", "allowPromptInjection"]) === false) {
+      runtimeIssues.push(`plugins.entries.${PLUGIN_ID}.hooks.allowPromptInjection should not be false`);
+    }
+    if (!this.config.recallEnabled) {
+      runtimeIssues.push("plugin config recallEnabled=false");
+    }
+
+    const workspaceDir = this.resolveWorkspaceDir();
+    const workspaceBootstrapPresent = [
+      "AGENTS.md",
+      "SOUL.md",
+      "TOOLS.md",
+      "IDENTITY.md",
+      "USER.md",
+      "HEARTBEAT.md",
+      "BOOTSTRAP.md",
+      "MEMORY.md",
+    ].some((name) => existsSync(join(workspaceDir, name)));
+
+    return {
+      slotOwner,
+      dynamicMemoryRuntime: slotOwner === PLUGIN_ID ? "YouAreMemory" : slotOwner || "unbound",
+      workspaceBootstrapPresent,
+      memoryRuntimeHealthy: runtimeIssues.length === 0,
+      runtimeIssues,
+    };
+  }
+
+  private logMemoryBoundaryDiagnostics(): void {
+    const diagnostics = this.collectMemoryBoundaryDiagnostics();
+    if (diagnostics.memoryRuntimeHealthy) {
+      this.logger.info?.("[youarememory] dynamic memory runtime ready: active memory slot is YouAreMemory.");
+      return;
+    }
+    this.logger.warn?.(
+      `[youarememory] dynamic memory runtime issues detected: ${diagnostics.runtimeIssues.join(" | ")}`,
+    );
   }
 }

@@ -1,4 +1,4 @@
-You are using multi-level memory indexes for this turn.
+## YouAreMemory Retrieved Evidence
 intent={{intent}}
 enoughAt={{enoughAt}}
 
@@ -10,4 +10,5 @@ enoughAt={{enoughAt}}
 
 {{l0Block}}
 
-Only use the above as supporting context; prioritize the user's latest request.
+Treat the selected evidence above as authoritative historical memory for this turn when it is relevant.
+If the needed answer is already shown above, do not claim that memory is missing or that this is a fresh conversation.

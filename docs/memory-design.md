@@ -318,7 +318,7 @@ YouAreMemory 通过多级索引升级 OpenClaw 的记忆机制，目标是保持
 - `captureStrategy = "full_session"`
 - `autoIndexIntervalMinutes = 60`
 - `indexIdleDebounceMs = 2500`
-- `recallBudgetMs = 700`
+- `recallBudgetMs = 1800`
 - `fastRecallFallbackEnabled = true`
 
 原因：
@@ -333,24 +333,77 @@ YouAreMemory 通过多级索引升级 OpenClaw 的记忆机制，目标是保持
 
 ## 6. 推理过程
 
-典型伪代码：
+当前 recall 不是“主模型自己循环调工具”，而是插件在 `before_prompt_build` 内完成的一条多跳动态检索链路。动态召回和逐层下钻由插件控制；OpenClaw 宿主的 workspace bootstrap 仍会作为静态 Project Context 存在，但它不是动态记忆 provider。
 
 ```text
-while true:
-  1. 识别用户问题意图
-  2. 调用 search_l2
-  3. 如果 L2 足够回答，则结束
-  4. 否则调用 search_l1
-  5. 如果 L1 足够回答，则结束
-  6. 否则调用 search_l0
-  7. 输出最终上下文
+before_prompt_build:
+  1. 读取当前 query
+  2. 默认注入 GlobalProfileRecord
+  3. Hop1 只读：
+     - query
+     - GlobalProfileRecord
+     输出：
+     - memoryRelevant
+     - baseOnly
+     - route = none | time | project | general
+     - timeSelector
+     - projectLookupQuery
+  4. 如果 Hop1 认为基础层已足够，停止
+  5. 否则准备候选 L2：
+     - 时间：按模型产出的日期/时间窗口匹配 L2Time
+     - 项目：先做通用 shortlist，再交给模型选
+  6. Hop2 读取：
+     - query
+     - GlobalProfileRecord
+     - 候选 L2 完整内容
+     输出：
+     - intent
+     - selectedL2Ids
+     - enoughAt = l2 | descend_l1 | none
+  7. 如果 Hop2 停在 L2，直接结束
+  8. 如果 Hop2 需要下钻：
+     - 只从 selectedL2Ids 对应的 l1Source 取候选 L1
+  9. Hop3 读取：
+     - query
+     - 已选 L2
+     - 候选 L1 完整摘要
+     - 这些 L1 关联 L0 的头信息
+     输出：
+     - useProfile
+     - selectedL1Ids
+     - selectedL0Ids
+     - enoughAt = l1 | l0 | none
+  10. 最终只注入被选中的 profile + L2 + L1 + L0
+  11. 通过 appendSystemContext 把 YouAreMemory 运行时合同和检索证据一起注入到本轮 system prompt
 ```
 
 当前实现里：
 
-- 时间问题优先命中 `L2Time`
-- 项目问题优先命中 `L2Project`
-- 检索阶段会额外参考 `GlobalProfileRecord` 中的稳定画像
+- `GlobalProfileRecord` 是动态顶层补充，默认优先于任何下层索引
+- `Hop2` 不会看到 `L0`；层级关系严格是 `L2 -> L1 -> L0`
+- 时间选择由模型直接产出日期或时间窗口，插件只负责归一化和匹配
+- 项目选择由模型驱动，插件只做通用 shortlist，不写业务规则
+- 三跳共享同一个 `recallBudgetMs`
+- 任一跳超时都会立刻降级，不阻塞主回答
+- 当前未闭合的开放话题不会参与 recall，避免把草稿态记忆提前注入
+
+### 6.1 OpenClaw 宿主边界
+
+这里要严格区分两层：
+
+- `memory slot`
+  - 由 `youarememory-openclaw` 接管
+  - 这是动态对话记忆 provider
+- `Project Context`
+  - 这是 OpenClaw 宿主自己的 workspace bootstrap 注入
+  - 例如 `AGENTS.md / USER.md / MEMORY.md / BOOTSTRAP.md`
+
+当前实现的目标是：
+
+- 用插件完全接管动态对话记忆
+- 关闭原生动态 memory 的并行配置
+- 不自动改写用户的 workspace bootstrap 文件
+- 在 `appendSystemContext` 里加入 YouAreMemory 运行时合同，明确“记忆问题优先相信插件注入证据；只有用户明确要看文件时才去读 workspace 文件”
 
 ---
 

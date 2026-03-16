@@ -59,6 +59,34 @@ openclaw gateway status --json
 
 - `http://127.0.0.1:39393/youarememory/`
 
+## OpenClaw 原生 memory 和本插件是什么关系
+
+很多人第一次接上 YouAreMemory 时，会误以为 OpenClaw 还在用它自己的原生 memory。这里要先分清两层边界：
+
+- `memory slot`
+  - 这是回答前的动态记忆 provider
+  - 现在应该由 `youarememory-openclaw` 接管
+- `Project Context`
+  - 这是 OpenClaw 宿主自己的 workspace bootstrap 注入链路
+  - 它会继续把 `AGENTS.md / USER.md / MEMORY.md / BOOTSTRAP.md` 之类文件放进系统提示
+  - 这不是 memory slot，也不是我们插件应该去重写的东西
+
+YouAreMemory 的目标是：**完全替代动态对话记忆**，但**不修改用户 workspace 文件**。也就是说：
+
+- 回答前的动态历史记忆，由 YouAreMemory 负责
+- OpenClaw 的 workspace bootstrap 仍然是宿主静态上下文
+- 插件会在自己的 system-context 合同里明确“本轮该信谁”
+- 插件不会自动改写 `~/.openclaw/workspace/*`
+
+为了避免 OpenClaw 原生动态 memory 和我们并行工作，这个仓库默认会收口这些配置：
+
+- `plugins.slots.memory = "youarememory-openclaw"`
+- `plugins.entries.memory-core.enabled = false`
+- `hooks.internal.entries.session-memory.enabled = false`
+- `agents.defaults.memorySearch.enabled = false`
+- `agents.defaults.compaction.memoryFlush.enabled = false`
+- 插件不再暴露 `memory_search`
+
 ## 日常怎么用
 
 正常对话就行，不需要手动调用工具。
@@ -89,6 +117,7 @@ npm run reload:memory-plugin
 
 - 构建当前插件
 - 确认 `memory` slot 指向 `youarememory-openclaw`
+- 关闭 OpenClaw 原生动态 memory 的并行配置
 - 启用插件
 - 重启 gateway
 - 校验插件和网关状态
@@ -157,6 +186,10 @@ PY
 - 最近 `L1`
 - 最近 `L0`
 - 单例全局画像
+- 当前 `memory slot` 是否真的是我们
+- 当前动态记忆运行时是否健康
+- 宿主 workspace bootstrap 是否存在
+- 最近一次 recall 是否真的注入了我们的记忆
 
 它主要用来回答三个问题：
 
@@ -194,6 +227,15 @@ docs/memory-design.md
 3. 打开看板或直接去 OpenClaw 对话验证
 4. 如果改动影响旧索引结构，用“清空并重建”
 
+如果你在改推理链路，最重要的入口是：
+
+- `packages/openclaw-memory-plugin/src/runtime.ts`
+  - OpenClaw `before_prompt_build` 的实际注入点
+- `packages/openclaw-memory-plugin/src/core/retrieval/reasoning-loop.ts`
+  - 三跳动态检索、逐层下钻、本地 fallback
+- `packages/openclaw-memory-plugin/src/tools.ts`
+  - 暴露给 OpenClaw 的工具面
+
 如果你只是在调 TS 编译：
 
 ```bash
@@ -215,7 +257,6 @@ youarememory/
 ├── docs/
 │   ├── memory-design.md                 # 设计说明
 │   ├── code-review-guide.md             # 代码审查入口
-│   └── openclaw-beginner-guide.md       # 旧入口，现已跳转到本 README
 └── scripts/                             # reload / relink 等辅助脚本
 ```
 

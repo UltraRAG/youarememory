@@ -155,23 +155,16 @@ function normalizeIndexingSettings(
   input: Partial<IndexingSettings> | undefined,
   defaults: IndexingSettings,
 ): IndexingSettings {
-  const autoIndexIntervalMinutes = typeof input?.autoIndexIntervalMinutes === "number" && Number.isFinite(input.autoIndexIntervalMinutes)
-    ? Math.max(0, Math.floor(input.autoIndexIntervalMinutes))
-    : defaults.autoIndexIntervalMinutes;
-  const recallBudgetMs = typeof input?.recallBudgetMs === "number" && Number.isFinite(input.recallBudgetMs)
-    ? Math.max(100, Math.floor(input.recallBudgetMs))
-    : defaults.recallBudgetMs;
-  const indexIdleDebounceMs = typeof input?.indexIdleDebounceMs === "number" && Number.isFinite(input.indexIdleDebounceMs)
-    ? Math.max(200, Math.floor(input.indexIdleDebounceMs))
-    : defaults.indexIdleDebounceMs;
-  const fastRecallFallbackEnabled = typeof input?.fastRecallFallbackEnabled === "boolean"
-    ? input.fastRecallFallbackEnabled
-    : defaults.fastRecallFallbackEnabled;
+  const legacy = input as Record<string, unknown> | undefined;
+  const reasoningMode = input?.reasoningMode === "accuracy_first" ? "accuracy_first" : "answer_first";
+  const rawLatency = typeof input?.maxAutoReplyLatencyMs === "number" && Number.isFinite(input.maxAutoReplyLatencyMs)
+    ? input.maxAutoReplyLatencyMs
+    : typeof legacy?.recallBudgetMs === "number" && Number.isFinite(legacy.recallBudgetMs)
+      ? legacy.recallBudgetMs
+      : defaults.maxAutoReplyLatencyMs;
   return {
-    autoIndexIntervalMinutes,
-    recallBudgetMs,
-    indexIdleDebounceMs,
-    fastRecallFallbackEnabled,
+    reasoningMode,
+    maxAutoReplyLatencyMs: Math.max(300, Math.floor(rawLatency)),
   };
 }
 
@@ -671,6 +664,14 @@ export class MemoryRepository {
     return row ? parseL2TimeRow(row) : undefined;
   }
 
+  getL2TimeByIds(ids: string[]): L2TimeIndexRecord[] {
+    if (ids.length === 0) return [];
+    const placeholders = ids.map(() => "?").join(", ");
+    const stmt = this.db.prepare(`SELECT * FROM l2_time_indexes WHERE l2_index_id IN (${placeholders}) ORDER BY updated_at DESC`);
+    const rows = stmt.all(...ids) as DbRow[];
+    return rows.map(parseL2TimeRow);
+  }
+
   upsertL2TimeIndex(index: L2TimeIndexRecord): void {
     const previous = this.getL2TimeByDate(index.dateKey);
     const now = nowIso();
@@ -725,6 +726,14 @@ export class MemoryRepository {
     const stmt = this.db.prepare("SELECT * FROM l2_project_indexes WHERE project_key = ?");
     const row = stmt.get(projectKey) as DbRow | undefined;
     return row ? parseL2ProjectRow(row) : undefined;
+  }
+
+  getL2ProjectByIds(ids: string[]): L2ProjectIndexRecord[] {
+    if (ids.length === 0) return [];
+    const placeholders = ids.map(() => "?").join(", ");
+    const stmt = this.db.prepare(`SELECT * FROM l2_project_indexes WHERE l2_index_id IN (${placeholders}) ORDER BY updated_at DESC`);
+    const rows = stmt.all(...ids) as DbRow[];
+    return rows.map(parseL2ProjectRow);
   }
 
   upsertL2ProjectIndex(index: L2ProjectIndexRecord): void {
@@ -1097,10 +1106,8 @@ export class MemoryRepository {
     return {
       overview: this.getOverview(),
       settings: this.getIndexingSettings({
-        autoIndexIntervalMinutes: 60,
-        recallBudgetMs: 700,
-        indexIdleDebounceMs: 2500,
-        fastRecallFallbackEnabled: true,
+        reasoningMode: "answer_first",
+        maxAutoReplyLatencyMs: 1800,
       }),
       recentTimeIndexes: this.listRecentL2Time(limit),
       recentProjectIndexes: this.listRecentL2Projects(limit),

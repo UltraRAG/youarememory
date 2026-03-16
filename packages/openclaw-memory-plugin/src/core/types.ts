@@ -23,12 +23,11 @@ export interface FactCandidate {
 }
 
 export type ProjectStatus = "planned" | "in_progress" | "blocked" | "on_hold" | "done" | "unknown";
+export type ReasoningMode = "answer_first" | "accuracy_first";
 
 export interface IndexingSettings {
-  autoIndexIntervalMinutes: number;
-  recallBudgetMs: number;
-  indexIdleDebounceMs: number;
-  fastRecallFallbackEnabled: boolean;
+  reasoningMode: ReasoningMode;
+  maxAutoReplyLatencyMs: number;
 }
 
 export interface ActiveTopicBufferRecord {
@@ -131,7 +130,7 @@ export interface L0SearchResult {
 export interface RetrievalResult {
   query: string;
   intent: IntentType;
-  enoughAt: "l2" | "l1" | "l0" | "none";
+  enoughAt: "profile" | "l2" | "l1" | "l0" | "none";
   profile: GlobalProfileRecord | null;
   l2Results: L2SearchResult[];
   l1Results: L1SearchResult[];
@@ -141,6 +140,21 @@ export interface RetrievalResult {
     mode: "llm" | "local_fallback" | "none";
     elapsedMs: number;
     cacheHit: boolean;
+    path?: "auto" | "explicit" | "shadow";
+    budgetLimited?: boolean;
+    shadowDeepQueued?: boolean;
+    hop1BaseOnly?: boolean;
+    hop1LookupQueries?: Array<{
+      targetTypes: Array<"time" | "project">;
+      lookupQuery: string;
+    }>;
+    hop2EnoughAt?: "l2" | "descend_l1" | "none";
+    hop2SelectedL2Ids?: string[];
+    hop3EnoughAt?: "l1" | "descend_l0" | "none";
+    hop3SelectedL1Ids?: string[];
+    hop4SelectedL0Ids?: string[];
+    catalogTruncated?: boolean;
+    corrections?: string[];
   };
 }
 
@@ -158,6 +172,18 @@ export interface DashboardOverview {
   lastRecallMs: number;
   recallTimeouts: number;
   lastRecallMode: RecallMode;
+  currentReasoningMode?: ReasoningMode;
+  lastRecallPath?: "auto" | "explicit" | "shadow";
+  lastRecallBudgetLimited?: boolean;
+  lastShadowDeepQueued?: boolean;
+  lastRecallInjected?: boolean;
+  lastRecallEnoughAt?: RetrievalResult["enoughAt"];
+  lastRecallCacheHit?: boolean;
+  slotOwner?: string;
+  dynamicMemoryRuntime?: string;
+  workspaceBootstrapPresent?: boolean;
+  memoryRuntimeHealthy?: boolean;
+  runtimeIssues?: string[];
   lastIndexedAt?: string;
 }
 

@@ -42,7 +42,12 @@ export function buildPluginTools(
           return jsonResult({ ok: false, error: "query is required" });
         }
         const limit = toLimit(input.limit, 6);
-        const result = await retriever.retrieve(query, { l2Limit: limit, l1Limit: limit, l0Limit: Math.max(3, Math.floor(limit / 2)) });
+        const result = await retriever.retrieve(query, {
+          retrievalMode: "explicit",
+          l2Limit: limit,
+          l1Limit: limit,
+          l0Limit: Math.max(3, Math.floor(limit / 2)),
+        });
         return jsonResult({ ok: true, ...result });
       },
     },
@@ -130,26 +135,6 @@ export function buildPluginTools(
         const limit = toLimit(input.limit, 6);
         const results = await retriever.searchL0(query, ids, limit);
         return jsonResult({ ok: true, count: results.length, results });
-      },
-    },
-    {
-      name: "memory_search",
-      label: "Alias: Memory Search",
-      description: "Alias tool that maps to memory_recall for compatibility.",
-      parameters: {
-        type: "object",
-        properties: {
-          query: { type: "string" },
-          limit: { type: "number" },
-        },
-        required: ["query"],
-      },
-      async execute(_id, params) {
-        const input = (params ?? {}) as Record<string, unknown>;
-        const query = typeof input.query === "string" ? input.query : "";
-        const limit = toLimit(input.limit, 6);
-        const result = await retriever.retrieve(query, { l2Limit: limit, l1Limit: limit, l0Limit: Math.max(3, Math.floor(limit / 2)) });
-        return jsonResult({ ok: true, alias: "memory_recall", ...result });
       },
     },
   ];

@@ -21,7 +21,25 @@ export interface UiServerControls {
   getSettings: () => IndexingSettings;
   saveSettings: (partial: Partial<IndexingSettings>) => IndexingSettings;
   runIndexNow: () => Promise<HeartbeatStats>;
-  getRuntimeOverview: () => Pick<DashboardOverview, "queuedSessions" | "lastRecallMs" | "recallTimeouts" | "lastRecallMode">;
+  getRuntimeOverview: () => Pick<
+    DashboardOverview,
+    | "queuedSessions"
+    | "lastRecallMs"
+    | "recallTimeouts"
+    | "lastRecallMode"
+    | "currentReasoningMode"
+    | "lastRecallPath"
+    | "lastRecallBudgetLimited"
+    | "lastShadowDeepQueued"
+    | "lastRecallInjected"
+    | "lastRecallEnoughAt"
+    | "lastRecallCacheHit"
+    | "slotOwner"
+    | "dynamicMemoryRuntime"
+    | "workspaceBootstrapPresent"
+    | "memoryRuntimeHealthy"
+    | "runtimeIssues"
+  >;
 }
 
 const CONTENT_TYPES: Record<string, string> = {
@@ -229,6 +247,7 @@ export class LocalUiServer {
       return sendJson(
         res,
         await this.retriever.retrieve(query, {
+          retrievalMode: "explicit",
           l2Limit: limit,
           l1Limit: limit,
           l0Limit: Math.max(3, Math.floor(limit / 2)),

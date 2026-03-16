@@ -48,9 +48,21 @@
         "type": "integer",
         "default": 60
       },
+      "reasoningMode": {
+        "type": "string",
+        "enum": [
+          "answer_first",
+          "accuracy_first"
+        ],
+        "default": "answer_first"
+      },
+      "maxAutoReplyLatencyMs": {
+        "type": "integer",
+        "default": 1800
+      },
       "recallBudgetMs": {
         "type": "integer",
-        "default": 700
+        "default": 1800
       },
       "indexIdleDebounceMs": {
         "type": "integer",
@@ -103,17 +115,13 @@
       "label": "Auto Index Interval",
       "placeholder": "60"
     },
-    "recallBudgetMs": {
-      "label": "Recall Budget (ms)",
-      "placeholder": "700"
+    "reasoningMode": {
+      "label": "Reasoning Mode",
+      "help": "answer_first stops when reply latency budget is about to run out; accuracy_first prefers full recursive memory retrieval."
     },
-    "indexIdleDebounceMs": {
-      "label": "Idle Index Delay (ms)",
-      "placeholder": "2500"
-    },
-    "fastRecallFallbackEnabled": {
-      "label": "Fallback On Timeout",
-      "help": "When the fast memory selector times out, inject local profile/L2 memory instead of blocking the main reply."
+    "maxAutoReplyLatencyMs": {
+      "label": "Max Auto Reply Latency (ms)",
+      "placeholder": "1800"
     },
     "uiEnabled": {
       "label": "Enable Local UI",
