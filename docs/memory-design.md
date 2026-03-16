@@ -4,7 +4,7 @@
 
 1. 项目为什么采用“plugin 优先 + skills 配置化”
 2. `indexed`、`createdAt`、`updatedAt`、`source` 分别做什么
-3. L0、L1、L2 与 `GlobalFactRecord` 的最终数据结构长什么样
+3. L0、L1、L2 与 `GlobalProfileRecord` 的最终数据结构长什么样
 4. 索引构建与推理链路如何工作
 
 ---
@@ -35,7 +35,7 @@ YouAreMemory 通过多级索引升级 OpenClaw 的记忆机制，目标是保持
 
 - `skills` 不能稳定接管 OpenClaw 生命周期事件
 - 自动采集 L0 需要监听 `agent_end`
-- 自动注入记忆上下文需要挂在 `before_prompt_build` / `before_agent_start`
+- 自动注入记忆上下文需要挂在 `before_prompt_build`
 - 工具注册和本地 UI 服务也依赖 plugin runtime
 
 因此当前推荐形态是：
@@ -54,7 +54,7 @@ YouAreMemory 通过多级索引升级 OpenClaw 的记忆机制，目标是保持
 作用：
 
 - 标记这条 L0 是否已经被 heartbeat 消费过
-- `false` 表示还没生成 L1/L2/GlobalFact
+- `false` 表示还没生成 L1/L2/GlobalProfile
 - `true` 表示已经完成上层索引构建
 
 为什么需要：
@@ -71,7 +71,7 @@ YouAreMemory 通过多级索引升级 OpenClaw 的记忆机制，目标是保持
 - L0：原始会话首次落库
 - L1：结构化窗口首次生成
 - L2：某个时间/项目聚合索引首次出现
-- GlobalFact：某条事实或整个单例画像首次创建
+- GlobalProfile：单例画像首次创建
 
 ### `updatedAt`
 
@@ -81,8 +81,8 @@ YouAreMemory 通过多级索引升级 OpenClaw 的记忆机制，目标是保持
 
 - `L2TimeIndexRecord`
 - `L2ProjectIndexRecord`
-- `GlobalFactItem`
-- `GlobalFactRecord`
+- `FactCandidate`
+- `GlobalProfileRecord`
 
 含义：
 
@@ -116,7 +116,7 @@ YouAreMemory 通过多级索引升级 OpenClaw 的记忆机制，目标是保持
 约束：
 
 - `L0`、`L1`、`L2` 都是列表型结构
-- `GlobalFactRecord` 是单例，全局只维护一份，会被不断覆盖更新
+- `GlobalProfileRecord` 是单例，全局只维护一份，会被不断覆盖更新
 
 ### 4.1 L0SessionRecord
 
@@ -260,35 +260,18 @@ YouAreMemory 通过多级索引升级 OpenClaw 的记忆机制，目标是保持
 }
 ```
 
-### 4.5 GlobalFactRecord（单例）
+### 4.5 GlobalProfileRecord（单例）
 
 ```jsonc
 {
   // 固定单例 ID，永远只有一条
-  "recordId": "global_fact_record",
+  "recordId": "global_profile_record",
 
-  // 当前全局画像中的事实列表
-  "facts": [
-    {
-      // 事实键，作为事实主键
-      "factKey": "project:ultrarag",
+  // 当前全局画像摘要
+  "profileText": "用户正在推进 OpenClaw 记忆插件开发，偏好中文交流，长期关注论文写作和产品化落地。",
 
-      // 事实值
-      "factValue": "用户当前在推进 UltraRAG 相关开发",
-
-      // 置信度
-      "confidence": 0.92,
-
-      // 支撑这条事实的 L1 来源
-      "sourceL1Ids": ["l1_g325gsa", "l1_8ad31c"],
-
-      // 事实首次出现时间
-      "createdAt": "2026-03-11T07:54:18.990Z",
-
-      // 最近一次更新时间
-      "updatedAt": "2026-03-11T09:10:41.003Z"
-    }
-  ],
+  // 这份画像主要由哪些 L1 窗口重写出来
+  "sourceL1Ids": ["l1_g325gsa", "l1_8ad31c"],
 
   // 单例画像首次创建时间
   "createdAt": "2026-03-11T07:54:18.990Z",
@@ -300,45 +283,49 @@ YouAreMemory 通过多级索引升级 OpenClaw 的记忆机制，目标是保持
 
 注意：
 
-- `facts` 内部每条事实会被持续覆盖和合并
-- 顶层 `GlobalFactRecord` 不再一条 fact 一行存储
+- `profileText` 是一段会持续被重写的稳定画像摘要
+- `sourceL1Ids` 表示这份画像主要参考了哪些 `L1`
 - 现在只维护一份单例画像
 
 ---
 
 ## 5. 索引构建过程
 
-heartbeat 每次消费一批未索引的 `L0`，但不再是“一条 L0 直接生成一条 L1”：
+当前实现不是按时间窗切 `L1`，而是按话题闭合来构建：
 
-1. 先按 `sessionKey` 聚合未索引的 `L0`
-2. 再按 `L1` 窗口规则切分：
-   - `l1WindowMode = "time"` 时使用 `l1WindowMinutes`
-   - `l1WindowMode = "count"` 时使用 `l1WindowMaxL0`
-3. 每个窗口抽取得到一个 `L1`
-4. 基于 `L1.startedAt + L1.summary` 更新 `L2Time`
-5. 基于 `L1.projectDetails + L1.summary` 更新 `L2Project`
-6. 基于 `L1.facts` 更新 `GlobalFactRecord`
-7. 把该窗口覆盖到的 `L0.indexed` 标记为 `true`
+1. 每轮对话先落一条 `L0`
+2. 同一 session 的新增 `L0` 会进入空闲队列，而不是立刻同步建索引
+3. 当用户空闲达到 debounce 时间、切到新 session、手动点击“立即构建”或定时任务触发时，开始消费待处理 `L0`
+4. 先读取当前 session 的 `active_topic_buffers`
+5. 只基于当前区间内的用户消息做话题转变判断
+6. 如果话题未变，就把新的 `L0` 并入当前开放话题
+7. 如果话题已闭合，就基于上一个话题窗口内的全部 `L0` 构建一个正式 `L1`
+8. 每次新 `L1` 生成后：
+   - 更新当日 `L2Time`
+   - 更新或归并 `L2Project`
+   - 重写单例 `GlobalProfileRecord`
+9. 被消费过的 `L0` 会标记为 `indexed = true`
 
 当前支持三种触发索引构建的方式：
 
 - 定时触发：`autoIndexIntervalMinutes`
-- 新 session 边界触发：用户在 OpenClaw 切到 `/new` 后，旧 session 的待索引 L0 会被立即消费
+- 新 session 边界触发：用户切到新对话后，旧 session 的开放话题会被立即消费
 - 看板手动触发：点击“立即构建”
+- reset 边界触发：`before_reset` 会对当前 session 做 best-effort flush
 
 当前默认采集策略：
 
 - `captureStrategy = "full_session"`
 - `autoIndexIntervalMinutes = 60`
-- `l1WindowMode = "time"`
-- `l1WindowMinutes = 120`
-- `l1WindowMaxL0 = 8`
-- `l2TimeGranularity = "day"`
+- `indexIdleDebounceMs = 2500`
+- `recallBudgetMs = 700`
+- `fastRecallFallbackEnabled = true`
 
 原因：
 
 - 更符合 L0“原始对话日志”的设计定义
-- 比 `last_turn` 更适合作为上层抽取的根数据
+- 话题闭合比时间窗更接近真实记忆单元
+- 空闲后再索引可以减少回答路径阻塞
 
 `last_turn` 仍保留，但仅作为轻量模式。
 
@@ -363,13 +350,13 @@ while true:
 
 - 时间问题优先命中 `L2Time`
 - 项目问题优先命中 `L2Project`
-- 检索阶段会额外参考 `GlobalFactRecord` 中的动态事实
+- 检索阶段会额外参考 `GlobalProfileRecord` 中的稳定画像
 
 ---
 
 ## 7. 升级说明
 
-新版已经把动态事实切换到单例 `global_fact_record`：
+新版已经把全局画像切换到单例 `global_profile_record`：
 
 - 旧版 `global_facts` 不再作为主读取来源
 - 当前版本不提供自动迁移脚本
@@ -380,4 +367,4 @@ while true:
 1. 升级插件
 2. 打开本地看板
 3. 使用“清空并重建”
-4. 让后续对话重新生成新的 L0/L1/L2/GlobalFact
+4. 让后续对话重新生成新的 L0/L1/L2/GlobalProfile

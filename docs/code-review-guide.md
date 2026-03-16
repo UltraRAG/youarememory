@@ -13,8 +13,14 @@
 ### 插件入口与生命周期
 
 - `packages/openclaw-memory-plugin/src/index.ts`
-  - `before_prompt_build` / `before_agent_start`
+  - runtime 组装、tools 注册、hook 注册
+- `packages/openclaw-memory-plugin/src/runtime.ts`
+  - 运行态 service、queue、timer、`before_reset` flush
+- `packages/openclaw-memory-plugin/src/hooks.ts`
+  - `before_prompt_build`
+  - `before_message_write`
   - `agent_end`
+  - `before_reset`
 
 ### 记忆构建与检索
 
@@ -27,8 +33,8 @@
 重点关注：
 
 - `L0` 默认是否按 `full_session` 采集
-- `GlobalFactRecord` 是否仍保持单例模型
-- `MemoryUiSnapshot` 是否直接返回 `recentL1Windows + globalFact`
+- `GlobalProfileRecord` 是否仍保持单例模型
+- `MemoryUiSnapshot` 是否直接返回 `recentL1Windows + globalProfile`
 
 ### 工具与 UI
 

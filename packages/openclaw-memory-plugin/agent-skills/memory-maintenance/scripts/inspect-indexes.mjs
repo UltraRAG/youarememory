@@ -43,7 +43,7 @@ const summary = {
     l1_windows: count("l1_windows"),
     l2_time_indexes: count("l2_time_indexes"),
     l2_project_indexes: count("l2_project_indexes"),
-    global_facts: count("global_facts"),
+    global_profile_record: count("global_profile_record"),
     index_links: count("index_links"),
   },
   state: {
