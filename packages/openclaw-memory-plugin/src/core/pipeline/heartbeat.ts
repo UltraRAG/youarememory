@@ -2,12 +2,14 @@ import type {
   ActiveTopicBufferRecord,
   IndexingSettings,
   L0SessionRecord,
+  L1WindowRecord,
+  L2ProjectIndexRecord,
   MemoryMessage,
   ProjectDetail,
 } from "../types.js";
 import { buildL0IndexId, nowIso } from "../utils/id.js";
 import { extractL1FromWindow } from "../indexers/l1-extractor.js";
-import { buildL2ProjectsFromL1, buildL2TimeFromL1 } from "../indexers/l2-builder.js";
+import { buildL2ProjectFromDetail, buildL2TimeFromL1 } from "../indexers/l2-builder.js";
 import { LlmMemoryExtractor } from "../skills/llm-extraction.js";
 import { MemoryRepository } from "../storage/sqlite.js";
 
@@ -106,21 +108,130 @@ function buildLocalDateKey(timestamp: string): string {
   return `${year}-${month}-${day}`;
 }
 
-function mergeProjectDetail(existing: ProjectDetail, incoming: ProjectDetail): ProjectDetail {
-  const statusRank: Record<ProjectDetail["status"], number> = {
-    blocked: 5,
-    in_progress: 4,
-    planned: 3,
-    on_hold: 2,
-    done: 1,
-    unknown: 0,
+const PROJECT_STATUS_RANK: Record<ProjectDetail["status"], number> = {
+  blocked: 5,
+  in_progress: 4,
+  planned: 3,
+  on_hold: 2,
+  done: 1,
+  unknown: 0,
+};
+
+const GENERIC_PROJECT_SUMMARY_PATTERNS = [
+  /^(用户|我).{0,12}(正在|目前|继续|开始|还在)/,
+  /^(正在|目前).{0,16}(推进|处理|做|写|准备)/,
+  /(进展顺利|进展还可以|还可以|持续推进|正在推进|正在处理|目前顺利|目前正常)/,
+];
+
+type ProjectRewriteContext = {
+  incomingProject: ProjectDetail;
+  existingProject: L2ProjectIndexRecord | null;
+  recentWindows: L1WindowRecord[];
+};
+
+function truncateProjectText(value: string, maxLength: number): string {
+  const normalized = value.trim();
+  if (normalized.length <= maxLength) return normalized;
+  return normalized.slice(0, maxLength).trim();
+}
+
+function normalizeComparableProjectText(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/\s+/g, "")
+    .replace(/[，。；;、,:：!?！？"'`~\-_/\\()[\]{}]/g, "");
+}
+
+function preferProjectStatus(existing: ProjectDetail["status"], incoming: ProjectDetail["status"]): ProjectDetail["status"] {
+  return PROJECT_STATUS_RANK[incoming] >= PROJECT_STATUS_RANK[existing] ? incoming : existing;
+}
+
+function chooseProjectName(existingName: string, incomingName: string): string {
+  return incomingName.length >= existingName.length ? incomingName : existingName;
+}
+
+function isWeakProjectSummary(summary: string, projectName: string, latestProgress: string): boolean {
+  const normalized = normalizeComparableProjectText(summary);
+  if (!normalized) return true;
+
+  const normalizedName = normalizeComparableProjectText(projectName);
+  const normalizedLatest = normalizeComparableProjectText(latestProgress);
+  if (normalized.length <= Math.max(10, normalizedName.length + 4)) return true;
+  if (normalizedLatest && (normalized === normalizedLatest || normalized.endsWith(normalizedLatest))) return true;
+  if (GENERIC_PROJECT_SUMMARY_PATTERNS.some((pattern) => pattern.test(summary)) && !summary.includes(projectName)) return true;
+  return false;
+}
+
+function chooseRicherProjectSummary(existingSummary: string, incomingSummary: string, projectName: string, latestProgress: string): string {
+  const normalizedExisting = truncateProjectText(existingSummary, 360);
+  const normalizedIncoming = truncateProjectText(incomingSummary, 360);
+  const existingWeak = isWeakProjectSummary(normalizedExisting, projectName, latestProgress);
+  const incomingWeak = isWeakProjectSummary(normalizedIncoming, projectName, latestProgress);
+
+  if (normalizedExisting && !existingWeak && (incomingWeak || normalizedExisting.length >= normalizedIncoming.length)) {
+    return normalizedExisting;
+  }
+  if (normalizedIncoming && !incomingWeak) return normalizedIncoming;
+  return normalizedIncoming || normalizedExisting;
+}
+
+function mergeDistinctProjectText(base: string, addition: string, maxLength = 360): string {
+  const normalizedBase = truncateProjectText(base, maxLength);
+  const normalizedAddition = truncateProjectText(addition, maxLength);
+  if (!normalizedAddition) return normalizedBase;
+  if (!normalizedBase) return normalizedAddition;
+
+  const comparableBase = normalizeComparableProjectText(normalizedBase);
+  const comparableAddition = normalizeComparableProjectText(normalizedAddition);
+  if (!comparableAddition || comparableBase.includes(comparableAddition) || comparableAddition.includes(comparableBase)) {
+    return normalizedBase;
+  }
+
+  const separator = /[。！？.!?]$/.test(normalizedBase) ? " " : "；";
+  return truncateProjectText(`${normalizedBase}${separator}${normalizedAddition}`, maxLength);
+}
+
+function chooseLatestProgress(existingProgress: string, incomingProgress: string, l1: L1WindowRecord): string {
+  return truncateProjectText(incomingProgress || existingProgress || l1.situationTimeInfo || l1.summary, 220);
+}
+
+function fallbackRewriteProjectDetail(context: ProjectRewriteContext, l1: L1WindowRecord, rewritten?: ProjectDetail): ProjectDetail {
+  const { incomingProject, existingProject } = context;
+  const latestProgress = chooseLatestProgress(
+    existingProject?.latestProgress ?? "",
+    rewritten?.latestProgress || incomingProject.latestProgress,
+    l1,
+  );
+  let summary = chooseRicherProjectSummary(
+    existingProject?.summary ?? "",
+    rewritten?.summary || incomingProject.summary,
+    incomingProject.name,
+    latestProgress,
+  );
+  summary = mergeDistinctProjectText(summary, incomingProject.summary, 360);
+  summary = mergeDistinctProjectText(summary, latestProgress, 360);
+  if (isWeakProjectSummary(summary, incomingProject.name, latestProgress)) {
+    summary = mergeDistinctProjectText(summary, l1.summary, 360);
+  }
+  summary = truncateProjectText(summary || incomingProject.summary || existingProject?.summary || incomingProject.name, 360);
+
+  return {
+    ...incomingProject,
+    name: chooseProjectName(existingProject?.projectName ?? "", rewritten?.name || incomingProject.name),
+    status: preferProjectStatus(existingProject?.currentStatus ?? "unknown", rewritten?.status ?? incomingProject.status),
+    summary,
+    latestProgress,
+    confidence: Math.max(incomingProject.confidence, rewritten?.confidence ?? 0),
   };
-  const preferredStatus = statusRank[incoming.status] >= statusRank[existing.status] ? incoming.status : existing.status;
+}
+
+function mergeProjectDetail(existing: ProjectDetail, incoming: ProjectDetail): ProjectDetail {
+  const preferredStatus = preferProjectStatus(existing.status, incoming.status);
   return {
     ...existing,
-    name: incoming.name.length >= existing.name.length ? incoming.name : existing.name,
+    name: chooseProjectName(existing.name, incoming.name),
     status: preferredStatus,
-    summary: incoming.summary || existing.summary,
+    summary: chooseRicherProjectSummary(existing.summary, incoming.summary, incoming.name, incoming.latestProgress),
     latestProgress: incoming.latestProgress || existing.latestProgress,
     confidence: Math.max(existing.confidence, incoming.confidence),
   };
@@ -180,6 +291,45 @@ async function canonicalizeL1Projects(
   }
 
   return Array.from(resolved.values());
+}
+
+async function rewriteRollingProjectMemories(
+  projects: ProjectDetail[],
+  l1: L1WindowRecord,
+  repository: MemoryRepository,
+  extractor: LlmMemoryExtractor,
+): Promise<ProjectDetail[]> {
+  if (projects.length === 0) return projects;
+
+  const contexts: ProjectRewriteContext[] = projects.map((incomingProject) => {
+    const existingProject = repository.getL2ProjectByKey(incomingProject.key) ?? null;
+    const recentWindowIds = existingProject?.l1Source.slice(-4) ?? [];
+    const recentWindows = recentWindowIds.length > 0 ? repository.getL1ByIds(recentWindowIds).slice(0, 4) : [];
+    return {
+      incomingProject,
+      existingProject,
+      recentWindows,
+    };
+  });
+
+  try {
+    const rewrittenProjects = await extractor.rewriteProjectMemories({
+      l1,
+      projects: contexts,
+    });
+    const rewrittenByKey = new Map(rewrittenProjects.map((project) => [project.key, project]));
+    return contexts.map((context) => {
+      const rewritten = rewrittenByKey.get(context.incomingProject.key);
+      if (!rewritten) return fallbackRewriteProjectDetail(context, l1);
+      const merged = fallbackRewriteProjectDetail(context, l1, rewritten);
+      if (isWeakProjectSummary(merged.summary, merged.name, merged.latestProgress)) {
+        return fallbackRewriteProjectDetail(context, l1);
+      }
+      return merged;
+    });
+  } catch {
+    return contexts.map((context) => fallbackRewriteProjectDetail(context, l1));
+  }
 }
 
 export class HeartbeatIndexer {
@@ -325,7 +475,8 @@ export class HeartbeatIndexer {
     this.repository.insertLink("l2", l2Time.l2IndexId, "l1", l1.l1IndexId);
     stats.l2TimeUpdated += 1;
 
-    const projectIndexes = buildL2ProjectsFromL1(l1);
+    const rollingProjects = await rewriteRollingProjectMemories(l1.projectDetails, l1, this.repository, this.extractor);
+    const projectIndexes = rollingProjects.map((project) => buildL2ProjectFromDetail(project, l1.l1IndexId));
     for (const l2Project of projectIndexes) {
       this.repository.upsertL2ProjectIndex(l2Project);
       this.repository.insertLink("l2", l2Project.l2IndexId, "l1", l1.l1IndexId);

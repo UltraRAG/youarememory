@@ -190,6 +190,18 @@ export interface LlmProjectBatchResolutionInput {
   agentId?: string;
 }
 
+export interface LlmProjectMemoryRewriteItem {
+  incomingProject: ProjectDetail;
+  existingProject: L2ProjectIndexRecord | null;
+  recentWindows: L1WindowRecord[];
+}
+
+export interface LlmProjectMemoryRewriteInput {
+  l1: L1WindowRecord;
+  projects: LlmProjectMemoryRewriteItem[];
+  agentId?: string;
+}
+
 export type LookupTargetType = "time" | "project";
 
 export interface LlmMemoryRouteInput {
@@ -290,6 +302,10 @@ Rules:
 - Extract facts only when they are likely to matter in future conversations: preferences, constraints, goals, identity, long-lived context, stable relationships, or durable project context.
 - The facts are intermediate material for a later global profile rewrite, so prefer stable facts over temporary situation notes.
 - Natural-language output fields must use the dominant language of the user messages. If user messages are mixed, prefer the most recent user language. Keys and enums must stay in English.
+- Each project summary must be a compact 1-2 sentence project memory, not a generic status line.
+- A good project summary should preserve: what the project is, what stage it is in now, and the next step / blocker / missing info when available.
+- Do not output vague summaries like "用户正在推进这个项目", "进展顺利", "还可以", or "正在处理某事" unless the project-specific context is also included.
+- latest_progress must stay short and only capture the newest meaningful update, newest blocker, or newest confirmation state.
 - Return valid JSON only. No markdown fences, no commentary.
 
 Use this exact JSON shape:
@@ -309,8 +325,8 @@ Use this exact JSON shape:
       "key": "stable english identifier, lower-kebab-case",
       "name": "project name as the user would recognize it",
       "status": "planned | in_progress | blocked | on_hold | done | unknown",
-      "summary": "short project summary",
-      "latest_progress": "latest meaningful progress or state",
+      "summary": "rolling 1-2 sentence summary: what this project is + current phase + next step/blocker when known",
+      "latest_progress": "short latest meaningful progress or blocker, without repeating the full project background",
       "confidence": 0.0
     }
   ]
@@ -368,6 +384,9 @@ Rules:
 - Resolved but substantial threads from the current window may still be kept with status "done" if they are a meaningful thread the user may refer back to.
 - Example pair of separate projects in one window: "friend's stomach illness and medicine follow-up" plus "EMNLP submission preparation".
 - Merge duplicates caused by wording differences.
+- For each project summary, write a compact 1-2 sentence project memory that explains what the project is, what phase it is in, and the next step / blocker / missing info when available.
+- Do not flatten summaries into generic text like "用户正在做某事", "进展还可以", or "正在推进".
+- latest_progress should stay short and only describe the newest concrete update.
 - Return JSON only.
 
 Use this exact JSON shape:
@@ -377,8 +396,8 @@ Use this exact JSON shape:
       "key": "stable english identifier, lower-kebab-case",
       "name": "project name as the user would recognize it",
       "status": "planned | in_progress | blocked | on_hold | done | unknown",
-      "summary": "short project summary",
-      "latest_progress": "latest meaningful progress or state",
+      "summary": "rolling 1-2 sentence summary: what this project is + current phase + next step/blocker when known",
+      "latest_progress": "short latest meaningful progress or blocker, without repeating the full project background",
       "confidence": 0.0
     }
   ]
@@ -416,6 +435,39 @@ Rules:
 Use this exact JSON shape:
 {
   "summary": "updated daily summary"
+}
+`.trim();
+
+const PROJECT_MEMORY_REWRITE_SYSTEM_PROMPT = `
+You maintain rolling L2 project memories for a conversational memory system.
+
+Rules:
+- Rewrite the full project memory for each incoming project using the existing L2 memory, recent linked L1 windows, and the new L1 window.
+- Preserve earlier project background and major stage transitions whenever they are still useful.
+- The new summary must not overwrite older context with only the newest update.
+- summary must be a compact 1-2 sentence rolling project memory that preserves:
+  1. what the project is,
+  2. important stage progression or milestones so far,
+  3. the current phase,
+  4. the next step / blocker / missing info when present.
+- latest_progress must stay short and only describe the newest meaningful update, blocker, or confirmation state.
+- Do not output generic summaries like "用户正在推进这个项目", "进展顺利", "还可以", or "正在处理某事" unless the project-specific context is explicitly preserved.
+- Keep each project's incoming key stable.
+- Natural-language output must follow the language used by the user in the new L1 window.
+- Return JSON only.
+
+Use this exact JSON shape:
+{
+  "projects": [
+    {
+      "key": "same stable english identifier as the incoming project",
+      "name": "project name as the user would recognize it",
+      "status": "planned | in_progress | blocked | on_hold | done | unknown",
+      "summary": "rolling 1-2 sentence project memory with background + stage progression + current phase + next step/blocker when known",
+      "latest_progress": "short latest meaningful progress or blocker",
+      "confidence": 0.0
+    }
+  ]
 }
 `.trim();
 
@@ -711,6 +763,8 @@ function buildPrompt(timestamp: string, messages: MemoryMessage[], extraInstruct
     "- projects should only include trackable ongoing efforts.",
     "- if there are two or more unrelated ongoing threads, list them as separate project entries.",
     "- health/caregiving/problem-management threads count as projects when they are ongoing across turns.",
+    "- each project summary should explain what the project is, what phase it is in, and the next step or blocker when available.",
+    "- avoid generic project summaries that only say progress is fine or ongoing.",
   ];
   if (preferredLanguage) {
     sections.push(`- Write all natural-language output fields in ${preferredLanguage}.`);
@@ -738,6 +792,7 @@ function buildProjectCompletionPrompt(input: {
     current_summary: input.summary,
     current_facts: input.facts,
     current_projects: input.projectDetails,
+    completion_goal: "Keep all meaningful ongoing projects. Each summary should preserve project background, current phase, and next step or blocker when available.",
   }, null, 2);
 }
 
@@ -767,6 +822,59 @@ function buildDailyTimeSummaryPrompt(input: LlmDailyTimeSummaryInput): string {
         value: truncateForPrompt(fact.factValue, 120),
       })).slice(0, 10),
     },
+  }, null, 2);
+}
+
+function buildProjectMemoryRewritePrompt(input: LlmProjectMemoryRewriteInput): string {
+  return JSON.stringify({
+    current_l1: {
+      id: input.l1.l1IndexId,
+      time_period: input.l1.timePeriod,
+      summary: truncateForPrompt(input.l1.summary, 220),
+      situation_time_info: truncateForPrompt(input.l1.situationTimeInfo, 220),
+      projects: input.l1.projectDetails.map((project) => ({
+        key: project.key,
+        name: project.name,
+        status: project.status,
+        summary: truncateForPrompt(project.summary, 220),
+        latest_progress: truncateForPrompt(project.latestProgress, 180),
+      })),
+    },
+    incoming_projects: input.projects.map((item) => ({
+      incoming_project: {
+        key: item.incomingProject.key,
+        name: item.incomingProject.name,
+        status: item.incomingProject.status,
+        summary: truncateForPrompt(item.incomingProject.summary, 240),
+        latest_progress: truncateForPrompt(item.incomingProject.latestProgress, 180),
+        confidence: item.incomingProject.confidence,
+      },
+      existing_project_memory: item.existingProject
+        ? {
+            project_key: item.existingProject.projectKey,
+            project_name: item.existingProject.projectName,
+            status: item.existingProject.currentStatus,
+            summary: truncateForPrompt(item.existingProject.summary, 320),
+            latest_progress: truncateForPrompt(item.existingProject.latestProgress, 180),
+          }
+        : null,
+      recent_stage_windows: item.recentWindows.slice(0, 5).map((window) => ({
+        id: window.l1IndexId,
+        time_period: window.timePeriod,
+        summary: truncateForPrompt(window.summary, 180),
+        situation_time_info: truncateForPrompt(window.situationTimeInfo, 180),
+        matching_project_details: window.projectDetails
+          .filter((project) => project.key === item.incomingProject.key || project.name === item.incomingProject.name)
+          .slice(0, 2)
+          .map((project) => ({
+            key: project.key,
+            name: project.name,
+            status: project.status,
+            summary: truncateForPrompt(project.summary, 180),
+            latest_progress: truncateForPrompt(project.latestProgress, 160),
+          })),
+      })),
+    })),
   }, null, 2);
 }
 
@@ -991,7 +1099,7 @@ function normalizeProjectDetails(items: unknown): ProjectDetail[] {
       key: stableKey,
       name: truncate(name, 80),
       status: normalizeStatus(raw.status),
-      summary: truncate(typeof raw.summary === "string" ? normalizeWhitespace(raw.summary) : "", 220),
+      summary: truncate(typeof raw.summary === "string" ? normalizeWhitespace(raw.summary) : "", 360),
       latestProgress: truncate(typeof raw.latest_progress === "string" ? normalizeWhitespace(raw.latest_progress) : "", 220),
       confidence: clampConfidence(raw.confidence, 0.7),
     });
@@ -1541,6 +1649,41 @@ export class LlmMemoryExtractor {
       this.logger?.warn?.(`[youarememory] daily summary fallback: ${String(error)}`);
     }
     return truncate(input.l1.situationTimeInfo || input.l1.summary || input.existingSummary, 280);
+  }
+
+  async rewriteProjectMemories(input: LlmProjectMemoryRewriteInput): Promise<ProjectDetail[]> {
+    if (input.projects.length === 0) return [];
+
+    const fallbackProjects = input.projects.map((item) => item.incomingProject);
+    try {
+      const raw = await this.callStructuredJson({
+        systemPrompt: PROJECT_MEMORY_REWRITE_SYSTEM_PROMPT,
+        userPrompt: buildProjectMemoryRewritePrompt(input),
+        requestLabel: "Project memory rewrite",
+        timeoutMs: 20_000,
+        ...(input.agentId ? { agentId: input.agentId } : {}),
+      });
+      const parsed = JSON.parse(extractFirstJsonObject(raw)) as RawExtractionPayload;
+      const rewritten = normalizeProjectDetails(parsed.projects);
+      if (rewritten.length === 0) throw new Error("Project memory rewrite returned no projects");
+
+      const rewrittenByKey = new Map(rewritten.map((project) => [project.key, project]));
+      return fallbackProjects.map((project) => {
+        const next = rewrittenByKey.get(project.key);
+        if (!next) return project;
+        return {
+          ...project,
+          name: next.name || project.name,
+          status: next.status,
+          summary: next.summary || project.summary,
+          latestProgress: next.latestProgress || project.latestProgress,
+          confidence: Math.max(project.confidence, next.confidence),
+        };
+      });
+    } catch (error) {
+      this.logger?.warn?.(`[youarememory] project memory rewrite fallback: ${String(error)}`);
+      throw error;
+    }
   }
 
   async rewriteGlobalProfile(input: LlmGlobalProfileInput): Promise<string> {
