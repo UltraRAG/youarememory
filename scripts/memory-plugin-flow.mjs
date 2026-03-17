@@ -7,11 +7,20 @@ import { fileURLToPath } from "node:url";
 
 const PLUGIN_ID = "youarememory-openclaw";
 const WORKSPACE_NAME = "@youarememory/youarememory-openclaw";
-const RESTART_TIMEOUT_MS = 8_000;
+const RESTART_TIMEOUT_MS = process.platform === "win32" ? 15_000 : 8_000;
 const RESTART_KILL_GRACE_MS = 1_000;
-const HEALTH_TIMEOUT_MS = 20_000;
-const HEALTH_POLL_MS = 750;
+const HEALTH_TIMEOUT_MS = process.platform === "win32" ? 45_000 : 20_000;
+const HEALTH_POLL_MS = process.platform === "win32" ? 1_000 : 750;
 const SHORT_COMMAND_TIMEOUT_MS = 3_000;
+const ANSI = {
+  reset: "\u001b[0m",
+  bold: "\u001b[1m",
+  dim: "\u001b[2m",
+  cyan: "\u001b[36m",
+  green: "\u001b[32m",
+  yellow: "\u001b[33m",
+  red: "\u001b[31m",
+};
 
 function resolveRepoRoot(importMetaUrl) {
   return path.resolve(path.dirname(fileURLToPath(importMetaUrl)), "..");
@@ -37,7 +46,36 @@ function sleep(ms) {
 }
 
 function printStep(label) {
-  console.log(`\n==> ${label}`);
+  console.log(`\n${paint(">", ANSI.cyan, ANSI.bold)} ${paint(label, ANSI.bold)}`);
+}
+
+function supportsColor() {
+  return Boolean(process.stdout?.isTTY) && process.env.NO_COLOR !== "1";
+}
+
+function paint(text, ...styles) {
+  if (!supportsColor() || styles.length === 0) return text;
+  return `${styles.join("")}${text}${ANSI.reset}`;
+}
+
+function printBanner(title, subtitle = "") {
+  console.log("");
+  console.log(paint(title, ANSI.bold, ANSI.cyan));
+  if (subtitle) {
+    console.log(paint(subtitle, ANSI.dim));
+  }
+}
+
+function printSuccess(label, detail = "") {
+  console.log(`${paint("OK", ANSI.green, ANSI.bold)} ${label}${detail ? ` ${paint(detail, ANSI.dim)}` : ""}`);
+}
+
+function printWarn(label, detail = "") {
+  console.warn(`${paint("WARN", ANSI.yellow, ANSI.bold)} ${label}${detail ? ` ${paint(detail, ANSI.dim)}` : ""}`);
+}
+
+function printInfo(label, detail = "") {
+  console.log(`${paint("INFO", ANSI.cyan, ANSI.bold)} ${label}${detail ? ` ${paint(detail, ANSI.dim)}` : ""}`);
 }
 
 function summarizeOutput(text, max = 600) {
@@ -64,6 +102,16 @@ function commandToString(command, args) {
   return [command, ...args].join(" ");
 }
 
+function resolveSpawn(command, args) {
+  if (process.platform !== "win32") {
+    return { command, args };
+  }
+  return {
+    command: process.env.ComSpec || "cmd.exe",
+    args: ["/d", "/s", "/c", command, ...args],
+  };
+}
+
 function runCommand(command, args, options = {}) {
   const {
     cwd,
@@ -74,7 +122,8 @@ function runCommand(command, args, options = {}) {
   } = options;
 
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
+    const resolved = resolveSpawn(command, args);
+    const child = spawn(resolved.command, resolved.args, {
       cwd,
       env: { ...process.env, ...env },
       stdio: inherit ? "inherit" : "pipe",
@@ -162,15 +211,43 @@ async function waitForGatewayHealthy(repoRoot) {
   while (Date.now() < deadline) {
     const status = await readGatewayStatus(repoRoot);
     const payload = status.payload;
+    const uiReady = await isUiReachable();
     const serviceLoaded = payload?.service?.loaded === true;
-    const runtimeRunning = payload?.service?.runtime?.status === "running";
+    const runtimeStatus = typeof payload?.service?.runtime?.status === "string"
+      ? payload.service.runtime.status.trim().toLowerCase()
+      : "";
+    const runtimeState = typeof payload?.service?.runtime?.state === "string"
+      ? payload.service.runtime.state.trim().toLowerCase()
+      : "";
+    const runtimeRunning = runtimeStatus === "running" || runtimeState === "running";
     const rpcOk = payload?.rpc?.ok === true;
-    if (serviceLoaded && runtimeRunning && rpcOk) {
-      return payload;
+    if (uiReady || (serviceLoaded && runtimeRunning) || rpcOk) {
+      return {
+        payload,
+        via: uiReady ? "ui" : rpcOk ? "rpc" : "service",
+      };
     }
     await sleep(HEALTH_POLL_MS);
   }
   return null;
+}
+
+async function restartGatewayService(repoRoot) {
+  printStep("Restart gateway");
+  return runCommand("openclaw", ["gateway", "restart"], {
+    cwd: repoRoot,
+    timeoutMs: RESTART_TIMEOUT_MS,
+    tolerateNonZero: true,
+  });
+}
+
+async function startGatewayService(repoRoot) {
+  printStep("Start gateway");
+  return runCommand("openclaw", ["gateway", "start"], {
+    cwd: repoRoot,
+    timeoutMs: RESTART_TIMEOUT_MS,
+    tolerateNonZero: true,
+  });
 }
 
 async function ensurePluginLoaded(repoRoot) {
@@ -218,6 +295,11 @@ async function verifyPluginEnabled() {
   return config?.plugins?.entries?.[PLUGIN_ID]?.enabled === true;
 }
 
+async function verifyPromptInjectionEnabled() {
+  const config = await readOpenClawConfig();
+  return config?.plugins?.entries?.[PLUGIN_ID]?.hooks?.allowPromptInjection === true;
+}
+
 async function verifyMemoryCoreDisabled() {
   const config = await readOpenClawConfig();
   return config?.plugins?.entries?.["memory-core"]?.enabled === false;
@@ -238,6 +320,14 @@ async function verifyCompactionMemoryFlushDisabled() {
   return config?.agents?.defaults?.compaction?.memoryFlush?.enabled === false;
 }
 
+function ensureObject(parent, key) {
+  const current = parent[key];
+  if (!current || typeof current !== "object" || Array.isArray(current)) {
+    parent[key] = {};
+  }
+  return parent[key];
+}
+
 async function ensurePluginLoadPath(pluginPath) {
   printStep("Register plugin source path");
   const config = (await readOpenClawConfig()) ?? {};
@@ -252,6 +342,63 @@ async function ensurePluginLoadPath(pluginPath) {
   plugins.load = load;
   config.plugins = plugins;
   await writeOpenClawConfig(config);
+}
+
+async function applyManagedPluginConfig(pluginPath, { resetInstallMetadata = false } = {}) {
+  printStep("Sync OpenClaw config");
+  const config = (await readOpenClawConfig()) ?? {};
+  const plugins = ensureObject(config, "plugins");
+  const load = ensureObject(plugins, "load");
+  const slots = ensureObject(plugins, "slots");
+  const entries = ensureObject(plugins, "entries");
+  const pluginEntry = ensureObject(entries, PLUGIN_ID);
+  const pluginHooks = ensureObject(pluginEntry, "hooks");
+  const internalHooks = ensureObject(ensureObject(ensureObject(config, "hooks"), "internal"), "entries");
+  const sessionMemory = ensureObject(internalHooks, "session-memory");
+  const agents = ensureObject(config, "agents");
+  const defaults = ensureObject(agents, "defaults");
+  const memorySearch = ensureObject(defaults, "memorySearch");
+  const compaction = ensureObject(defaults, "compaction");
+  const memoryFlush = ensureObject(compaction, "memoryFlush");
+  const memoryCore = ensureObject(entries, "memory-core");
+  const normalizedPluginPath = path.resolve(pluginPath);
+  const currentPaths = Array.isArray(load.paths)
+    ? load.paths.filter((entry) => typeof entry === "string" && entry.trim())
+    : [];
+
+  load.paths = [normalizedPluginPath, ...currentPaths.filter((entry) => path.resolve(entry) !== normalizedPluginPath)];
+  slots.memory = PLUGIN_ID;
+  pluginEntry.enabled = true;
+  pluginHooks.allowPromptInjection = true;
+  memoryCore.enabled = false;
+  sessionMemory.enabled = false;
+  memorySearch.enabled = false;
+  memoryFlush.enabled = false;
+
+  if (resetInstallMetadata && plugins.installs && typeof plugins.installs === "object") {
+    delete plugins.installs[PLUGIN_ID];
+    if (Object.keys(plugins.installs).length === 0) {
+      delete plugins.installs;
+    }
+  }
+
+  await writeOpenClawConfig(config);
+
+  const checks = await Promise.all([
+    verifyMemorySlotBound(),
+    verifyPluginEnabled(),
+    verifyPromptInjectionEnabled(),
+    verifyMemoryCoreDisabled(),
+    verifySessionMemoryDisabled(),
+    verifyAgentMemorySearchDisabled(),
+    verifyCompactionMemoryFlushDisabled(),
+  ]);
+
+  if (checks.some((item) => item !== true)) {
+    throw new Error("managed OpenClaw config update did not persist the expected state");
+  }
+
+  printSuccess("Config synced", "memory slot bound, prompt injection enabled, native memory disabled");
 }
 
 async function isUiReachable() {
@@ -317,65 +464,28 @@ async function buildPlugin(repoRoot) {
     ["run", "build", "--workspace", WORKSPACE_NAME],
     { cwd: repoRoot, inherit: true },
   );
+  printSuccess("Plugin build complete");
 }
 
 async function runReloadFlow(repoRoot, options = {}) {
-  const { skipBuild = false } = options;
+  printBanner("YouAreMemory Plugin Reload", "Link config, restart gateway, and verify the memory runtime.");
+  const { skipBuild = false, resetInstallMetadata = false } = options;
   if (!skipBuild) {
     await buildPlugin(repoRoot);
   }
+  await applyManagedPluginConfig(path.join(repoRoot, "packages", "openclaw-memory-plugin"), { resetInstallMetadata });
 
-  await runConfigMutation(
-    repoRoot,
-    "Bind memory slot",
-    "openclaw",
-    ["config", "set", "plugins.slots.memory", JSON.stringify(PLUGIN_ID)],
-    verifyMemorySlotBound,
-  );
-  await runConfigMutation(
-    repoRoot,
-    "Enable plugin",
-    "openclaw",
-    ["plugins", "enable", PLUGIN_ID],
-    verifyPluginEnabled,
-  );
-  await runConfigMutation(
-    repoRoot,
-    "Disable memory-core",
-    "openclaw",
-    ["config", "set", "plugins.entries.memory-core.enabled", JSON.stringify(false)],
-    verifyMemoryCoreDisabled,
-  );
-  await runConfigMutation(
-    repoRoot,
-    "Disable session-memory hook",
-    "openclaw",
-    ["config", "set", "hooks.internal.entries.session-memory.enabled", JSON.stringify(false)],
-    verifySessionMemoryDisabled,
-  );
-  await runConfigMutation(
-    repoRoot,
-    "Disable native memorySearch",
-    "openclaw",
-    ["config", "set", "agents.defaults.memorySearch.enabled", JSON.stringify(false)],
-    verifyAgentMemorySearchDisabled,
-  );
-  await runConfigMutation(
-    repoRoot,
-    "Disable compaction memoryFlush",
-    "openclaw",
-    ["config", "set", "agents.defaults.compaction.memoryFlush.enabled", JSON.stringify(false)],
-    verifyCompactionMemoryFlushDisabled,
-  );
-
-  printStep("Restart gateway");
-  const restart = await runCommand("openclaw", ["gateway", "restart"], {
-    cwd: repoRoot,
-    timeoutMs: RESTART_TIMEOUT_MS,
-    tolerateNonZero: true,
-  });
-
-  const health = await waitForGatewayHealthy(repoRoot);
+  const restart = await restartGatewayService(repoRoot);
+  let health = await waitForGatewayHealthy(repoRoot);
+  let recoveredVia = "restart";
+  if (!health) {
+    printWarn("Gateway did not report healthy after restart", "trying a follow-up start");
+    const start = await startGatewayService(repoRoot);
+    health = await waitForGatewayHealthy(repoRoot);
+    if (health) {
+      recoveredVia = start.timedOut ? "start-timeout" : "start";
+    }
+  }
   if (!health) {
     const snippet = summarizeOutput(`${restart.stderr}\n${restart.stdout}`);
     throw new Error(
@@ -388,10 +498,11 @@ async function runReloadFlow(repoRoot, options = {}) {
   }
 
   if (restart.timedOut) {
-    console.warn("warning: `openclaw gateway restart` timed out, but the gateway recovered and is healthy.");
+    printWarn("`openclaw gateway restart` timed out, but the gateway recovered.");
   } else if (restart.code !== 0) {
-    console.warn(`warning: \`openclaw gateway restart\` exited with ${restart.code}, but the gateway is healthy.`);
+    printWarn(`\`openclaw gateway restart\` exited with ${restart.code}, but the gateway recovered.`);
   }
+  printSuccess("Gateway ready", `health source=${health.via}; recovery=${recoveredVia}`);
 
   printStep("Verify plugin status");
   const plugin = await ensurePluginLoaded(repoRoot);
@@ -399,15 +510,17 @@ async function runReloadFlow(repoRoot, options = {}) {
     throw new Error(`plugin failed to load\n${summarizeOutput(plugin.output, 1200)}`);
   }
   if (plugin.via !== "plugins-info") {
-    console.warn("warning: `openclaw plugins info` did not return cleanly, but the UI endpoint is reachable.");
+    printWarn("`openclaw plugins info` was noisy, but the plugin UI endpoint is reachable.");
   }
+  printSuccess("Plugin loaded", `verified via ${plugin.via}`);
 
   const url = resolveUiUrl();
   maybeOpenBrowser(url);
 
-  console.log("\nMemory plugin reloaded.");
-  console.log(`Gateway: running on ws://127.0.0.1:${health?.gateway?.port ?? "18789"}`);
-  console.log(`UI: ${url}`);
+  console.log("");
+  printSuccess("Memory plugin reloaded");
+  printInfo("Gateway", `ws://127.0.0.1:${health?.payload?.gateway?.port ?? "18789"}`);
+  printInfo("UI", url);
 }
 
 export async function reloadMemoryPlugin({ importMetaUrl, skipBuild = false } = {}) {
@@ -417,15 +530,14 @@ export async function reloadMemoryPlugin({ importMetaUrl, skipBuild = false } = 
 
 export async function relinkMemoryPlugin({ importMetaUrl } = {}) {
   const repoRoot = resolveRepoRoot(importMetaUrl);
-  const pluginPath = path.join(repoRoot, "packages", "openclaw-memory-plugin");
   const installDir = path.join(resolveStateDir(), "extensions", PLUGIN_ID);
 
+  printBanner("YouAreMemory Plugin Relink", "Build, relink, update config, and restart the gateway.");
   await buildPlugin(repoRoot);
-  await ensurePluginLoadPath(pluginPath);
-  await removePluginInstallMetadata();
 
   printStep("Clean extension directory");
   await rm(installDir, { recursive: true, force: true });
+  printSuccess("Extension directory cleaned", installDir);
 
-  await runReloadFlow(repoRoot, { skipBuild: true });
+  await runReloadFlow(repoRoot, { skipBuild: true, resetInstallMetadata: true });
 }

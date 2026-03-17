@@ -374,7 +374,7 @@ before_prompt_build:
      - selectedL0Ids
      - enoughAt = l1 | l0 | none
   10. 最终只注入被选中的 profile + L2 + L1 + L0
-  11. 通过 appendSystemContext 把 YouAreMemory 运行时合同和检索证据一起注入到本轮 system prompt
+  11. 通过 prependSystemContext 把 YouAreMemory 运行时合同和检索证据一起前置注入到本轮 system prompt
 ```
 
 当前实现里：
@@ -403,7 +403,7 @@ before_prompt_build:
 - 用插件完全接管动态对话记忆
 - 关闭原生动态 memory 的并行配置
 - 不自动改写用户的 workspace bootstrap 文件
-- 在 `appendSystemContext` 里加入 YouAreMemory 运行时合同，明确“记忆问题优先相信插件注入证据；只有用户明确要看文件时才去读 workspace 文件”
+- 在 `prependSystemContext` 里加入 YouAreMemory 运行时合同，明确“记忆问题优先相信插件注入证据；只有用户明确要看文件时才去读 workspace 文件”
 
 ---
 

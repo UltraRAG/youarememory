@@ -832,6 +832,10 @@ body[data-panel="retrieve"] #retrievePanel {
   gap: 10px;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 .drawer-section:first-of-type {
   border-top: none;
   padding-top: 0;

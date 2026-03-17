@@ -26,7 +26,7 @@ const LOCALES = {
     "detail.empty": "选择左侧记录查看详情",
     "settings.title": "索引设置",
     "settings.mode": "推理模式",
-    "settings.mode.help": "选择更快回答还是更深检索。",
+    "settings.mode.help": "回答优先会遵守最大可接受时延；准确优先不受这个时延设置限制。",
     "settings.mode.answer_first": "回答优先",
     "settings.mode.accuracy_first": "准确优先",
     "settings.maxLatency": "最大可接受时延（毫秒）",
@@ -184,7 +184,7 @@ const LOCALES = {
     "detail.empty": "Select a record to view details",
     "settings.title": "Index Settings",
     "settings.mode": "Reasoning mode",
-    "settings.mode.help": "Choose faster replies or deeper memory retrieval.",
+    "settings.mode.help": "Answer first obeys the max acceptable latency; accuracy first ignores that latency cap.",
     "settings.mode.answer_first": "Answer first",
     "settings.mode.accuracy_first": "Accuracy first",
     "settings.maxLatency": "Max acceptable latency (ms)",
@@ -701,18 +701,24 @@ function applySettings(settings = {}) {
 function readSettingsForm() {
   const parsedLatency = Number.parseInt(String(maxAutoReplyLatencyInput.value || "").trim(), 10);
   const reasoningMode = reasoningModeInput.value === "accuracy_first" ? "accuracy_first" : "answer_first";
-  return {
-    reasoningMode,
-    maxAutoReplyLatencyMs: Number.isFinite(parsedLatency)
+  const next = { reasoningMode };
+  if (reasoningMode === "answer_first") {
+    next.maxAutoReplyLatencyMs = Number.isFinite(parsedLatency)
       ? Math.max(300, parsedLatency)
-      : state.settings.maxAutoReplyLatencyMs,
-  };
+      : state.settings.maxAutoReplyLatencyMs;
+  }
+  return next;
 }
 
 function updateSettingsVisibility() {
   const answerFirst = (reasoningModeInput?.value || state.settings.reasoningMode) === "answer_first";
   if (latencyFieldWrap) {
     latencyFieldWrap.hidden = !answerFirst;
+    latencyFieldWrap.style.display = answerFirst ? "" : "none";
+    latencyFieldWrap.setAttribute("aria-hidden", answerFirst ? "false" : "true");
+  }
+  if (maxAutoReplyLatencyInput) {
+    maxAutoReplyLatencyInput.disabled = !answerFirst;
   }
 }
 

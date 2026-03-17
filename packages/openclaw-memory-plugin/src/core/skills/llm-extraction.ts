@@ -20,6 +20,16 @@ type LoggerLike = {
 
 type ProviderHeaders = Record<string, string> | undefined;
 
+function isTimeoutError(error: unknown): boolean {
+  return error instanceof Error && (error.name === "AbortError" || /timeout/i.test(error.message));
+}
+
+function resolveRequestTimeoutMs(timeoutMs: number | undefined): number | null {
+  if (typeof timeoutMs !== "number" || !Number.isFinite(timeoutMs)) return 15_000;
+  if (timeoutMs <= 0) return null;
+  return timeoutMs;
+}
+
 interface ModelSelection {
   provider: string;
   model: string;
@@ -1236,8 +1246,8 @@ export class LlmMemoryExtractor {
 
     const execute = async (payloadBody: Record<string, unknown>): Promise<Response> => {
       const controller = new AbortController();
-      const timeoutMs = input.timeoutMs ?? 15_000;
-      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+      const timeoutMs = resolveRequestTimeoutMs(input.timeoutMs);
+      const timeoutId = timeoutMs === null ? null : setTimeout(() => controller.abort(), timeoutMs);
       try {
         return await fetch(url, {
           method: "POST",
@@ -1246,12 +1256,12 @@ export class LlmMemoryExtractor {
           signal: controller.signal,
         });
       } catch (error) {
-        if (error instanceof Error && error.name === "AbortError") {
+        if (timeoutMs !== null && error instanceof Error && error.name === "AbortError") {
           throw new Error(`${input.requestLabel} request timed out after ${timeoutMs}ms`);
         }
         throw error;
       } finally {
-        clearTimeout(timeoutId);
+        if (timeoutId) clearTimeout(timeoutId);
       }
     };
 
@@ -1619,9 +1629,14 @@ export class LlmMemoryExtractor {
     } catch (error) {
       const hasTime = input.l2Entries.some((entry) => entry.type === "time");
       const hasProject = input.l2Entries.some((entry) => entry.type === "project");
-      if (hasTime && hasProject) {
+      if (hasTime && hasProject && !isTimeoutError(error)) {
         try {
-          const splitTimeoutMs = Math.max(1_200, Math.floor((input.timeoutMs ?? 5_000) / 2));
+          const baseTimeoutMs = typeof input.timeoutMs === "number" && Number.isFinite(input.timeoutMs)
+            ? input.timeoutMs
+            : 5_000;
+          const splitTimeoutMs = baseTimeoutMs > 0
+            ? Math.min(baseTimeoutMs, Math.max(300, Math.floor(baseTimeoutMs / 2)))
+            : 0;
           const [timeDecision, projectDecision] = await Promise.all([
             this.runL2SelectionOnce({
               ...input,

@@ -39,6 +39,7 @@ const HARD_HOP1_MS = 1600;
 const HARD_HOP2_MS = 3500;
 const HARD_HOP3_MS = 1200;
 const HARD_HOP4_MS = 1400;
+const MIN_AUTO_HOP_TIMEOUT_MS = 180;
 
 export interface RetrievalOptions {
   l2Limit?: number;
@@ -337,10 +338,82 @@ export class ReasoningRetriever {
     return { hop1, hop2, hop3, hop4 };
   }
 
-  private buildLocalFallbackCandidates(query: string, options: RetrievalOptions, profile: GlobalProfileRecord | null): LocalFallbackCandidates {
+  private getL2HitId(hit: L2SearchResult): string {
+    return hit.item.l2IndexId;
+  }
+
+  private hitMatchesLookupTypes(hit: L2SearchResult, targetTypes: LookupQuerySpec["targetTypes"]): boolean {
+    if (targetTypes.length === 0) return true;
+    return hit.level === "l2_time"
+      ? targetTypes.includes("time")
+      : targetTypes.includes("project");
+  }
+
+  private buildLookupSearchSpecs(query: string, lookupQueries: LookupQuerySpec[]): LookupQuerySpec[] {
+    const specs: LookupQuerySpec[] = [];
+    const seen = new Set<string>();
+    const requestedTypes = uniqueById<LookupQuerySpec["targetTypes"][number]>(
+      lookupQueries.flatMap((item) => item.targetTypes),
+      (item) => item,
+    );
+    const defaultTypes: LookupQuerySpec["targetTypes"] = requestedTypes.length > 0
+      ? requestedTypes
+      : ["time", "project"];
+
+    const push = (spec: LookupQuerySpec): void => {
+      const lookupQuery = normalizeQueryKey(spec.lookupQuery);
+      if (!lookupQuery) return;
+      const targetTypes = spec.targetTypes.length > 0 ? spec.targetTypes : defaultTypes;
+      const key = `${lookupQuery}::${targetTypes.join("|")}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      specs.push({
+        targetTypes,
+        lookupQuery: spec.lookupQuery,
+      });
+    };
+
+    lookupQueries.forEach((spec) => push(spec));
+    push({ targetTypes: defaultTypes, lookupQuery: query });
+    return specs;
+  }
+
+  private buildRelevantL2Hits(query: string, lookupQueries: LookupQuerySpec[], limit: number): L2SearchResult[] {
+    const specs = this.buildLookupSearchSpecs(query, lookupQueries);
+    const ranked: L2SearchResult[] = [];
+    const seen = new Set<string>();
+    const perSpecLimit = Math.max(6, Math.min(L2_CATALOG_ENTRY_MAX, limit * 2));
+
+    for (const spec of specs) {
+      const hits = this.repository.searchL2Hits(spec.lookupQuery, perSpecLimit)
+        .filter((hit) => this.hitMatchesLookupTypes(hit, spec.targetTypes));
+      for (const hit of hits) {
+        const hitId = this.getL2HitId(hit);
+        if (seen.has(hitId)) continue;
+        seen.add(hitId);
+        ranked.push(hit);
+        if (ranked.length >= limit) {
+          return ranked.slice(0, limit);
+        }
+      }
+    }
+
+    return ranked;
+  }
+
+  private buildLocalFallbackCandidates(
+    query: string,
+    options: RetrievalOptions,
+    profile: GlobalProfileRecord | null,
+    lookupQueries: LookupQuerySpec[] = [],
+  ): LocalFallbackCandidates {
     return {
       profile,
-      l2: this.repository.searchL2Hits(query, Math.max(4, options.l2Limit ?? 4)).slice(0, Math.max(1, options.l2Limit ?? 4)),
+      l2: this.buildRelevantL2Hits(
+        query,
+        lookupQueries,
+        Math.max(4, options.l2Limit ?? 4),
+      ).slice(0, Math.max(1, options.l2Limit ?? 4)),
     };
   }
 
@@ -351,6 +424,7 @@ export class ReasoningRetriever {
     mode: RecallMode,
     elapsedMs: number,
     cacheHit: boolean,
+    corrections: string[] = ["fallback"],
   ): RetrievalResult {
     const profile = candidates.profile;
     const l2Results = candidates.l2.slice(0, Math.max(1, Math.min(2, options.l2Limit ?? 2)));
@@ -380,7 +454,7 @@ export class ReasoningRetriever {
       elapsedMs,
       cacheHit,
       path: options.retrievalMode ?? "explicit",
-      corrections: ["fallback"],
+      corrections,
     });
   }
 
@@ -451,24 +525,28 @@ export class ReasoningRetriever {
     return rightUpdatedAt.localeCompare(leftUpdatedAt);
   }
 
-  private buildL2Catalog(lookupQueries: LookupQuerySpec[]): PackedL2Catalog {
+  private buildL2Catalog(query: string, lookupQueries: LookupQuerySpec[]): PackedL2Catalog {
     const requestedTypes = new Set(lookupQueries.flatMap((item) => item.targetTypes));
     const includeTime = requestedTypes.size === 0 || requestedTypes.has("time");
     const includeProject = requestedTypes.size === 0 || requestedTypes.has("project");
+    const relevantHits = this.buildRelevantL2Hits(query, lookupQueries, L2_CATALOG_ENTRY_MAX);
+    const selectedIds = new Set(relevantHits.map((hit) => this.getL2HitId(hit)));
     const timeHits = includeTime
       ? this.repository.listRecentL2Time(L2_TIME_SCAN_MAX).map((item) => this.buildL2CatalogHit(item))
       : [];
     const projectHits = includeProject
       ? this.repository.listRecentL2Projects(L2_PROJECT_SCAN_MAX).map((item) => this.buildL2CatalogHit(item))
       : [];
-    const orderedHits = [...timeHits, ...projectHits]
-      .sort((left, right) => this.compareL2UpdatedAtDesc(left, right))
+    const orderedRecentHits = [...timeHits, ...projectHits]
+      .filter((hit) => !selectedIds.has(this.getL2HitId(hit)))
+      .sort((left, right) => this.compareL2UpdatedAtDesc(left, right));
+    const orderedHits = [...relevantHits, ...orderedRecentHits]
       .slice(0, L2_CATALOG_ENTRY_MAX);
 
     const packedEntries: L2CatalogEntry[] = [];
     const byId = new Map<string, L2SearchResult>();
     let remainingBudget = L2_CATALOG_CHAR_BUDGET;
-    let truncated = timeHits.length + projectHits.length > orderedHits.length;
+    let truncated = relevantHits.length + orderedRecentHits.length > orderedHits.length;
 
     for (const hit of orderedHits) {
       const fullEntry = this.buildL2CatalogEntry(hit, 140);
@@ -608,6 +686,17 @@ export class ReasoningRetriever {
     return remaining >= nextHopBudgetMs + 40;
   }
 
+  private getAutoHopTimeout(
+    startedAt: number,
+    totalBudgetMs: number,
+    preferredHopMs: number,
+    reserveMs: number,
+  ): number {
+    const remaining = totalBudgetMs - (Date.now() - startedAt) - reserveMs;
+    if (remaining < MIN_AUTO_HOP_TIMEOUT_MS) return 0;
+    return Math.max(MIN_AUTO_HOP_TIMEOUT_MS, Math.min(preferredHopMs, remaining));
+  }
+
   private finalizeResult(
     result: RetrievalResult,
     execution: RetrieveExecutionOptions,
@@ -690,6 +779,7 @@ export class ReasoningRetriever {
 
     const baseProfile = this.getBaseProfile(options.includeFacts);
     const fallbackCandidates = this.buildLocalFallbackCandidates(query, options, baseProfile);
+    let routedFallbackCandidates = fallbackCandidates;
     if (!baseProfile && fallbackCandidates.l2.length === 0) {
       const result = withDebug({
         query,
@@ -716,14 +806,33 @@ export class ReasoningRetriever {
 
     const totalBudgetMs = this.getTotalBudgetMs(settings, execution.retrievalMode);
     const budgets = this.getHopBudgets(totalBudgetMs, settings.reasoningMode, execution.retrievalMode);
-    const answerFirst = this.isAnswerFirst(settings, execution.retrievalMode);
+    const autoBounded = this.isAnswerFirst(settings, execution.retrievalMode);
+    const unboundedAccuracy = settings.reasoningMode === "accuracy_first";
 
     try {
+      const hop1Timeout = unboundedAccuracy
+        ? 0
+        : autoBounded
+        ? this.getAutoHopTimeout(startedAt, totalBudgetMs, budgets.hop1, 40)
+        : budgets.hop1;
+      if (autoBounded && hop1Timeout <= 0) {
+        const fallback = this.buildLocalFallback(
+          query,
+          fallbackCandidates,
+          options,
+          "local_fallback",
+          Date.now() - startedAt,
+          false,
+          ["hop1_budget", "fallback"],
+        );
+        return this.finalizeResult(fallback, execution, cacheKey, false);
+      }
       const hop1 = await this.extractor.decideMemoryLookup({
         query,
         profile: baseProfile,
-        timeoutMs: budgets.hop1,
+        timeoutMs: hop1Timeout,
       });
+      routedFallbackCandidates = this.buildLocalFallbackCandidates(query, options, baseProfile, hop1.lookupQueries);
 
       if (!hop1.memoryRelevant || hop1.baseOnly) {
         const intent = this.resolveBaseIntent(baseProfile);
@@ -748,48 +857,50 @@ export class ReasoningRetriever {
         return this.finalizeResult(result, execution, cacheKey, false);
       }
 
-      if (answerFirst && !this.canEnterNextHop(startedAt, totalBudgetMs, budgets.hop2)) {
+      if (autoBounded && !this.canEnterNextHop(startedAt, totalBudgetMs, budgets.hop2)) {
         const queued = execution.allowShadowDeep ? this.queueShadowDeep(query, options) : false;
-        const intent = this.resolveBaseIntent(baseProfile);
-        const enoughAt = this.resolveBaseEnoughAt(baseProfile);
-        const result = withDebug({
+        const fallback = this.buildLocalFallback(
           query,
-          intent,
-          enoughAt,
-          profile: baseProfile,
-          l2Results: [],
-          l1Results: [],
-          l0Results: [],
-          context: this.buildContext(intent, enoughAt, baseProfile, [], [], []),
-        }, {
-          mode: "llm",
+          routedFallbackCandidates,
+          options,
+          "local_fallback",
+          Date.now() - startedAt,
+          false,
+          ["hop1_budget", "fallback"],
+        );
+        const fallbackDebug = fallback.debug ?? {
+          mode: "local_fallback" as const,
           elapsedMs: Date.now() - startedAt,
           cacheHit: false,
+        };
+        const result = withDebug(fallback, {
+          ...fallbackDebug,
           path: execution.retrievalMode,
-          budgetLimited: true,
+          budgetLimited: autoBounded,
           shadowDeepQueued: queued,
           hop1LookupQueries: hop1.lookupQueries,
         });
         return this.finalizeResult(result, execution, cacheKey, false);
       }
 
-      const catalog = this.buildL2Catalog(hop1.lookupQueries);
+      const catalog = this.buildL2Catalog(query, hop1.lookupQueries);
       if (catalog.entries.length === 0) {
-        const intent = this.resolveBaseIntent(baseProfile);
-        const enoughAt = this.resolveBaseEnoughAt(baseProfile);
-        const result = withDebug({
+        const fallback = this.buildLocalFallback(
           query,
-          intent,
-          enoughAt,
-          profile: baseProfile,
-          l2Results: [],
-          l1Results: [],
-          l0Results: [],
-          context: this.buildContext(intent, enoughAt, baseProfile, [], [], []),
-        }, {
-          mode: "llm",
+          routedFallbackCandidates,
+          options,
+          "local_fallback",
+          Date.now() - startedAt,
+          false,
+          ["catalog_empty", "fallback"],
+        );
+        const fallbackDebug = fallback.debug ?? {
+          mode: "local_fallback" as const,
           elapsedMs: Date.now() - startedAt,
           cacheHit: false,
+        };
+        const result = withDebug(fallback, {
+          ...fallbackDebug,
           path: execution.retrievalMode,
           hop1BaseOnly: hop1.baseOnly,
           hop1LookupQueries: hop1.lookupQueries,
@@ -798,9 +909,38 @@ export class ReasoningRetriever {
         return this.finalizeResult(result, execution, cacheKey, false);
       }
 
-      const hop2Timeout = answerFirst
-        ? Math.max(AUTO_MIN_HOP2_MS, totalBudgetMs - (Date.now() - startedAt) - Math.max(60, budgets.hop3 + budgets.hop4))
+      const hop2Timeout = unboundedAccuracy
+        ? 0
+        : autoBounded
+        ? this.getAutoHopTimeout(startedAt, totalBudgetMs, budgets.hop2, Math.max(60, budgets.hop3 + budgets.hop4))
         : Math.max(budgets.hop2, totalBudgetMs - (Date.now() - startedAt) - Math.max(220, budgets.hop3 + budgets.hop4));
+      if (autoBounded && hop2Timeout <= 0) {
+        const queued = execution.allowShadowDeep ? this.queueShadowDeep(query, options) : false;
+        const fallback = this.buildLocalFallback(
+          query,
+          routedFallbackCandidates,
+          options,
+          "local_fallback",
+          Date.now() - startedAt,
+          false,
+          ["hop2_budget", "fallback"],
+        );
+        const fallbackDebug = fallback.debug ?? {
+          mode: "local_fallback" as const,
+          elapsedMs: Date.now() - startedAt,
+          cacheHit: false,
+        };
+        const result = withDebug(fallback, {
+          ...fallbackDebug,
+          path: execution.retrievalMode,
+          budgetLimited: true,
+          shadowDeepQueued: queued,
+          hop1BaseOnly: hop1.baseOnly,
+          hop1LookupQueries: hop1.lookupQueries,
+          catalogTruncated: catalog.truncated,
+        });
+        return this.finalizeResult(result, execution, cacheKey, false);
+      }
       const hop2 = await this.extractor.selectL2FromCatalog({
         query,
         profile: baseProfile,
@@ -815,19 +955,22 @@ export class ReasoningRetriever {
       const selectedL2Entries = this.buildSelectedL2Entries(selectedL2Ids, catalog.entries);
 
       if (hop2.enoughAt === "none" || l2Results.length === 0) {
-        const result = withDebug({
+        const fallback = this.buildLocalFallback(
           query,
-          intent: hop2.intent,
-          enoughAt: "none",
-          profile: null,
-          l2Results: [],
-          l1Results: [],
-          l0Results: [],
-          context: this.buildContext(hop2.intent, "none", null, [], [], []),
-        }, {
-          mode: "llm",
+          routedFallbackCandidates,
+          options,
+          "local_fallback",
+          Date.now() - startedAt,
+          false,
+          ["hop2_empty", "fallback"],
+        );
+        const fallbackDebug = fallback.debug ?? {
+          mode: "local_fallback" as const,
           elapsedMs: Date.now() - startedAt,
           cacheHit: false,
+        };
+        const result = withDebug(fallback, {
+          ...fallbackDebug,
           path: execution.retrievalMode,
           hop1BaseOnly: hop1.baseOnly,
           hop1LookupQueries: hop1.lookupQueries,
@@ -864,7 +1007,7 @@ export class ReasoningRetriever {
       }
 
       const l1Candidates = this.buildL1CandidatesFromL2(l2Results);
-      if (l1Candidates.length === 0 || (answerFirst && !this.canEnterNextHop(startedAt, totalBudgetMs, budgets.hop3))) {
+      if (l1Candidates.length === 0 || (autoBounded && !this.canEnterNextHop(startedAt, totalBudgetMs, budgets.hop3))) {
         const enoughAt = coerceEnoughAt("l2", { l2: l2Results.length, l1: 0, l0: 0 });
         const queued = l1Candidates.length > 0 && execution.allowShadowDeep ? this.queueShadowDeep(query, options) : false;
         const result = withDebug({
@@ -881,7 +1024,7 @@ export class ReasoningRetriever {
           elapsedMs: Date.now() - startedAt,
           cacheHit: false,
           path: execution.retrievalMode,
-          budgetLimited: answerFirst && l1Candidates.length > 0,
+          budgetLimited: autoBounded && l1Candidates.length > 0,
           shadowDeepQueued: queued,
           hop1BaseOnly: hop1.baseOnly,
           hop1LookupQueries: hop1.lookupQueries,
@@ -892,9 +1035,39 @@ export class ReasoningRetriever {
         return this.finalizeResult(result, execution, cacheKey, false);
       }
 
-      const hop3Timeout = answerFirst
-        ? Math.max(AUTO_MIN_HOP3_MS, totalBudgetMs - (Date.now() - startedAt) - Math.max(40, budgets.hop4))
+      const hop3Timeout = unboundedAccuracy
+        ? 0
+        : autoBounded
+        ? this.getAutoHopTimeout(startedAt, totalBudgetMs, budgets.hop3, Math.max(40, budgets.hop4))
         : Math.max(budgets.hop3, totalBudgetMs - (Date.now() - startedAt) - Math.max(40, budgets.hop4));
+      if (autoBounded && hop3Timeout <= 0) {
+        const enoughAt = coerceEnoughAt("l2", { l2: l2Results.length, l1: 0, l0: 0 });
+        const finalProfile = null;
+        const queued = execution.allowShadowDeep ? this.queueShadowDeep(query, options) : false;
+        const result = withDebug({
+          query,
+          intent: hop2.intent,
+          enoughAt,
+          profile: finalProfile,
+          l2Results,
+          l1Results: [],
+          l0Results: [],
+          context: this.buildContext(hop2.intent, enoughAt, finalProfile, l2Results, [], []),
+        }, {
+          mode: "llm",
+          elapsedMs: Date.now() - startedAt,
+          cacheHit: false,
+          path: execution.retrievalMode,
+          budgetLimited: true,
+          shadowDeepQueued: queued,
+          hop1BaseOnly: hop1.baseOnly,
+          hop1LookupQueries: hop1.lookupQueries,
+          hop2EnoughAt: hop2.enoughAt,
+          hop2SelectedL2Ids: selectedL2Ids,
+          catalogTruncated: catalog.truncated,
+        });
+        return this.finalizeResult(result, execution, cacheKey, false);
+      }
       const hop3 = await this.extractor.selectL1FromEvidence({
         query,
         profile: baseProfile,
@@ -971,7 +1144,7 @@ export class ReasoningRetriever {
       }
 
       const l0Candidates = this.buildL0CandidatesFromL1(selectedL1Windows, Math.max(L0_CANDIDATE_MAX, options.l0Limit ?? 1));
-      if (l0Candidates.length === 0 || (answerFirst && !this.canEnterNextHop(startedAt, totalBudgetMs, budgets.hop4))) {
+      if (l0Candidates.length === 0 || (autoBounded && !this.canEnterNextHop(startedAt, totalBudgetMs, budgets.hop4))) {
         const enoughAt = coerceEnoughAt("l1", { l2: l2Results.length, l1: l1Results.length, l0: 0 });
         const finalProfile = hop3.useProfile ? baseProfile : null;
         const queued = l0Candidates.length > 0 && execution.allowShadowDeep ? this.queueShadowDeep(query, options) : false;
@@ -989,7 +1162,7 @@ export class ReasoningRetriever {
           elapsedMs: Date.now() - startedAt,
           cacheHit: false,
           path: execution.retrievalMode,
-          budgetLimited: answerFirst && l0Candidates.length > 0,
+          budgetLimited: autoBounded && l0Candidates.length > 0,
           shadowDeepQueued: queued,
           hop1BaseOnly: hop1.baseOnly,
           hop1LookupQueries: hop1.lookupQueries,
@@ -1002,9 +1175,41 @@ export class ReasoningRetriever {
         return this.finalizeResult(result, execution, cacheKey, false);
       }
 
-      const hop4Timeout = answerFirst
-        ? Math.max(AUTO_MIN_HOP4_MS, totalBudgetMs - (Date.now() - startedAt) - 40)
+      const hop4Timeout = unboundedAccuracy
+        ? 0
+        : autoBounded
+        ? this.getAutoHopTimeout(startedAt, totalBudgetMs, budgets.hop4, 40)
         : Math.max(budgets.hop4, totalBudgetMs - (Date.now() - startedAt) - 40);
+      if (autoBounded && hop4Timeout <= 0) {
+        const enoughAt = coerceEnoughAt("l1", { l2: l2Results.length, l1: l1Results.length, l0: 0 });
+        const finalProfile = hop3.useProfile ? baseProfile : null;
+        const queued = execution.allowShadowDeep ? this.queueShadowDeep(query, options) : false;
+        const result = withDebug({
+          query,
+          intent: hop2.intent,
+          enoughAt,
+          profile: finalProfile,
+          l2Results,
+          l1Results,
+          l0Results: [],
+          context: this.buildContext(hop2.intent, enoughAt, finalProfile, l2Results, l1Results, []),
+        }, {
+          mode: "llm",
+          elapsedMs: Date.now() - startedAt,
+          cacheHit: false,
+          path: execution.retrievalMode,
+          budgetLimited: true,
+          shadowDeepQueued: queued,
+          hop1BaseOnly: hop1.baseOnly,
+          hop1LookupQueries: hop1.lookupQueries,
+          hop2EnoughAt: hop2.enoughAt,
+          hop2SelectedL2Ids: selectedL2Ids,
+          hop3EnoughAt: hop3.enoughAt,
+          hop3SelectedL1Ids: selectedL1Ids,
+          catalogTruncated: catalog.truncated,
+        });
+        return this.finalizeResult(result, execution, cacheKey, false);
+      }
       const hop4 = await this.extractor.selectL0FromEvidence({
         query,
         selectedL2Entries,
@@ -1052,8 +1257,8 @@ export class ReasoningRetriever {
       return this.finalizeResult(result, execution, cacheKey, false);
     } catch (error) {
       const elapsedMs = Date.now() - startedAt;
-      const timedOut = isTimeoutError(error) || elapsedMs >= totalBudgetMs - 25;
-      const result = this.buildLocalFallback(query, fallbackCandidates, options, "local_fallback", elapsedMs, false);
+      const timedOut = isTimeoutError(error) || (autoBounded && elapsedMs >= totalBudgetMs - 25);
+      const result = this.buildLocalFallback(query, routedFallbackCandidates, options, "local_fallback", elapsedMs, false);
       return this.finalizeResult(result, execution, cacheKey, timedOut);
     }
   }

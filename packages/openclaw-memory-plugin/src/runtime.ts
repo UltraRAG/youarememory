@@ -346,6 +346,7 @@ export class MemoryPluginRuntime {
     if (prompt.trim().length < 2) return;
     try {
       const startedAt = Date.now();
+      const settings = this.indexer.getSettings();
       const retrieved = await this.retriever.retrieve(prompt, {
         retrievalMode: "auto",
         l2Limit: 4,
@@ -355,19 +356,19 @@ export class MemoryPluginRuntime {
       });
       const elapsedMs = Date.now() - startedAt;
       if (
-        this.indexer.getSettings().reasoningMode === "answer_first"
-        && elapsedMs > this.indexer.getSettings().maxAutoReplyLatencyMs + 300
+        settings.reasoningMode === "answer_first"
+        && elapsedMs > settings.maxAutoReplyLatencyMs + 300
       ) {
         this.logger.warn?.(`[youarememory] recall slow query_ms=${elapsedMs} prompt_chars=${prompt.length}`);
       }
       const injected = Boolean(retrieved.context?.trim());
       this.logger.info?.(
-        `[youarememory] recall mode=${retrieved.debug?.mode ?? "none"} enough_at=${retrieved.enoughAt} injected=${injected} elapsed_ms=${retrieved.debug?.elapsedMs ?? elapsedMs} cache_hit=${retrieved.debug?.cacheHit ? "1" : "0"}`,
+        `[youarememory] recall mode=${retrieved.debug?.mode ?? "none"} reasoning_mode=${settings.reasoningMode} latency_cap_ms=${settings.reasoningMode === "answer_first" ? settings.maxAutoReplyLatencyMs : "none"} enough_at=${retrieved.enoughAt} injected=${injected} elapsed_ms=${retrieved.debug?.elapsedMs ?? elapsedMs} cache_hit=${retrieved.debug?.cacheHit ? "1" : "0"}`,
       );
-      return { appendSystemContext: buildMemoryRuntimeSystemContext(retrieved.context) };
+      return { prependSystemContext: buildMemoryRuntimeSystemContext(retrieved.context) };
     } catch (error) {
       this.logger.warn?.(`[youarememory] recall failed: ${String(error)}`);
-      return { appendSystemContext: buildMemoryRuntimeSystemContext("") };
+      return { prependSystemContext: buildMemoryRuntimeSystemContext("") };
     }
   };
 
