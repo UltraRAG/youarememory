@@ -7,7 +7,10 @@ import {
   type HeartbeatStats,
   type IndexingSettings,
   MemoryRepository,
+  MemoryBundleValidationError,
   ReasoningRetriever,
+  type MemoryExportBundle,
+  type MemoryImportResult,
 } from "./core/index.js";
 import type { PluginLogger } from "./plugin-api.js";
 
@@ -21,6 +24,8 @@ export interface UiServerControls {
   getSettings: () => IndexingSettings;
   saveSettings: (partial: Partial<IndexingSettings>) => IndexingSettings;
   runIndexNow: () => Promise<HeartbeatStats>;
+  exportMemoryBundle: () => MemoryExportBundle;
+  importMemoryBundle: (bundle: MemoryExportBundle) => Promise<MemoryImportResult>;
   getRuntimeOverview: () => Pick<
     DashboardOverview,
     | "queuedSessions"
@@ -92,6 +97,24 @@ function sendError(res: ServerResponse, message: string): void {
   res.statusCode = 500;
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   res.end(JSON.stringify({ error: message }));
+}
+
+function sendBadRequest(res: ServerResponse, message: string): void {
+  res.statusCode = 400;
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.end(JSON.stringify({ error: message }));
+}
+
+function sendJsonDownload(res: ServerResponse, body: unknown, filename: string): void {
+  res.statusCode = 200;
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+  res.end(JSON.stringify(body, null, 2));
+}
+
+function buildExportFilename(exportedAt: string): string {
+  const safe = exportedAt.replace(/[^\dTZ-]/g, "-").replace(/-+/g, "-");
+  return `youarememory-memory-${safe || "export"}.json`;
 }
 
 function parseLimit(value: string | null, fallback: number): number {
@@ -206,6 +229,28 @@ export class LocalUiServer {
     if (relativePath === "/api/clear") {
       if (upperMethod !== "POST") return sendMethodNotAllowed(res, "POST");
       return sendJson(res, this.repository.clearAllMemoryData());
+    }
+    if (relativePath === "/api/export") {
+      if (upperMethod !== "GET") return sendMethodNotAllowed(res, "GET");
+      const bundle = this.controls.exportMemoryBundle();
+      return sendJsonDownload(res, bundle, buildExportFilename(bundle.exportedAt));
+    }
+    if (relativePath === "/api/import") {
+      if (upperMethod !== "POST") return sendMethodNotAllowed(res, "POST");
+      let body: Record<string, unknown>;
+      try {
+        body = await readJsonBody(req);
+      } catch (error) {
+        return sendBadRequest(res, error instanceof Error ? error.message : "Invalid JSON body");
+      }
+      try {
+        return sendJson(res, await this.controls.importMemoryBundle(body as unknown as MemoryExportBundle));
+      } catch (error) {
+        if (error instanceof MemoryBundleValidationError) {
+          return sendBadRequest(res, error.message);
+        }
+        throw error;
+      }
     }
     if (relativePath === "/api/overview") {
       return sendJson(res, overview());

@@ -8,6 +8,8 @@ import {
   type HeartbeatStats,
   type IndexingSettings,
   type MemoryMessage,
+  type MemoryExportBundle,
+  type MemoryImportResult,
   nowIso,
 } from "./core/index.js";
 import type { PluginHookAgentEndEvent, PluginHookAgentContext, PluginHookBeforeMessageWriteEvent, PluginHookBeforePromptBuildEvent, PluginHookBeforePromptBuildResult, PluginHookBeforeResetEvent, PluginLogger, PluginRuntimeLike } from "./plugin-api.js";
@@ -247,6 +249,8 @@ export class MemoryPluginRuntime {
           getSettings: () => this.indexer.getSettings(),
           saveSettings: (partial) => this.applyIndexingSettings(partial),
           runIndexNow: () => this.flushAllNow("manual"),
+          exportMemoryBundle: () => this.repository.exportMemoryBundle(),
+          importMemoryBundle: (bundle) => this.replaceMemoryBundle(bundle),
           getRuntimeOverview: () => this.getRuntimeOverview(),
         },
         this.logger,
@@ -260,6 +264,34 @@ export class MemoryPluginRuntime {
     const normalized = this.repository.saveIndexingSettings(settings, this.config.defaultIndexingSettings);
     this.repository.setPipelineState("indexingSettingsMigration", INDEXING_SETTINGS_MIGRATION_VERSION);
     return normalized;
+  }
+
+  private clearEphemeralMemoryState(): void {
+    for (const sessionKey of Array.from(this.idleIndexTimers.keys())) {
+      this.clearIdleTimer(sessionKey);
+    }
+    this.pendingBySession.clear();
+    this.debouncedSessions.clear();
+    this.queuedSessionKeys.clear();
+    this.queuedFullRun = false;
+    this.queuedReason = "";
+    this.activeSessionKey = undefined;
+    this.effectiveSessionKeyByRawSession.clear();
+    this.conversationGenerationByRawSession.clear();
+    this.retriever.resetTransientState();
+  }
+
+  async replaceMemoryBundle(bundle: MemoryExportBundle): Promise<MemoryImportResult> {
+    this.clearEphemeralMemoryState();
+    if (this.queuePromise) {
+      try {
+        await this.queuePromise;
+      } catch (error) {
+        this.logger.warn?.(`[youarememory] pending index queue failed before import: ${String(error)}`);
+      }
+    }
+    this.clearEphemeralMemoryState();
+    return this.repository.importMemoryBundle(bundle);
   }
 
   getTools() {

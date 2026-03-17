@@ -7,6 +7,7 @@ import type {
   FactCandidate,
   GlobalProfileRecord,
   IndexingSettings,
+  IndexLinkRecord,
   L0SessionRecord,
   L1SearchResult,
   L1WindowRecord,
@@ -14,8 +15,12 @@ import type {
   L2SearchResult,
   L2TimeIndexRecord,
   MemoryMessage,
+  MemoryExportBundle,
+  MemoryImportResult,
+  MemoryTransferCounts,
   MemoryUiSnapshot,
 } from "../types.js";
+import { MEMORY_EXPORT_FORMAT_VERSION } from "../types.js";
 import { buildLinkId, nowIso } from "../utils/id.js";
 import { safeJsonParse, scoreMatch } from "../utils/text.js";
 
@@ -24,6 +29,14 @@ type SearchIdHit = { id: string; score: number };
 
 const GLOBAL_PROFILE_RECORD_ID = "global_profile_record" as const;
 const INDEXING_SETTINGS_STATE_KEY = "indexingSettings" as const;
+const LAST_INDEXED_AT_STATE_KEY = "lastIndexedAt" as const;
+
+export class MemoryBundleValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "MemoryBundleValidationError";
+  }
+}
 
 export interface ClearMemoryResult {
   cleared: {
@@ -44,6 +57,181 @@ export interface RepairMemoryResult {
   updated: number;
   removed: number;
   rebuilt: boolean;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function requireString(value: unknown, field: string): string {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new MemoryBundleValidationError(`Invalid ${field}`);
+  }
+  return value;
+}
+
+function readString(value: unknown, field: string): string {
+  if (typeof value !== "string") {
+    throw new MemoryBundleValidationError(`Invalid ${field}`);
+  }
+  return value;
+}
+
+function normalizeStringArray(value: unknown, field: string): string[] {
+  if (!Array.isArray(value) || !value.every((item) => typeof item === "string")) {
+    throw new MemoryBundleValidationError(`Invalid ${field}`);
+  }
+  return value.map((item) => item.trim()).filter(Boolean);
+}
+
+function normalizeMessages(value: unknown, field: string): MemoryMessage[] {
+  if (!Array.isArray(value)) throw new MemoryBundleValidationError(`Invalid ${field}`);
+  return value.map((item, index) => {
+    if (!isRecord(item)) throw new MemoryBundleValidationError(`Invalid ${field}[${index}]`);
+    return {
+      ...(typeof item.msgId === "string" && item.msgId.trim() ? { msgId: item.msgId.trim() } : {}),
+      role: requireString(item.role, `${field}[${index}].role`),
+      content: requireString(item.content, `${field}[${index}].content`),
+    };
+  });
+}
+
+function normalizeL0Record(value: unknown, index: number): L0SessionRecord {
+  if (!isRecord(value)) throw new MemoryBundleValidationError(`Invalid l0Sessions[${index}]`);
+  return {
+    l0IndexId: requireString(value.l0IndexId, `l0Sessions[${index}].l0IndexId`),
+    sessionKey: requireString(value.sessionKey, `l0Sessions[${index}].sessionKey`),
+    timestamp: requireString(value.timestamp, `l0Sessions[${index}].timestamp`),
+    messages: normalizeMessages(value.messages, `l0Sessions[${index}].messages`),
+    source: requireString(value.source, `l0Sessions[${index}].source`),
+    indexed: Boolean(value.indexed),
+    createdAt: requireString(value.createdAt, `l0Sessions[${index}].createdAt`),
+  };
+}
+
+function normalizeFactCandidate(value: unknown, field: string): FactCandidate {
+  if (!isRecord(value)) throw new MemoryBundleValidationError(`Invalid ${field}`);
+  const confidence = typeof value.confidence === "number" && Number.isFinite(value.confidence)
+    ? value.confidence
+    : 0;
+  return {
+    factKey: requireString(value.factKey, `${field}.factKey`),
+    factValue: readString(value.factValue, `${field}.factValue`),
+    confidence,
+  };
+}
+
+function normalizeProjectDetail(value: unknown, field: string): L1WindowRecord["projectDetails"][number] {
+  if (!isRecord(value)) throw new MemoryBundleValidationError(`Invalid ${field}`);
+  const confidence = typeof value.confidence === "number" && Number.isFinite(value.confidence)
+    ? value.confidence
+    : 0;
+  return {
+    key: requireString(value.key, `${field}.key`),
+    name: readString(value.name, `${field}.name`),
+    status: requireString(value.status, `${field}.status`) as L1WindowRecord["projectDetails"][number]["status"],
+    summary: readString(value.summary, `${field}.summary`),
+    latestProgress: readString(value.latestProgress, `${field}.latestProgress`),
+    confidence,
+  };
+}
+
+function normalizeL1Record(value: unknown, index: number): L1WindowRecord {
+  if (!isRecord(value)) throw new MemoryBundleValidationError(`Invalid l1Windows[${index}]`);
+  return {
+    l1IndexId: requireString(value.l1IndexId, `l1Windows[${index}].l1IndexId`),
+    sessionKey: readString(value.sessionKey, `l1Windows[${index}].sessionKey`),
+    timePeriod: requireString(value.timePeriod, `l1Windows[${index}].timePeriod`),
+    startedAt: requireString(value.startedAt, `l1Windows[${index}].startedAt`),
+    endedAt: requireString(value.endedAt, `l1Windows[${index}].endedAt`),
+    summary: readString(value.summary, `l1Windows[${index}].summary`),
+    facts: Array.isArray(value.facts)
+      ? value.facts.map((item, factIndex) => normalizeFactCandidate(item, `l1Windows[${index}].facts[${factIndex}]`))
+      : (() => { throw new MemoryBundleValidationError(`Invalid l1Windows[${index}].facts`); })(),
+    situationTimeInfo: readString(value.situationTimeInfo, `l1Windows[${index}].situationTimeInfo`),
+    projectTags: normalizeStringArray(value.projectTags, `l1Windows[${index}].projectTags`),
+    projectDetails: Array.isArray(value.projectDetails)
+      ? value.projectDetails.map((item, projectIndex) => normalizeProjectDetail(item, `l1Windows[${index}].projectDetails[${projectIndex}]`))
+      : (() => { throw new MemoryBundleValidationError(`Invalid l1Windows[${index}].projectDetails`); })(),
+    l0Source: normalizeStringArray(value.l0Source, `l1Windows[${index}].l0Source`),
+    createdAt: requireString(value.createdAt, `l1Windows[${index}].createdAt`),
+  };
+}
+
+function normalizeL2TimeRecord(value: unknown, index: number): L2TimeIndexRecord {
+  if (!isRecord(value)) throw new MemoryBundleValidationError(`Invalid l2TimeIndexes[${index}]`);
+  return {
+    l2IndexId: requireString(value.l2IndexId, `l2TimeIndexes[${index}].l2IndexId`),
+    dateKey: requireString(value.dateKey, `l2TimeIndexes[${index}].dateKey`),
+    summary: readString(value.summary, `l2TimeIndexes[${index}].summary`),
+    l1Source: normalizeStringArray(value.l1Source, `l2TimeIndexes[${index}].l1Source`),
+    createdAt: requireString(value.createdAt, `l2TimeIndexes[${index}].createdAt`),
+    updatedAt: requireString(value.updatedAt, `l2TimeIndexes[${index}].updatedAt`),
+  };
+}
+
+function normalizeL2ProjectRecord(value: unknown, index: number): L2ProjectIndexRecord {
+  if (!isRecord(value)) throw new MemoryBundleValidationError(`Invalid l2ProjectIndexes[${index}]`);
+  return {
+    l2IndexId: requireString(value.l2IndexId, `l2ProjectIndexes[${index}].l2IndexId`),
+    projectKey: requireString(value.projectKey, `l2ProjectIndexes[${index}].projectKey`),
+    projectName: readString(value.projectName, `l2ProjectIndexes[${index}].projectName`),
+    summary: readString(value.summary, `l2ProjectIndexes[${index}].summary`),
+    currentStatus: requireString(value.currentStatus, `l2ProjectIndexes[${index}].currentStatus`) as L2ProjectIndexRecord["currentStatus"],
+    latestProgress: readString(value.latestProgress, `l2ProjectIndexes[${index}].latestProgress`),
+    l1Source: normalizeStringArray(value.l1Source, `l2ProjectIndexes[${index}].l1Source`),
+    createdAt: requireString(value.createdAt, `l2ProjectIndexes[${index}].createdAt`),
+    updatedAt: requireString(value.updatedAt, `l2ProjectIndexes[${index}].updatedAt`),
+  };
+}
+
+function normalizeGlobalProfile(value: unknown): GlobalProfileRecord {
+  if (!isRecord(value)) throw new MemoryBundleValidationError("Invalid globalProfile");
+  const recordId = requireString(value.recordId, "globalProfile.recordId");
+  if (recordId !== GLOBAL_PROFILE_RECORD_ID) {
+    throw new MemoryBundleValidationError("Invalid globalProfile.recordId");
+  }
+  return {
+    recordId: GLOBAL_PROFILE_RECORD_ID,
+    profileText: readString(value.profileText ?? "", "globalProfile.profileText"),
+    sourceL1Ids: normalizeStringArray(value.sourceL1Ids, "globalProfile.sourceL1Ids"),
+    createdAt: requireString(value.createdAt, "globalProfile.createdAt"),
+    updatedAt: requireString(value.updatedAt, "globalProfile.updatedAt"),
+  };
+}
+
+function normalizeIndexLink(value: unknown, index: number): IndexLinkRecord {
+  if (!isRecord(value)) throw new MemoryBundleValidationError(`Invalid indexLinks[${index}]`);
+  return {
+    linkId: requireString(value.linkId, `indexLinks[${index}].linkId`),
+    fromLevel: requireString(value.fromLevel, `indexLinks[${index}].fromLevel`) as IndexLinkRecord["fromLevel"],
+    fromId: requireString(value.fromId, `indexLinks[${index}].fromId`),
+    toLevel: requireString(value.toLevel, `indexLinks[${index}].toLevel`) as IndexLinkRecord["toLevel"],
+    toId: requireString(value.toId, `indexLinks[${index}].toId`),
+    createdAt: requireString(value.createdAt, `indexLinks[${index}].createdAt`),
+  };
+}
+
+function normalizeMemoryExportBundle(value: unknown): MemoryExportBundle {
+  if (!isRecord(value)) throw new MemoryBundleValidationError("Invalid memory bundle");
+  if (value.formatVersion !== MEMORY_EXPORT_FORMAT_VERSION) {
+    throw new MemoryBundleValidationError("Unsupported memory bundle formatVersion");
+  }
+  if (!Array.isArray(value.l0Sessions) || !Array.isArray(value.l1Windows) || !Array.isArray(value.l2TimeIndexes)
+    || !Array.isArray(value.l2ProjectIndexes) || !Array.isArray(value.indexLinks)) {
+    throw new MemoryBundleValidationError("Invalid memory bundle collections");
+  }
+  return {
+    formatVersion: MEMORY_EXPORT_FORMAT_VERSION,
+    exportedAt: requireString(value.exportedAt, "exportedAt"),
+    ...(typeof value.lastIndexedAt === "string" && value.lastIndexedAt.trim() ? { lastIndexedAt: value.lastIndexedAt } : {}),
+    l0Sessions: value.l0Sessions.map((item, index) => normalizeL0Record(item, index)),
+    l1Windows: value.l1Windows.map((item, index) => normalizeL1Record(item, index)),
+    l2TimeIndexes: value.l2TimeIndexes.map((item, index) => normalizeL2TimeRecord(item, index)),
+    l2ProjectIndexes: value.l2ProjectIndexes.map((item, index) => normalizeL2ProjectRecord(item, index)),
+    globalProfile: normalizeGlobalProfile(value.globalProfile),
+    indexLinks: value.indexLinks.map((item, index) => normalizeIndexLink(item, index)),
+  };
 }
 
 function parseL0Row(row: DbRow): L0SessionRecord {
@@ -120,6 +308,17 @@ function parseGlobalProfileRow(row: DbRow): GlobalProfileRecord {
     sourceL1Ids: safeJsonParse(String(row.source_l1_ids_json ?? "[]"), []),
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
+  };
+}
+
+function parseIndexLinkRow(row: DbRow): IndexLinkRecord {
+  return {
+    linkId: String(row.link_id),
+    fromLevel: String(row.from_level) as IndexLinkRecord["fromLevel"],
+    fromId: String(row.from_id),
+    toLevel: String(row.to_level) as IndexLinkRecord["toLevel"],
+    toId: String(row.to_id),
+    createdAt: String(row.created_at),
   };
 }
 
@@ -450,9 +649,9 @@ export class MemoryRepository {
       DELETE FROM l1_window_fts;
     `);
     this.syncProfileFts(this.getGlobalProfileRecord());
-    for (const item of this.listRecentL2Time(10_000)) this.syncL2TimeFts(item);
-    for (const item of this.listRecentL2Projects(10_000)) this.syncL2ProjectFts(item);
-    for (const item of this.listRecentL1(10_000)) this.syncL1Fts(item);
+    for (const item of this.listAllL2Time()) this.syncL2TimeFts(item);
+    for (const item of this.listAllL2Projects()) this.syncL2ProjectFts(item);
+    for (const item of this.listAllL1()) this.syncL1Fts(item);
   }
 
   insertL0Session(record: Omit<L0SessionRecord, "createdAt"> & { createdAt?: string }): void {
@@ -633,6 +832,12 @@ export class MemoryRepository {
     return rows.map(parseL1Row);
   }
 
+  listAllL1(): L1WindowRecord[] {
+    const stmt = this.db.prepare("SELECT * FROM l1_windows ORDER BY ended_at ASC, created_at ASC");
+    const rows = stmt.all() as DbRow[];
+    return rows.map(parseL1Row);
+  }
+
   searchL1Hits(query: string, limit = 10): L1SearchResult[] {
     const recent = this.listRecentL1(Math.max(60, limit * 10));
     const ftsHits = this.searchFts("l1_window_fts", "l1_index_id", query, limit * 2);
@@ -722,6 +927,12 @@ export class MemoryRepository {
     return rows.map(parseL2TimeRow);
   }
 
+  listAllL2Time(): L2TimeIndexRecord[] {
+    const stmt = this.db.prepare("SELECT * FROM l2_time_indexes ORDER BY date_key ASC, created_at ASC");
+    const rows = stmt.all() as DbRow[];
+    return rows.map(parseL2TimeRow);
+  }
+
   getL2ProjectByKey(projectKey: string): L2ProjectIndexRecord | undefined {
     const stmt = this.db.prepare("SELECT * FROM l2_project_indexes WHERE project_key = ?");
     const row = stmt.get(projectKey) as DbRow | undefined;
@@ -797,6 +1008,12 @@ export class MemoryRepository {
   listRecentL2Projects(limit = 20, offset = 0): L2ProjectIndexRecord[] {
     const stmt = this.db.prepare("SELECT * FROM l2_project_indexes ORDER BY updated_at DESC LIMIT ? OFFSET ?");
     const rows = stmt.all(limit, offset) as DbRow[];
+    return rows.map(parseL2ProjectRow);
+  }
+
+  listAllL2Projects(): L2ProjectIndexRecord[] {
+    const stmt = this.db.prepare("SELECT * FROM l2_project_indexes ORDER BY updated_at ASC, created_at ASC");
+    const rows = stmt.all() as DbRow[];
     return rows.map(parseL2ProjectRow);
   }
 
@@ -897,6 +1114,12 @@ export class MemoryRepository {
     stmt.run(linkId, fromLevel, fromId, toLevel, toId, nowIso());
   }
 
+  listAllIndexLinks(): IndexLinkRecord[] {
+    const stmt = this.db.prepare("SELECT * FROM index_links ORDER BY created_at ASC");
+    const rows = stmt.all() as DbRow[];
+    return rows.map(parseIndexLinkRow);
+  }
+
   getOverview(): DashboardOverview {
     const count = (tableName: string): number => {
       const stmt = this.db.prepare(`SELECT COUNT(1) AS total FROM ${tableName}`);
@@ -904,7 +1127,7 @@ export class MemoryRepository {
       return Number(row?.total ?? 0);
     };
     const stateStmt = this.db.prepare("SELECT state_value FROM pipeline_state WHERE state_key = ?");
-    const state = stateStmt.get("lastIndexedAt") as { state_value?: string } | undefined;
+    const state = stateStmt.get(LAST_INDEXED_AT_STATE_KEY) as { state_value?: string } | undefined;
     const profile = this.getGlobalProfileRecord();
     const overview: DashboardOverview = {
       totalL0: count("l0_sessions"),
@@ -947,6 +1170,11 @@ export class MemoryRepository {
     return row?.state_value;
   }
 
+  deletePipelineState(key: string): void {
+    const stmt = this.db.prepare("DELETE FROM pipeline_state WHERE state_key = ?");
+    stmt.run(key);
+  }
+
   getIndexingSettings(defaults: IndexingSettings): IndexingSettings {
     const raw = this.getPipelineState(INDEXING_SETTINGS_STATE_KEY);
     if (!raw) return normalizeIndexingSettings(undefined, defaults);
@@ -958,6 +1186,150 @@ export class MemoryRepository {
     const next = normalizeIndexingSettings(input, defaults);
     this.setPipelineState(INDEXING_SETTINGS_STATE_KEY, JSON.stringify(next));
     return next;
+  }
+
+  exportMemoryBundle(): MemoryExportBundle {
+    const lastIndexedAt = this.getPipelineState(LAST_INDEXED_AT_STATE_KEY);
+    return {
+      formatVersion: MEMORY_EXPORT_FORMAT_VERSION,
+      exportedAt: nowIso(),
+      ...(lastIndexedAt ? { lastIndexedAt } : {}),
+      l0Sessions: this.listAllL0(),
+      l1Windows: this.listAllL1(),
+      l2TimeIndexes: this.listAllL2Time(),
+      l2ProjectIndexes: this.listAllL2Projects(),
+      globalProfile: this.getGlobalProfileRecord(),
+      indexLinks: this.listAllIndexLinks(),
+    };
+  }
+
+  importMemoryBundle(bundleLike: unknown): MemoryImportResult {
+    const bundle = normalizeMemoryExportBundle(bundleLike);
+    const importedAt = nowIso();
+    const imported: MemoryTransferCounts = {
+      l0: bundle.l0Sessions.length,
+      l1: bundle.l1Windows.length,
+      l2Time: bundle.l2TimeIndexes.length,
+      l2Project: bundle.l2ProjectIndexes.length,
+      profile: bundle.globalProfile.profileText.trim() ? 1 : 0,
+      links: bundle.indexLinks.length,
+    };
+
+    this.db.exec("BEGIN");
+    try {
+      this.db.exec(`
+        DELETE FROM active_topic_buffers;
+        DELETE FROM index_links;
+        DELETE FROM l2_project_indexes;
+        DELETE FROM l2_time_indexes;
+        DELETE FROM l1_windows;
+        DELETE FROM l0_sessions;
+        DELETE FROM global_profile_record;
+      `);
+
+      const insertL0Stmt = this.db.prepare(`
+        INSERT INTO l0_sessions (
+          l0_index_id, session_key, timestamp, messages_json, source, indexed, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      `);
+      const insertL1Stmt = this.db.prepare(`
+        INSERT INTO l1_windows (
+          l1_index_id, session_key, time_period, started_at, ended_at, summary, facts_json, situation_time_info, project_tags_json, project_details_json, l0_source_json, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      const insertL2TimeStmt = this.db.prepare(`
+        INSERT INTO l2_time_indexes (
+          l2_index_id, date_key, summary, l1_source_json, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?)
+      `);
+      const insertL2ProjectStmt = this.db.prepare(`
+        INSERT INTO l2_project_indexes (
+          l2_index_id, project_key, project_name, summary, current_status, latest_progress, l1_source_json, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      const insertLinkStmt = this.db.prepare(`
+        INSERT INTO index_links (link_id, from_level, from_id, to_level, to_id, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `);
+
+      for (const session of bundle.l0Sessions) {
+        insertL0Stmt.run(
+          session.l0IndexId,
+          session.sessionKey,
+          session.timestamp,
+          JSON.stringify(session.messages),
+          session.source,
+          session.indexed ? 1 : 0,
+          session.createdAt,
+        );
+      }
+
+      for (const window of bundle.l1Windows) {
+        insertL1Stmt.run(
+          window.l1IndexId,
+          window.sessionKey,
+          window.timePeriod,
+          window.startedAt,
+          window.endedAt,
+          window.summary,
+          JSON.stringify(window.facts),
+          window.situationTimeInfo,
+          JSON.stringify(window.projectTags),
+          JSON.stringify(window.projectDetails),
+          JSON.stringify(window.l0Source),
+          window.createdAt,
+        );
+      }
+
+      for (const timeIndex of bundle.l2TimeIndexes) {
+        insertL2TimeStmt.run(
+          timeIndex.l2IndexId,
+          timeIndex.dateKey,
+          timeIndex.summary,
+          JSON.stringify(timeIndex.l1Source),
+          timeIndex.createdAt,
+          timeIndex.updatedAt,
+        );
+      }
+
+      for (const projectIndex of bundle.l2ProjectIndexes) {
+        insertL2ProjectStmt.run(
+          projectIndex.l2IndexId,
+          projectIndex.projectKey,
+          projectIndex.projectName,
+          projectIndex.summary,
+          projectIndex.currentStatus,
+          projectIndex.latestProgress,
+          JSON.stringify(projectIndex.l1Source),
+          projectIndex.createdAt,
+          projectIndex.updatedAt,
+        );
+      }
+
+      this.saveGlobalProfileRecord(bundle.globalProfile);
+
+      for (const link of bundle.indexLinks) {
+        insertLinkStmt.run(link.linkId, link.fromLevel, link.fromId, link.toLevel, link.toId, link.createdAt);
+      }
+
+      if (bundle.lastIndexedAt) {
+        this.setPipelineState(LAST_INDEXED_AT_STATE_KEY, bundle.lastIndexedAt);
+      } else {
+        this.deletePipelineState(LAST_INDEXED_AT_STATE_KEY);
+      }
+
+      this.db.exec("COMMIT");
+      this.rebuildSearchIndexes();
+      return {
+        formatVersion: MEMORY_EXPORT_FORMAT_VERSION,
+        imported,
+        importedAt,
+        ...(bundle.lastIndexedAt ? { lastIndexedAt: bundle.lastIndexedAt } : {}),
+      };
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
   }
 
   resetDerivedIndexes(): void {

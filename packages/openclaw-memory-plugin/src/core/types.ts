@@ -103,6 +103,36 @@ export interface IndexLinkRecord {
   createdAt: string;
 }
 
+export const MEMORY_EXPORT_FORMAT_VERSION = "youarememory-memory-bundle.v1" as const;
+
+export interface MemoryExportBundle {
+  formatVersion: typeof MEMORY_EXPORT_FORMAT_VERSION;
+  exportedAt: string;
+  lastIndexedAt?: string;
+  l0Sessions: L0SessionRecord[];
+  l1Windows: L1WindowRecord[];
+  l2TimeIndexes: L2TimeIndexRecord[];
+  l2ProjectIndexes: L2ProjectIndexRecord[];
+  globalProfile: GlobalProfileRecord;
+  indexLinks: IndexLinkRecord[];
+}
+
+export interface MemoryTransferCounts {
+  l0: number;
+  l1: number;
+  l2Time: number;
+  l2Project: number;
+  profile: number;
+  links: number;
+}
+
+export interface MemoryImportResult {
+  formatVersion: typeof MEMORY_EXPORT_FORMAT_VERSION;
+  imported: MemoryTransferCounts;
+  importedAt: string;
+  lastIndexedAt?: string;
+}
+
 export type IntentType = "time" | "project" | "fact" | "general";
 
 export type L2SearchResult =

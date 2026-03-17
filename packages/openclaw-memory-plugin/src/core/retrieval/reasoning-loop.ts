@@ -220,6 +220,23 @@ export class ReasoningRetriever {
     return { ...this.runtimeStats };
   }
 
+  resetTransientState(): void {
+    this.cache.clear();
+    this.shadowDeepCache.clear();
+    this.shadowTasks.clear();
+    this.runtimeStats = {
+      lastRecallMs: 0,
+      recallTimeouts: 0,
+      lastRecallMode: "none",
+      lastRecallPath: "explicit",
+      lastRecallBudgetLimited: false,
+      lastShadowDeepQueued: false,
+      lastRecallInjected: false,
+      lastRecallEnoughAt: "none",
+      lastRecallCacheHit: false,
+    };
+  }
+
   private currentSettings(): IndexingSettings {
     return this.runtime.getSettings?.() ?? {
       reasoningMode: "answer_first",

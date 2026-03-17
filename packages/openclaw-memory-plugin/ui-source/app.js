@@ -40,6 +40,8 @@ const LOCALES = {
     "settings.theme.dark": "深色",
     "settings.theme.auto": "跟随系统",
     "settings.language": "界面语言",
+    "settings.export": "导出记忆",
+    "settings.import": "导入记忆",
     "settings.clear": "清除所有记忆",
     "settings.dangerZone": "危险操作",
     "retrieve.title": "检索调试",
@@ -55,11 +57,21 @@ const LOCALES = {
     "confirm.clear.title": "清除所有记忆",
     "confirm.clear.body": "此操作将删除所有已索引的记忆数据，且不可撤销。确定继续吗？",
     "confirm.clear.ok": "确认清除",
+    "confirm.import.title": "导入记忆",
+    "confirm.import.body": "这会用导入文件中的记忆覆盖当前设备上的全部记忆数据，当前设备记忆将被替换。确定继续吗？",
+    "confirm.import.ok": "确认导入",
     "confirm.cancel": "取消",
     "status.building": "同步中…",
     "status.built": "已构建 · L0 {0} / L1 {1} / L2T {2} / L2P {3} / 画像 {4}",
     "status.clearing": "清空中…",
     "status.cleared": "已清空本地记忆",
+    "status.exporting": "导出中…",
+    "status.exported": "已导出记忆 · {0}",
+    "status.importing": "导入中…",
+    "status.imported": "已导入 · L0 {0} / L1 {1} / L2T {2} / L2P {3} / 画像 {4} / 链接 {5}",
+    "status.importInvalid": "导入文件不是有效的记忆包",
+    "status.importFailed": "导入失败：{0}",
+    "status.exportFailed": "导出失败：{0}",
     "status.searching": "搜索中…",
     "status.searched": "搜索完成",
     "status.retrieving": "检索中…",
@@ -233,6 +245,8 @@ const LOCALES = {
     "settings.theme.dark": "Dark",
     "settings.theme.auto": "System",
     "settings.language": "Language",
+    "settings.export": "Export Memory",
+    "settings.import": "Import Memory",
     "settings.clear": "Clear All Memory",
     "settings.dangerZone": "Danger Zone",
     "retrieve.title": "Retrieve Debug",
@@ -248,11 +262,21 @@ const LOCALES = {
     "confirm.clear.title": "Clear All Memory",
     "confirm.clear.body": "This will permanently delete all indexed memory data. This action cannot be undone. Continue?",
     "confirm.clear.ok": "Confirm Clear",
+    "confirm.import.title": "Import Memory",
+    "confirm.import.body": "This will replace all memory on this device with the imported memory bundle. Current device memory will be overwritten. Continue?",
+    "confirm.import.ok": "Confirm Import",
     "confirm.cancel": "Cancel",
     "status.building": "Syncing…",
     "status.built": "Built · L0 {0} / L1 {1} / L2T {2} / L2P {3} / Profile {4}",
     "status.clearing": "Clearing…",
     "status.cleared": "Local memory cleared",
+    "status.exporting": "Exporting…",
+    "status.exported": "Memory exported · {0}",
+    "status.importing": "Importing…",
+    "status.imported": "Imported · L0 {0} / L1 {1} / L2T {2} / L2P {3} / Profile {4} / Links {5}",
+    "status.importInvalid": "The selected file is not a valid memory bundle",
+    "status.importFailed": "Import failed: {0}",
+    "status.exportFailed": "Export failed: {0}",
     "status.searching": "Searching…",
     "status.searched": "Search complete",
     "status.retrieving": "Retrieving…",
@@ -494,7 +518,10 @@ const detailBody = $("#detailBody");
 const settingsPanel = document.getElementById("settingsPanel");
 const settingsCloseBtn = document.getElementById("settingsCloseBtn");
 const saveSettingsBtn = $("#saveSettingsBtn");
+const exportMemoryBtn = $("#exportMemoryBtn");
+const importMemoryBtn = $("#importMemoryBtn");
 const clearMemoryBtn = $("#clearMemoryBtn");
+const importMemoryInput = $("#importMemoryInput");
 const reasoningModeToggle = document.getElementById("reasoningModeToggle");
 const maxAutoReplyLatencyInput = $("#maxAutoReplyLatencyInput");
 const latencyFieldWrap = $("#latencyFieldWrap");
@@ -1854,9 +1881,19 @@ function renderActiveNav() {
 
 /* ── API ─────────────────────────────────────────────────── */
 
+async function readErrorMessage(res) {
+  try {
+    const payload = await res.json();
+    if (payload && typeof payload.error === "string" && payload.error.trim()) {
+      return payload.error.trim();
+    }
+  } catch {}
+  return `${res.status} ${res.statusText}`;
+}
+
 async function fetchJson(url) {
   const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  if (!res.ok) throw new Error(await readErrorMessage(res));
   return res.json();
 }
 
@@ -1867,8 +1904,14 @@ async function postJson(url, body) {
     headers: body ? { "content-type": "application/json" } : undefined,
     body: body ? JSON.stringify(body) : undefined,
   });
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  if (!res.ok) throw new Error(await readErrorMessage(res));
   return res.json();
+}
+
+function parseDownloadFilename(headerValue) {
+  const value = String(headerValue || "");
+  const match = value.match(/filename="([^"]+)"/i);
+  return match?.[1] || "youarememory-memory-export.json";
 }
 
 /* ── Data loading ────────────────────────────────────────── */
@@ -2077,6 +2120,70 @@ async function clearMemory() {
   await refreshDashboard("status.cleared", "warning");
 }
 
+async function exportMemory() {
+  closePopover();
+  setActivity("status.exporting");
+  try {
+    const res = await fetch("./api/export", { cache: "no-store" });
+    if (!res.ok) throw new Error(await readErrorMessage(res));
+    const blob = await res.blob();
+    const filename = parseDownloadFilename(res.headers.get("content-disposition"));
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = objectUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+    setActivity("status.exported", "success", filename);
+  } catch (error) {
+    setActivity("status.exportFailed", "danger", error instanceof Error ? error.message : String(error));
+  }
+}
+
+async function importMemoryBundle(bundle) {
+  const ok = await showModal({
+    icon: "⇪", iconClass: "icon-danger",
+    title: t("confirm.import.title"),
+    body: t("confirm.import.body"),
+    confirmText: t("confirm.import.ok"),
+    confirmClass: "danger",
+  });
+  if (!ok) return;
+  setActivity("status.importing", "warning");
+  const result = await postJson("./api/import", bundle);
+  const counts = result?.imported || {};
+  await refreshDashboard(
+    "status.imported",
+    "success",
+    counts.l0 ?? 0,
+    counts.l1 ?? 0,
+    counts.l2Time ?? 0,
+    counts.l2Project ?? 0,
+    counts.profile ?? 0,
+    counts.links ?? 0,
+  );
+}
+
+async function handleImportFile(file) {
+  if (!file) return;
+  closePopover();
+  try {
+    const raw = await file.text();
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.l0Sessions) || !Array.isArray(parsed.l1Windows)) {
+      setActivity("status.importInvalid", "danger");
+      return;
+    }
+    await importMemoryBundle(parsed);
+  } catch (error) {
+    setActivity("status.importFailed", "danger", error instanceof Error ? error.message : String(error));
+  } finally {
+    if (importMemoryInput) importMemoryInput.value = "";
+  }
+}
+
 async function searchCurrentLevel() {
   setActivity("status.searching");
   await loadLevel(state.activeLevel, listQueryInput.value || "");
@@ -2103,6 +2210,15 @@ refreshBtn.addEventListener("click", () => void refreshDashboard());
 buildNowBtn.addEventListener("click", () => void buildNow());
 overviewToggleBtn.addEventListener("click", () => togglePanel("overview"));
 saveSettingsBtn.addEventListener("click", () => void saveSettings());
+if (exportMemoryBtn) exportMemoryBtn.addEventListener("click", () => void exportMemory());
+if (importMemoryBtn) importMemoryBtn.addEventListener("click", () => importMemoryInput?.click());
+if (importMemoryInput) {
+  importMemoryInput.addEventListener("change", (event) => {
+    const input = event.target;
+    const file = input instanceof HTMLInputElement ? input.files?.[0] : undefined;
+    void handleImportFile(file || null);
+  });
+}
 clearMemoryBtn.addEventListener("click", () => void clearMemory());
 const listClearBtn = document.getElementById("listClearBtn");
 listSearchBtn.addEventListener("click", () => void searchCurrentLevel());
@@ -2139,7 +2255,9 @@ navMenuTrigger?.addEventListener("click", (e) => {
 
 settingsPopover?.addEventListener("click", (e) => {
   const item = e.target instanceof Element ? e.target.closest(".popover-item") : null;
-  if (item && (item.id === "refreshBtn" || item.id === "overviewToggleBtn")) closePopover();
+  if (item && (item.id === "refreshBtn" || item.id === "overviewToggleBtn" || item.id === "exportMemoryBtn" || item.id === "importMemoryBtn")) {
+    closePopover();
+  }
 });
 
 document.addEventListener("click", (e) => {
