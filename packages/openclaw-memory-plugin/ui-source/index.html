@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="./app.css" />
   </head>
   <body>
-    <div class="app-shell">
+    <div class="app-shell" data-view="command_center">
       <div id="appScrim" class="app-scrim"></div>
 
       <aside class="nav-rail" id="navRail">
@@ -23,7 +23,27 @@
           <button id="navCloseBtn" class="drawer-close nav-close" type="button" aria-label="Close">&#x2715;</button>
         </div>
 
-        <nav id="levelTabs" class="nav-list">
+        <div id="viewToggleWrap" class="view-toggle-wrap">
+          <span class="view-toggle-label" data-i18n="topbar.commandCenter">画布视图</span>
+          <button id="viewToggleBtn" class="view-toggle-switch" type="button" role="switch" aria-checked="true">
+            <span class="view-toggle-thumb"></span>
+          </button>
+          <span class="view-toggle-label view-toggle-label--sub" data-i18n="topbar.listView">列表视图</span>
+        </div>
+
+        <nav id="boardNavTabs" class="nav-list">
+          <button class="nav-item active" data-board="project" type="button">
+            <span class="nav-label" data-i18n="board.project">项目看版</span>
+          </button>
+          <button class="nav-item" data-board="timeline" type="button">
+            <span class="nav-label" data-i18n="board.timeline">时间线看版</span>
+          </button>
+          <button class="nav-item" data-board="profile" type="button">
+            <span class="nav-label" data-i18n="board.profile">用户画像</span>
+          </button>
+        </nav>
+
+        <nav id="levelTabs" class="nav-list" style="display:none">
           <button class="nav-item active" data-level="l1" type="button">
             <span class="nav-label" data-i18n="nav.l1">L1 窗口</span>
             <span class="nav-count" data-count-for="l1">0</span>
@@ -46,13 +66,87 @@
           </button>
         </nav>
 
-        <div class="nav-footer">
-          <span class="nav-footer-label" data-i18n="nav.lastIndexed">最近索引</span>
-          <strong id="navLastIndexed" data-i18n="nav.waiting">等待索引</strong>
+        <div class="nav-spacer"></div>
+
+        <div class="nav-bottom">
+          <div class="nav-popover" id="settingsPopover">
+            <button class="popover-item" id="refreshBtn" type="button">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+              <span data-i18n="topbar.refresh">刷新</span>
+            </button>
+            <button class="popover-item" id="buildNowBtn" type="button">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
+              <span data-i18n="topbar.build">索引同步</span>
+            </button>
+            <button class="popover-item" id="overviewToggleBtn" type="button">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+              <span data-i18n="topbar.overview">仪表盘</span>
+            </button>
+            <div class="popover-divider"></div>
+
+            <div class="popover-group">
+              <span class="popover-label" data-i18n="settings.theme">显示主题</span>
+              <div class="popover-seg" id="themeToggle">
+                <button data-theme-value="light" type="button" class="popover-seg-btn active" title="浅色">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+                </button>
+                <button data-theme-value="dark" type="button" class="popover-seg-btn" title="深色">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                </button>
+                <button data-theme-value="auto" type="button" class="popover-seg-btn" title="跟随系统">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                </button>
+              </div>
+            </div>
+
+            <div class="popover-group">
+              <span class="popover-label" data-i18n="settings.language">界面语言</span>
+              <div class="popover-seg" id="langToggle">
+                <button data-locale="zh" type="button" class="popover-seg-btn active">文</button>
+                <button data-locale="en" type="button" class="popover-seg-btn">A</button>
+              </div>
+            </div>
+
+            <div class="popover-divider"></div>
+
+            <div class="popover-group">
+              <span class="popover-label" data-i18n="settings.mode">推理模式</span>
+              <div class="popover-seg popover-seg-wide" id="reasoningModeToggle">
+                <button data-mode="answer_first" type="button" class="popover-seg-btn active">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                  <span data-i18n="settings.mode.answer_first">回答优先</span>
+                </button>
+                <button data-mode="accuracy_first" type="button" class="popover-seg-btn">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+                  <span data-i18n="settings.mode.accuracy_first">准确优先</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="popover-group popover-group-stack" id="latencyFieldWrap">
+              <span class="popover-label" data-i18n="settings.maxLatency">最大可接受时延（毫秒）</span>
+              <input id="maxAutoReplyLatencyInput" class="popover-input" type="number" min="300" step="100" placeholder="1800" />
+            </div>
+
+            <button class="popover-item popover-save" id="saveSettingsBtn" type="button">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+              <span data-i18n="settings.save">保存设置</span>
+            </button>
+
+            <div class="popover-divider"></div>
+            <button class="popover-item popover-danger" id="clearMemoryBtn" type="button">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+              <span data-i18n="settings.clear">清除所有记忆</span>
+            </button>
+          </div>
+          <button class="nav-menu-trigger" id="navMenuTrigger" type="button">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            <span data-i18n="topbar.settings">设置</span>
+          </button>
         </div>
       </aside>
 
-      <main class="workspace">
+      <main class="workspace" data-view="command_center">
         <header class="topbar">
           <div class="topbar-leading">
             <button id="navToggleBtn" class="icon-btn nav-toggle" type="button" aria-label="Menu">☰</button>
@@ -63,34 +157,32 @@
           </div>
 
           <div class="toolbar">
-            <span id="statusPill" class="status-pill" data-i18n="nav.waiting">等待索引</span>
-            <button id="refreshBtn" class="tool-btn" type="button" data-i18n="topbar.refresh">刷新</button>
-            <button id="buildNowBtn" class="tool-btn primary" type="button" data-i18n="topbar.build">立即构建</button>
-            <button id="overviewToggleBtn" class="tool-btn" type="button" data-i18n="topbar.overview">概览</button>
-            <button id="settingsToggleBtn" class="tool-btn" type="button" data-i18n="topbar.settings">设置</button>
-            <button id="retrieveToggleBtn" class="tool-btn" type="button" data-i18n="topbar.retrieve">检索</button>
-            <button id="detailToggleBtn" class="tool-btn" type="button" data-i18n="topbar.detail">详情</button>
-
-            <span class="toolbar-sep"></span>
-
-            <div class="theme-toggle" id="themeToggle">
-              <button data-theme-value="light" type="button" class="active" title="Light">☀</button>
-              <button data-theme-value="dark" type="button" title="Dark">☽</button>
-              <button data-theme-value="auto" type="button" title="Auto">◑</button>
-            </div>
-
-            <div class="lang-dropdown" id="langDropdown">
-              <button class="lang-dropdown-trigger" id="langTrigger" type="button">
-                <span id="langCurrentLabel">简体中文</span>
-                <span class="lang-arrow">▾</span>
-              </button>
-              <div class="lang-dropdown-menu" id="langMenu">
-                <button class="lang-option active" data-locale="zh" type="button">简体中文</button>
-                <button class="lang-option" data-locale="en" type="button">English</button>
-              </div>
-            </div>
+            <span class="topbar-index-info">
+              <span class="topbar-index-label" data-i18n="nav.lastIndexed">最近索引</span>
+              <span id="navLastIndexed" class="topbar-index-time" data-i18n="nav.waiting">等待索引</span>
+            </span>
           </div>
         </header>
+
+        <section class="command-center" id="commandCenter">
+          <div class="summary-header" id="summaryHeader"></div>
+          <div class="board-scroll" id="boardScroll">
+            <div class="board-content board-active" id="projectBoard"></div>
+            <div class="board-content" id="timelineBoard"></div>
+            <div class="board-content" id="profileBoard"></div>
+          </div>
+          <div class="connection-panel" id="connectionPanel">
+            <div class="connection-header">
+              <button id="connectionBackBtn" class="conn-back-btn" type="button">&#8592; 返回</button>
+              <h3 data-i18n="connection.title">记忆连线</h3>
+              <button id="connectionCloseBtn" class="drawer-close" type="button" aria-label="Close">&#x2715;</button>
+            </div>
+            <div class="connection-graph" id="connectionGraph">
+              <svg class="connection-svg" id="connectionSvg" xmlns="http://www.w3.org/2000/svg"></svg>
+              <div class="connection-columns" id="connectionColumns"></div>
+            </div>
+          </div>
+        </section>
 
         <section class="stream-panel">
           <div class="panel-head">
@@ -109,6 +201,7 @@
                 placeholder="搜索当前层级"
               />
               <button id="listSearchBtn" class="tool-btn" type="button" data-i18n="stream.search">搜索</button>
+              <button id="listClearBtn" class="tool-btn search-clear-btn" type="button" style="display:none" data-i18n="stream.clear">清空</button>
             </div>
           </div>
 
@@ -141,41 +234,7 @@
       <div id="detailBody" class="detail-body"></div>
     </aside>
 
-    <aside class="side-drawer settings-drawer" id="settingsPanel">
-      <div class="drawer-header">
-        <h3 data-i18n="settings.title">索引设置</h3>
-        <button id="settingsCloseBtn" class="drawer-close" type="button" aria-label="Close">&#x2715;</button>
-      </div>
-
-      <div class="drawer-section">
-        <label class="settings-field">
-          <span data-i18n="settings.mode">推理模式</span>
-          <select id="reasoningModeInput">
-            <option value="answer_first" data-i18n="settings.mode.answer_first">回答优先</option>
-            <option value="accuracy_first" data-i18n="settings.mode.accuracy_first">准确优先</option>
-          </select>
-        </label>
-      </div>
-
-      <div class="drawer-section">
-        <p class="panel-meta" data-i18n="settings.mode.help">选择更快回答还是更深检索。</p>
-      </div>
-
-      <div class="drawer-section" id="latencyFieldWrap">
-        <label class="settings-field">
-          <span data-i18n="settings.maxLatency">最大可接受时延（毫秒）</span>
-          <input id="maxAutoReplyLatencyInput" type="number" min="300" step="100" placeholder="1800" />
-        </label>
-      </div>
-
-      <div class="drawer-actions">
-        <button id="saveSettingsBtn" class="tool-btn primary wide" type="button" data-i18n="settings.save">保存设置</button>
-      </div>
-
-      <div class="drawer-section drawer-danger">
-        <button id="clearMemoryBtn" class="tool-btn danger wide" type="button" data-i18n="settings.clear">清空并重建</button>
-      </div>
-    </aside>
+    <!-- settings drawer removed — all settings now in popover menu -->
 
     <aside class="side-drawer retrieve-drawer" id="retrievePanel">
       <div class="drawer-header">
@@ -205,6 +264,19 @@
         </details>
       </div>
     </aside>
+
+    <!-- Modal dialog -->
+    <div class="modal-overlay" id="modalOverlay">
+      <div class="modal-card" id="modalCard">
+        <div class="modal-icon" id="modalIcon"></div>
+        <h3 class="modal-title" id="modalTitle"></h3>
+        <p class="modal-body" id="modalBody"></p>
+        <div class="modal-actions">
+          <button class="modal-btn modal-cancel" id="modalCancel" type="button"></button>
+          <button class="modal-btn modal-confirm" id="modalConfirm" type="button"></button>
+        </div>
+      </div>
+    </div>
 
     <script type="module" src="./app.js"></script>
   </body>

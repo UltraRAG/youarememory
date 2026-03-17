@@ -528,9 +528,9 @@ export class MemoryRepository {
     return this.getL0ByIds(l0Ids).slice(0, limit);
   }
 
-  listRecentL0(limit = 20): L0SessionRecord[] {
-    const stmt = this.db.prepare("SELECT * FROM l0_sessions ORDER BY timestamp DESC LIMIT ?");
-    const rows = stmt.all(limit) as DbRow[];
+  listRecentL0(limit = 20, offset = 0): L0SessionRecord[] {
+    const stmt = this.db.prepare("SELECT * FROM l0_sessions ORDER BY timestamp DESC LIMIT ? OFFSET ?");
+    const rows = stmt.all(limit, offset) as DbRow[];
     return rows.map(parseL0Row);
   }
 
@@ -627,9 +627,9 @@ export class MemoryRepository {
     return this.searchL1Hits(query, limit).map((hit) => hit.item);
   }
 
-  listRecentL1(limit = 20): L1WindowRecord[] {
-    const stmt = this.db.prepare("SELECT * FROM l1_windows ORDER BY ended_at DESC, created_at DESC LIMIT ?");
-    const rows = stmt.all(limit) as DbRow[];
+  listRecentL1(limit = 20, offset = 0): L1WindowRecord[] {
+    const stmt = this.db.prepare("SELECT * FROM l1_windows ORDER BY ended_at DESC, created_at DESC LIMIT ? OFFSET ?");
+    const rows = stmt.all(limit, offset) as DbRow[];
     return rows.map(parseL1Row);
   }
 
@@ -716,9 +716,9 @@ export class MemoryRepository {
     return this.searchL2Hits(query, limit).filter((hit) => hit.level === "l2_time");
   }
 
-  listRecentL2Time(limit = 20): L2TimeIndexRecord[] {
-    const stmt = this.db.prepare("SELECT * FROM l2_time_indexes ORDER BY updated_at DESC LIMIT ?");
-    const rows = stmt.all(limit) as DbRow[];
+  listRecentL2Time(limit = 20, offset = 0): L2TimeIndexRecord[] {
+    const stmt = this.db.prepare("SELECT * FROM l2_time_indexes ORDER BY updated_at DESC LIMIT ? OFFSET ?");
+    const rows = stmt.all(limit, offset) as DbRow[];
     return rows.map(parseL2TimeRow);
   }
 
@@ -794,9 +794,9 @@ export class MemoryRepository {
     return this.searchL2Hits(query, limit).filter((hit) => hit.level === "l2_project");
   }
 
-  listRecentL2Projects(limit = 20): L2ProjectIndexRecord[] {
-    const stmt = this.db.prepare("SELECT * FROM l2_project_indexes ORDER BY updated_at DESC LIMIT ?");
-    const rows = stmt.all(limit) as DbRow[];
+  listRecentL2Projects(limit = 20, offset = 0): L2ProjectIndexRecord[] {
+    const stmt = this.db.prepare("SELECT * FROM l2_project_indexes ORDER BY updated_at DESC LIMIT ? OFFSET ?");
+    const rows = stmt.all(limit, offset) as DbRow[];
     return rows.map(parseL2ProjectRow);
   }
 

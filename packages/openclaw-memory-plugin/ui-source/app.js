@@ -9,11 +9,11 @@ const LOCALES = {
     "nav.profile": "全局画像",
     "nav.lastIndexed": "最近索引",
     "nav.waiting": "等待索引",
-    "topbar.title": "记忆看板",
+    "topbar.title": "YouAreMemory",
     "topbar.idle": "等待操作",
     "topbar.refresh": "刷新",
-    "topbar.build": "立即构建",
-    "topbar.overview": "概览",
+    "topbar.build": "索引同步",
+    "topbar.overview": "仪表盘",
     "topbar.settings": "设置",
     "topbar.retrieve": "检索",
     "topbar.detail": "详情",
@@ -21,17 +21,27 @@ const LOCALES = {
     "overview.scrollHint": "固定高度 · 可滚动",
     "stream.searchPlaceholder": "搜索当前层级",
     "stream.search": "搜索",
+    "stream.clear": "清空",
     "stream.items": "{0} 条",
+    "stream.prevPage": "上一页",
+    "stream.nextPage": "下一页",
+    "stream.pageInfo": "第 {0} / {1} 页",
     "detail.title": "记录详情",
     "detail.empty": "选择左侧记录查看详情",
-    "settings.title": "索引设置",
+    "settings.title": "设置",
     "settings.mode": "推理模式",
-    "settings.mode.help": "回答优先会遵守最大可接受时延；准确优先不受这个时延设置限制。",
+    "settings.mode.help": "回答优先遵守最大可接受时延；准确优先不受时延限制。",
     "settings.mode.answer_first": "回答优先",
     "settings.mode.accuracy_first": "准确优先",
     "settings.maxLatency": "最大可接受时延（毫秒）",
     "settings.save": "保存设置",
-    "settings.clear": "清空并重建",
+    "settings.theme": "显示主题",
+    "settings.theme.light": "浅色",
+    "settings.theme.dark": "深色",
+    "settings.theme.auto": "跟随系统",
+    "settings.language": "界面语言",
+    "settings.clear": "清除所有记忆",
+    "settings.dangerZone": "危险操作",
     "retrieve.title": "检索调试",
     "retrieve.placeholder": "输入问题，例如：这个项目最近进展到哪一步了？",
     "retrieve.run": "开始检索",
@@ -39,7 +49,14 @@ const LOCALES = {
     "retrieve.context": "上下文",
     "status.refreshing": "刷新中…",
     "status.refreshed": "已刷新",
-    "status.building": "构建中…",
+    "confirm.sync.title": "索引同步",
+    "confirm.sync.body": "将扫描最近对话并更新记忆索引，这可能需要一些时间。",
+    "confirm.sync.ok": "开始同步",
+    "confirm.clear.title": "清除所有记忆",
+    "confirm.clear.body": "此操作将删除所有已索引的记忆数据，且不可撤销。确定继续吗？",
+    "confirm.clear.ok": "确认清除",
+    "confirm.cancel": "取消",
+    "status.building": "同步中…",
     "status.built": "已构建 · L0 {0} / L1 {1} / L2T {2} / L2P {3} / 画像 {4}",
     "status.clearing": "清空中…",
     "status.cleared": "已清空本地记忆",
@@ -158,6 +175,24 @@ const LOCALES = {
     "enough.l0": "L0",
     "enough.profile": "画像",
     "enough.none": "无",
+    "topbar.commandCenter": "画布视图",
+    "topbar.listView": "列表视图",
+    "board.project": "项目看版",
+    "board.timeline": "时间线看版",
+    "board.profile": "用户画像",
+    "board.profile.empty": "暂无画像数据",
+    "board.profile.topics": "关联话题",
+    "board.profile.viewConn": "查看记忆连线",
+    "board.stats.activeProjects": "活跃项目",
+    "board.stats.timeRecords": "时间记录",
+    "board.stats.topicWindows": "话题窗口",
+    "board.stats.sessions": "会话数",
+    "connection.title": "记忆连线",
+    "connection.l2": "L2 索引",
+    "connection.l1": "L1 窗口",
+    "connection.l0": "L0 会话",
+    "connection.noData": "暂无关联数据",
+    "connection.notLoaded": "未加载",
   },
   en: {
     "nav.l1": "L1 Window",
@@ -167,11 +202,11 @@ const LOCALES = {
     "nav.profile": "Profile",
     "nav.lastIndexed": "Last indexed",
     "nav.waiting": "Waiting",
-    "topbar.title": "Memory Board",
+    "topbar.title": "YouAreMemory",
     "topbar.idle": "Idle",
     "topbar.refresh": "Refresh",
-    "topbar.build": "Build",
-    "topbar.overview": "Overview",
+    "topbar.build": "Sync Index",
+    "topbar.overview": "Dashboard",
     "topbar.settings": "Settings",
     "topbar.retrieve": "Retrieve",
     "topbar.detail": "Detail",
@@ -179,17 +214,27 @@ const LOCALES = {
     "overview.scrollHint": "Fixed height · Scrollable",
     "stream.searchPlaceholder": "Search current level",
     "stream.search": "Search",
+    "stream.clear": "Clear",
     "stream.items": "{0} items",
+    "stream.prevPage": "Prev",
+    "stream.nextPage": "Next",
+    "stream.pageInfo": "Page {0} / {1}",
     "detail.title": "Detail",
     "detail.empty": "Select a record to view details",
-    "settings.title": "Index Settings",
+    "settings.title": "Settings",
     "settings.mode": "Reasoning mode",
     "settings.mode.help": "Answer first obeys the max acceptable latency; accuracy first ignores that latency cap.",
     "settings.mode.answer_first": "Answer first",
     "settings.mode.accuracy_first": "Accuracy first",
     "settings.maxLatency": "Max acceptable latency (ms)",
     "settings.save": "Save",
-    "settings.clear": "Clear & Rebuild",
+    "settings.theme": "Theme",
+    "settings.theme.light": "Light",
+    "settings.theme.dark": "Dark",
+    "settings.theme.auto": "System",
+    "settings.language": "Language",
+    "settings.clear": "Clear All Memory",
+    "settings.dangerZone": "Danger Zone",
     "retrieve.title": "Retrieve Debug",
     "retrieve.placeholder": "Enter a question, e.g. What's the latest progress?",
     "retrieve.run": "Run",
@@ -197,7 +242,14 @@ const LOCALES = {
     "retrieve.context": "Context",
     "status.refreshing": "Refreshing…",
     "status.refreshed": "Refreshed",
-    "status.building": "Building…",
+    "confirm.sync.title": "Sync Index",
+    "confirm.sync.body": "This will scan recent conversations and update the memory index. It may take a moment.",
+    "confirm.sync.ok": "Start Sync",
+    "confirm.clear.title": "Clear All Memory",
+    "confirm.clear.body": "This will permanently delete all indexed memory data. This action cannot be undone. Continue?",
+    "confirm.clear.ok": "Confirm Clear",
+    "confirm.cancel": "Cancel",
+    "status.building": "Syncing…",
     "status.built": "Built · L0 {0} / L1 {1} / L2T {2} / L2P {3} / Profile {4}",
     "status.clearing": "Clearing…",
     "status.cleared": "Local memory cleared",
@@ -316,6 +368,24 @@ const LOCALES = {
     "enough.l0": "L0",
     "enough.profile": "Profile",
     "enough.none": "None",
+    "topbar.commandCenter": "Canvas View",
+    "topbar.listView": "List View",
+    "board.project": "Projects",
+    "board.timeline": "Timeline",
+    "board.profile": "Profile",
+    "board.profile.empty": "No profile data yet",
+    "board.profile.topics": "Related Topics",
+    "board.profile.viewConn": "View Memory Connections",
+    "board.stats.activeProjects": "Active Projects",
+    "board.stats.timeRecords": "Time Records",
+    "board.stats.topicWindows": "Topic Windows",
+    "board.stats.sessions": "Sessions",
+    "connection.title": "Memory Connections",
+    "connection.l2": "L2 Index",
+    "connection.l1": "L1 Windows",
+    "connection.l0": "L0 Sessions",
+    "connection.noData": "No linked data",
+    "connection.notLoaded": "Not loaded",
   },
 };
 
@@ -341,15 +411,15 @@ function translatePage() {
       el.textContent = t(key);
     }
   });
-  updateLangDropdown();
+  syncLangButtons();
 }
 
-function updateLangDropdown() {
-  const labels = { zh: "简体中文", en: "English" };
-  if (langCurrentLabel) langCurrentLabel.textContent = labels[currentLocale] || labels.zh;
-  document.querySelectorAll(".lang-option").forEach((opt) => {
-    opt.classList.toggle("active", opt.dataset.locale === currentLocale);
-  });
+function syncLangButtons() {
+  if (langToggle) {
+    langToggle.querySelectorAll(".popover-seg-btn").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.locale === currentLocale);
+    });
+  }
 }
 
 function setLocale(locale) {
@@ -372,7 +442,7 @@ function applyTheme(pref) {
   localStorage.setItem("ym-theme", pref);
   const effective = getEffectiveTheme(pref);
   document.documentElement.dataset.theme = effective;
-  document.querySelectorAll("#themeToggle button").forEach((btn) => {
+  document.querySelectorAll("#themeToggle .popover-seg-btn").forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.themeValue === pref);
   });
 }
@@ -397,7 +467,7 @@ const navCloseBtn = $("#navCloseBtn");
 const levelTabs = $("#levelTabs");
 const navLastIndexed = $("#navLastIndexed");
 
-const statusPill = $("#statusPill");
+const statusPill = document.getElementById("statusPill");
 const activityText = $("#activityText");
 const overviewToggleBtn = $("#overviewToggleBtn");
 const overviewCloseBtn = $("#overviewCloseBtn");
@@ -411,9 +481,9 @@ const entryList = $("#entryList");
 
 const refreshBtn = $("#refreshBtn");
 const buildNowBtn = $("#buildNowBtn");
-const settingsToggleBtn = $("#settingsToggleBtn");
-const retrieveToggleBtn = $("#retrieveToggleBtn");
-const detailToggleBtn = $("#detailToggleBtn");
+const settingsToggleBtn = document.getElementById("settingsToggleBtn");
+const retrieveToggleBtn = document.getElementById("retrieveToggleBtn");
+const detailToggleBtn = document.getElementById("detailToggleBtn");
 
 const detailPanel = $("#detailPanel");
 const detailCloseBtn = $("#detailCloseBtn");
@@ -421,13 +491,14 @@ const detailTitle = $("#detailTitle");
 const detailMeta = $("#detailMeta");
 const detailBody = $("#detailBody");
 
-const settingsPanel = $("#settingsPanel");
-const settingsCloseBtn = $("#settingsCloseBtn");
+const settingsPanel = document.getElementById("settingsPanel");
+const settingsCloseBtn = document.getElementById("settingsCloseBtn");
 const saveSettingsBtn = $("#saveSettingsBtn");
 const clearMemoryBtn = $("#clearMemoryBtn");
-const reasoningModeInput = $("#reasoningModeInput");
+const reasoningModeToggle = document.getElementById("reasoningModeToggle");
 const maxAutoReplyLatencyInput = $("#maxAutoReplyLatencyInput");
 const latencyFieldWrap = $("#latencyFieldWrap");
+const langToggle = document.getElementById("langToggle");
 
 const retrievePanel = $("#retrievePanel");
 const retrieveCloseBtn = $("#retrieveCloseBtn");
@@ -442,6 +513,21 @@ const langDropdown = $("#langDropdown");
 const langTrigger = $("#langTrigger");
 const langCurrentLabel = $("#langCurrentLabel");
 const langMenu = $("#langMenu");
+
+const commandCenter = $("#commandCenter");
+const summaryHeader = $("#summaryHeader");
+const boardNavTabs = $("#boardNavTabs");
+const boardTabs = document.getElementById("boardTabs");
+const boardScroll = $("#boardScroll");
+const projectBoard = $("#projectBoard");
+const timelineBoard = $("#timelineBoard");
+const connectionPanel = $("#connectionPanel");
+const connectionGraph = $("#connectionGraph");
+const connectionSvg = $("#connectionSvg");
+const connectionColumns = $("#connectionColumns");
+const connectionCloseBtn = $("#connectionCloseBtn");
+const connectionBackBtn = $("#connectionBackBtn");
+const viewToggleBtn = $("#viewToggleBtn");
 
 /* ── Level config ────────────────────────────────────────── */
 
@@ -489,6 +575,16 @@ const state = {
   baseItems: { l2_time: [], l2_project: [], l1: [], l0: [], profile: [] },
   visibleItems: [],
   selectedIndex: -1,
+  viewMode: "command_center",
+  activeBoard: "project",
+  connectionTarget: null,
+  connectionType: null,
+  l1ById: {},
+  l0ById: {},
+  listPage: 0,
+  listPageSize: 20,
+  isSearching: false,
+  searchTotal: 0,
 };
 
 /* ── Helpers ──────────────────────────────────────────────── */
@@ -552,14 +648,17 @@ function updateStatusPill(overview = {}) {
   const openTopics = Number(overview.openTopics ?? 0);
   const lastIndexed = overview.lastIndexedAt ? formatTime(overview.lastIndexedAt) : t("nav.waiting");
   const conflictCount = Array.isArray(overview.runtimeIssues) ? overview.runtimeIssues.length : 0;
-  if (conflictCount > 0) {
-    statusPill.textContent = t("status.conflictsDetected", conflictCount);
-    statusPill.dataset.tone = "warning";
-  } else {
-    statusPill.textContent = pending > 0
-      ? t("status.pending", pending, openTopics)
-      : lastIndexed;
-    statusPill.dataset.tone = pending > 0 ? "pending" : "ready";
+  if (statusPill) {
+    if (conflictCount > 0) {
+      statusPill.textContent = t("status.conflictsDetected", conflictCount);
+      statusPill.dataset.tone = "warning";
+    } else if (pending > 0) {
+      statusPill.textContent = t("status.pending", pending, openTopics);
+      statusPill.dataset.tone = "pending";
+    } else {
+      statusPill.textContent = t("status.ready");
+      statusPill.dataset.tone = "ready";
+    }
   }
   navLastIndexed.textContent = lastIndexed;
 }
@@ -693,14 +792,20 @@ function applySettings(settings = {}) {
     maxAutoReplyLatencyMs: 1800,
     ...(settings || {}),
   };
-  reasoningModeInput.value = state.settings.reasoningMode || "answer_first";
+  const activeMode = state.settings.reasoningMode || "answer_first";
+  if (reasoningModeToggle) {
+    reasoningModeToggle.querySelectorAll(".popover-seg-btn").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.mode === activeMode);
+    });
+  }
   maxAutoReplyLatencyInput.value = String(state.settings.maxAutoReplyLatencyMs ?? 1800);
   updateSettingsVisibility();
 }
 
 function readSettingsForm() {
   const parsedLatency = Number.parseInt(String(maxAutoReplyLatencyInput.value || "").trim(), 10);
-  const reasoningMode = reasoningModeInput.value === "accuracy_first" ? "accuracy_first" : "answer_first";
+  const activeBtn = reasoningModeToggle?.querySelector(".popover-seg-btn.active");
+  const reasoningMode = activeBtn?.dataset.mode === "accuracy_first" ? "accuracy_first" : "answer_first";
   const next = { reasoningMode };
   if (reasoningMode === "answer_first") {
     next.maxAutoReplyLatencyMs = Number.isFinite(parsedLatency)
@@ -711,7 +816,8 @@ function readSettingsForm() {
 }
 
 function updateSettingsVisibility() {
-  const answerFirst = (reasoningModeInput?.value || state.settings.reasoningMode) === "answer_first";
+  const activeBtn = reasoningModeToggle?.querySelector(".popover-seg-btn.active");
+  const answerFirst = (activeBtn?.dataset.mode || state.settings.reasoningMode) === "answer_first";
   if (latencyFieldWrap) {
     latencyFieldWrap.hidden = !answerFirst;
     latencyFieldWrap.style.display = answerFirst ? "" : "none";
@@ -784,11 +890,13 @@ function normalizeEntry(level, rawInput) {
   }
 
   if (level === "l0") {
-    const userMsgs = (raw.messages || []).filter((m) => m.role === "user").map((m) => m.content);
+    const msgs = raw.messages || [];
+    const userMsgs = msgs.filter((m) => m.role === "user").map((m) => m.content);
+    const asstMsgs = msgs.filter((m) => m.role === "assistant").map((m) => m.content);
     return {
       level, id: getRawId(level, raw), badge: "raw",
-      title: raw.sessionKey || t("entry.unnamed.session"),
-      subtitle: shortText(userMsgs[userMsgs.length - 1] || t("detail.noMessages"), 180),
+      title: shortText(userMsgs[userMsgs.length - 1] || t("entry.unnamed.session"), 80),
+      subtitle: shortText(asstMsgs[asstMsgs.length - 1] || t("detail.noMessages"), 180),
       meta: formatTime(raw.timestamp),
       raw,
     };
@@ -878,7 +986,63 @@ function renderEntryList() {
     entryList.append(li);
   });
 
+  renderPagination();
   renderDetail();
+}
+
+function renderPagination() {
+  let pager = document.getElementById("listPagination");
+  if (!pager) {
+    pager = document.createElement("div");
+    pager.id = "listPagination";
+    pager.className = "list-pagination";
+    entryList.parentElement.appendChild(pager);
+  }
+  pager.innerHTML = "";
+
+  if (state.isSearching) {
+    pager.style.display = "none";
+    return;
+  }
+  const overviewKey = OVERVIEW_KEYS[state.activeLevel];
+  const total = (overviewKey && state.overview[overviewKey]) || 0;
+  const totalPages = Math.max(1, Math.ceil(total / state.listPageSize));
+
+  if (totalPages <= 1 && state.listPage === 0) {
+    pager.style.display = "none";
+    return;
+  }
+  pager.style.display = "";
+
+  const prevBtn = document.createElement("button");
+  prevBtn.className = "page-btn";
+  prevBtn.textContent = t("stream.prevPage");
+  prevBtn.disabled = state.listPage <= 0;
+  prevBtn.addEventListener("click", () => {
+    if (state.listPage > 0) {
+      state.listPage--;
+      state.selectedIndex = 0;
+      loadLevel(state.activeLevel, listQueryInput.value || "");
+    }
+  });
+
+  const info = document.createElement("span");
+  info.className = "page-info";
+  info.textContent = t("stream.pageInfo", state.listPage + 1, totalPages);
+
+  const nextBtn = document.createElement("button");
+  nextBtn.className = "page-btn";
+  nextBtn.textContent = t("stream.nextPage");
+  nextBtn.disabled = state.listPage >= totalPages - 1;
+  nextBtn.addEventListener("click", () => {
+    if (state.listPage < totalPages - 1) {
+      state.listPage++;
+      state.selectedIndex = 0;
+      loadLevel(state.activeLevel, listQueryInput.value || "");
+    }
+  });
+
+  pager.append(prevBtn, info, nextBtn);
 }
 
 /* ── Detail render helpers ───────────────────────────────── */
@@ -921,6 +1085,48 @@ function createTagList(items = []) {
     wrap.append(tag);
   });
   return wrap;
+}
+
+function createClickableTagList(ids = [], level) {
+  const wrap = document.createElement("div");
+  wrap.className = "tag-list";
+  (ids || []).forEach((id) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "tag tag-clickable";
+    btn.textContent = String(id);
+    btn.addEventListener("click", () => navigateToRecord(id, level));
+    wrap.append(btn);
+  });
+  return wrap;
+}
+
+async function navigateToRecord(id, level) {
+  const lookupMap = level === "l1" ? state.l1ById : state.l0ById;
+  let raw = lookupMap[id];
+  if (!raw) {
+    try {
+      const endpoint = level === "l1" ? "./api/l1/byIds" : "./api/l0/byIds";
+      const data = await fetchJson(`${endpoint}?ids=${encodeURIComponent(id)}`);
+      if (data && data.length > 0) {
+        raw = data[0];
+        lookupMap[id] = raw;
+      }
+    } catch (e) { console.warn("Failed to fetch record:", e); }
+  }
+  if (!raw) return;
+  const entry = normalizeEntry(level, raw);
+  if (!entry) return;
+
+  if (state.viewMode === "command_center") switchView("list");
+  state.activeLevel = level;
+  state.listPage = 0;
+  state.visibleItems = [entry];
+  state.selectedIndex = 0;
+  renderActiveNav();
+  renderEntryList();
+  renderDetail();
+  setPanel("detail");
 }
 
 function createProjectStack(projects = []) {
@@ -989,7 +1195,7 @@ function renderDetail() {
     );
     detailBody.append(
       createDetailSection(t("detail.summary"), raw.summary || t("detail.noSummary")),
-      createDetailSection(t("detail.sourceWindows"), createTagList(raw.l1Source || [])),
+      createDetailSection(t("detail.sourceWindows"), createClickableTagList(raw.l1Source || [], "l1")),
     );
     return;
   }
@@ -1003,7 +1209,7 @@ function renderDetail() {
     detailBody.append(
       createDetailSection(t("detail.summary"), raw.summary || t("detail.noSummary")),
       createDetailSection(t("detail.progress"), raw.latestProgress || t("detail.noProgress")),
-      createDetailSection(t("detail.sourceWindows"), createTagList(raw.l1Source || [])),
+      createDetailSection(t("detail.sourceWindows"), createClickableTagList(raw.l1Source || [], "l1")),
     );
     return;
   }
@@ -1022,7 +1228,7 @@ function renderDetail() {
         t("detail.facts"),
         raw.facts?.length ? createTagList(raw.facts.map((f) => `${f.factKey}: ${f.factValue}`)) : t("detail.noFacts"),
       ),
-      createDetailSection(t("detail.sourceL0"), createTagList(raw.l0Source || [])),
+      createDetailSection(t("detail.sourceL0"), createClickableTagList(raw.l0Source || [], "l0")),
     );
     return;
   }
@@ -1046,9 +1252,596 @@ function renderDetail() {
     );
     detailBody.append(
       createDetailSection(t("detail.profileSummary"), raw.profileText || t("detail.noProfile")),
-      createDetailSection(t("detail.sourceWindows"), createTagList(raw.sourceL1Ids || [])),
+      createDetailSection(t("detail.sourceWindows"), createClickableTagList(raw.sourceL1Ids || [], "l1")),
     );
   }
+}
+
+/* ── Command Center ──────────────────────────────────────── */
+
+function buildDataIndexes() {
+  state.l1ById = {};
+  state.l0ById = {};
+  (state.baseRaw.l1 || []).forEach((raw) => {
+    if (raw.l1IndexId) state.l1ById[raw.l1IndexId] = raw;
+  });
+  (state.baseRaw.l0 || []).forEach((raw) => {
+    if (raw.l0IndexId) state.l0ById[raw.l0IndexId] = raw;
+  });
+}
+
+function switchView(mode) {
+  state.viewMode = mode;
+  const workspace = $(".workspace");
+  const shell = $(".app-shell");
+  workspace.dataset.view = mode;
+  shell.dataset.view = mode;
+  const isCmd = mode === "command_center";
+
+  viewToggleBtn.setAttribute("aria-checked", String(isCmd));
+  const labels = document.querySelectorAll(".view-toggle-label");
+  if (labels.length >= 2) {
+    labels[0].classList.toggle("active", isCmd);
+    labels[1].classList.toggle("active", !isCmd);
+  }
+
+  const h2 = $(".topbar h2");
+  if (isCmd) {
+    h2.dataset.i18n = "topbar.commandCenter";
+    h2.textContent = t("topbar.commandCenter");
+    renderCommandCenter();
+  } else {
+    h2.dataset.i18n = "topbar.listView";
+    h2.textContent = t("topbar.listView");
+    state.listPage = 0;
+    loadLevel(state.activeLevel, listQueryInput.value || "");
+  }
+}
+
+function switchBoard(board) {
+  state.activeBoard = board;
+  boardNavTabs.querySelectorAll("[data-board]").forEach((b) => {
+    b.classList.toggle("active", b.dataset.board === board);
+  });
+  projectBoard.classList.toggle("board-active", board === "project");
+  timelineBoard.classList.toggle("board-active", board === "timeline");
+  const pb = document.getElementById("profileBoard");
+  if (pb) pb.classList.toggle("board-active", board === "profile");
+  if (board === "project") renderProjectBoard();
+  else if (board === "timeline") renderTimelineBoard();
+  else if (board === "profile") renderProfileBoard();
+  closeConnection();
+}
+
+function renderCommandCenter() {
+  renderSummaryStats();
+  if (state.activeBoard === "project") renderProjectBoard();
+  else if (state.activeBoard === "timeline") renderTimelineBoard();
+  else if (state.activeBoard === "profile") renderProfileBoard();
+}
+
+function renderSummaryStats() {
+  summaryHeader.innerHTML = "";
+  const activeCount = (state.baseRaw.l2_project || [])
+    .filter((p) => (p.item || p).currentStatus === "in_progress").length;
+  const stats = [
+    { value: activeCount, label: t("board.stats.activeProjects"), stat: "projects" },
+    { value: state.overview.totalL2Time ?? 0, label: t("board.stats.timeRecords"), stat: "time" },
+    { value: state.overview.totalL1 ?? 0, label: t("board.stats.topicWindows"), stat: "windows" },
+    { value: state.overview.totalL0 ?? 0, label: t("board.stats.sessions"), stat: "sessions" },
+  ];
+  stats.forEach((s) => {
+    const card = document.createElement("div");
+    card.className = "stat-card";
+    card.dataset.stat = s.stat;
+    const val = document.createElement("div");
+    val.className = "stat-value";
+    val.textContent = String(s.value);
+    const lbl = document.createElement("div");
+    lbl.className = "stat-label";
+    lbl.textContent = s.label;
+    card.append(val, lbl);
+    summaryHeader.append(card);
+  });
+}
+
+/* ── Project Board ───────────────────────────────────────── */
+
+function renderProjectBoard() {
+  projectBoard.innerHTML = "";
+  const projects = (state.baseRaw.l2_project || []).map((p) => unwrapRaw("l2_project", p));
+  if (projects.length === 0) {
+    projectBoard.append(createEmptyState(t("level.l2_project.empty")));
+    return;
+  }
+  const groups = {};
+  const statusOrder = ["in_progress", "planned", "blocked", "on_hold", "done"];
+  projects.forEach((p) => {
+    const s = p.currentStatus || "unknown";
+    if (!groups[s]) groups[s] = [];
+    groups[s].push(p);
+  });
+  const allStatuses = [...statusOrder, ...Object.keys(groups).filter((s) => !statusOrder.includes(s))];
+  allStatuses.forEach((status) => {
+    const items = groups[status];
+    if (!items || items.length === 0) return;
+    const group = document.createElement("div");
+    group.className = "board-group";
+    const header = document.createElement("div");
+    header.className = "board-group-header";
+    const title = document.createElement("h4");
+    title.textContent = formatStatus(status);
+    const count = document.createElement("span");
+    count.className = "board-group-count";
+    count.textContent = String(items.length);
+    header.append(title, count);
+    group.append(header);
+    const grid = document.createElement("div");
+    grid.className = "board-card-grid";
+    items.forEach((p) => grid.append(createProjectCard(p)));
+    group.append(grid);
+    projectBoard.append(group);
+  });
+}
+
+function createProjectCard(project) {
+  const card = document.createElement("button");
+  card.type = "button";
+  card.className = "board-card";
+  const status = project.currentStatus || "unknown";
+  card.dataset.status = status;
+  const id = project.l2IndexId || project.projectKey || project.projectName || "";
+  card.dataset.id = id;
+  const connId = state.connectionTarget
+    ? (state.connectionTarget.l2IndexId || state.connectionTarget.projectKey || "")
+    : "";
+  if (connId && connId === id) card.classList.add("active");
+
+  const title = document.createElement("div");
+  title.className = "board-card-title";
+  title.textContent = project.projectName || t("entry.unnamed.project");
+
+  const badge = document.createElement("span");
+  badge.className = "board-card-status";
+  badge.dataset.status = status;
+  badge.textContent = formatStatus(status);
+
+  const body = document.createElement("div");
+  body.className = "board-card-body";
+  body.textContent = shortText(project.latestProgress || project.summary || "", 140);
+
+  const meta = document.createElement("div");
+  meta.className = "board-card-meta";
+  meta.textContent = `${t("meta.sourceCount", project.l1Source?.length ?? 0)} · ${formatTime(project.updatedAt)}`;
+
+  card.append(title, badge, body, meta);
+  card.addEventListener("click", () => openConnection(project, "l2_project"));
+  return card;
+}
+
+/* ── Timeline Board ──────────────────────────────────────── */
+
+function renderTimelineBoard() {
+  timelineBoard.innerHTML = "";
+  const records = (state.baseRaw.l2_time || []).map((r) => unwrapRaw("l2_time", r));
+  if (records.length === 0) {
+    timelineBoard.append(createEmptyState(t("level.l2_time.empty")));
+    return;
+  }
+  const track = document.createElement("div");
+  track.className = "timeline-track";
+  records.forEach((record) => {
+    const node = document.createElement("div");
+    node.className = "timeline-node";
+    const recId = record.l2IndexId || record.dateKey || "";
+    const connId = state.connectionTarget
+      ? (state.connectionTarget.l2IndexId || state.connectionTarget.dateKey || "")
+      : "";
+    if (connId && connId === recId) node.classList.add("active");
+
+    const marker = document.createElement("div");
+    marker.className = "timeline-marker";
+
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = "timeline-card";
+    card.dataset.id = recId;
+
+    const date = document.createElement("div");
+    date.className = "timeline-date";
+    date.textContent = record.dateKey || t("entry.unnamed.time");
+
+    const summary = document.createElement("div");
+    summary.className = "timeline-summary";
+    summary.textContent = shortText(record.summary || "", 180);
+
+    const meta = document.createElement("div");
+    meta.className = "timeline-meta";
+    meta.textContent = t("meta.l1Count", record.l1Source?.length ?? 0);
+
+    card.append(date, summary, meta);
+    card.addEventListener("click", () => openConnection(record, "l2_time"));
+    node.append(marker, card);
+    track.append(node);
+  });
+  timelineBoard.append(track);
+}
+
+/* ── Profile Board ───────────────────────────────────────── */
+
+async function showL1Detail(id) {
+  let raw = state.l1ById[id];
+  if (!raw) {
+    try {
+      const data = await fetchJson(`./api/l1/byIds?ids=${encodeURIComponent(id)}`);
+      if (data && data.length > 0) { raw = data[0]; state.l1ById[id] = raw; }
+    } catch (e) { console.warn("Failed to fetch L1:", e); }
+  }
+  if (!raw) return;
+  const entry = normalizeEntry("l1", raw);
+  if (!entry) return;
+  let idx = state.visibleItems.findIndex((i) => i.id === entry.id);
+  if (idx < 0) { state.visibleItems.push(entry); idx = state.visibleItems.length - 1; }
+  state.selectedIndex = idx;
+  renderDetail();
+  setPanel("detail");
+}
+
+async function renderProfileBoard() {
+  const pb = document.getElementById("profileBoard");
+  if (!pb) return;
+  pb.innerHTML = "";
+  const gp = state.globalProfile;
+  if (!gp || !gp.profileText) {
+    pb.append(createEmptyState(t("board.profile.empty")));
+    return;
+  }
+
+  const l1Ids = gp.sourceL1Ids || [];
+  const missingL1 = l1Ids.filter((id) => !state.l1ById[id]);
+  if (missingL1.length > 0) {
+    try {
+      const data = await fetchJson(`./api/l1/byIds?ids=${missingL1.join(",")}`);
+      (data || []).forEach((r) => { if (r.l1IndexId) state.l1ById[r.l1IndexId] = r; });
+    } catch (e) { console.warn("Failed to fetch L1 for profile:", e); }
+  }
+
+  const card = document.createElement("div");
+  card.className = "profile-board-card";
+
+  const paragraphs = (gp.profileText || "").split(/\n+/).filter(Boolean);
+  paragraphs.forEach((p) => {
+    const para = document.createElement("p");
+    para.className = "profile-para";
+    para.textContent = p;
+    card.append(para);
+  });
+
+  if (l1Ids.length > 0) {
+    const topicHead = document.createElement("div");
+    topicHead.className = "profile-section-title";
+    topicHead.textContent = t("board.profile.topics");
+    card.append(topicHead);
+
+    const topicList = document.createElement("div");
+    topicList.className = "profile-topic-list";
+    l1Ids.forEach((id) => {
+      const l1 = state.l1ById[id];
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "profile-topic-chip";
+      chip.textContent = shortText(l1?.summary || l1?.mergedSummary || id, 80);
+      chip.addEventListener("click", () => void showL1Detail(id));
+      topicList.append(chip);
+    });
+    card.append(topicList);
+  }
+
+  const connBtn = document.createElement("button");
+  connBtn.type = "button";
+  connBtn.className = "profile-conn-btn";
+  connBtn.textContent = t("board.profile.viewConn");
+  connBtn.addEventListener("click", () => openConnection(gp, "profile"));
+  card.append(connBtn);
+
+  pb.append(card);
+}
+
+/* ── Connection Panel ────────────────────────────────────── */
+
+function getRecordId(record) {
+  return record.l2IndexId || record.recordId || record.dateKey || record.projectKey || record.projectName || "";
+}
+
+async function openConnection(l2Record, type) {
+  const currentId = getRecordId(l2Record);
+  if (state.connectionTarget && getRecordId(state.connectionTarget) === currentId) {
+    closeConnection();
+    return;
+  }
+  state.connectionTarget = l2Record;
+  state.connectionType = type;
+  summaryHeader.style.display = "none";
+  boardScroll.style.display = "none";
+  connectionPanel.classList.add("conn-open");
+
+  const l1SourceIds = l2Record.l1Source || l2Record.sourceL1Ids || [];
+  const missingL1 = l1SourceIds.filter(id => !state.l1ById[id]);
+  if (missingL1.length > 0) {
+    try {
+      const l1Data = await fetchJson(`./api/l1/byIds?ids=${missingL1.join(",")}`);
+      (l1Data || []).forEach(r => { if (r.l1IndexId) state.l1ById[r.l1IndexId] = r; });
+    } catch (e) { console.warn("Failed to fetch missing L1:", e); }
+  }
+
+  const allL0Ids = new Set();
+  l1SourceIds.forEach(l1Id => {
+    const l1 = state.l1ById[l1Id];
+    if (l1 && l1.l0Source) l1.l0Source.forEach(id => allL0Ids.add(id));
+  });
+  const missingL0 = [...allL0Ids].filter(id => !state.l0ById[id]);
+  if (missingL0.length > 0) {
+    try {
+      const l0Data = await fetchJson(`./api/l0/byIds?ids=${missingL0.join(",")}`);
+      (l0Data || []).forEach(r => { if (r.l0IndexId) state.l0ById[r.l0IndexId] = r; });
+    } catch (e) { console.warn("Failed to fetch missing L0:", e); }
+  }
+
+  renderConnectionGraph(l2Record, type);
+}
+
+function closeConnection() {
+  state.connectionTarget = null;
+  state.connectionType = null;
+  connectionPanel.classList.remove("conn-open");
+  connectionSvg.innerHTML = "";
+  connectionColumns.innerHTML = "";
+  summaryHeader.style.display = "";
+  boardScroll.style.display = "";
+}
+
+function renderConnectionGraph(l2Record, type) {
+  connectionColumns.innerHTML = "";
+  connectionSvg.innerHTML = "";
+
+  const colL2 = document.createElement("div");
+  colL2.className = "conn-col";
+  const l2Header = type === "profile" ? t("entry.globalProfile") : t("connection.l2");
+  colL2.innerHTML = `<div class="conn-col-header">${l2Header}</div>`;
+
+  const colL1 = document.createElement("div");
+  colL1.className = "conn-col";
+  colL1.innerHTML = `<div class="conn-col-header">${t("connection.l1")}</div>`;
+
+  const colL0 = document.createElement("div");
+  colL0.className = "conn-col";
+  colL0.innerHTML = `<div class="conn-col-header">${t("connection.l0")}</div>`;
+
+  const l2Node = createConnNode("l2", l2Record, type);
+  colL2.append(l2Node);
+
+  const l1Ids = l2Record.l1Source || l2Record.sourceL1Ids || [];
+  let nodeDelay = 0;
+  const matchedL1 = [];
+  l1Ids.forEach((id) => {
+    const l1 = state.l1ById[id];
+    if (l1) {
+      matchedL1.push(l1);
+      nodeDelay += 60;
+      const node = createConnNode("l1", l1, "l1");
+      node.style.animationDelay = `${nodeDelay}ms`;
+      colL1.append(node);
+    } else {
+      nodeDelay += 60;
+      const ph = createConnNodePlaceholder("l1", id);
+      ph.style.animationDelay = `${nodeDelay}ms`;
+      colL1.append(ph);
+    }
+  });
+  if (l1Ids.length === 0) {
+    colL1.append(createConnEmpty());
+  }
+
+  const l0Set = new Set();
+  matchedL1.forEach((l1) => {
+    (l1.l0Source || []).forEach((l0Id) => {
+      if (l0Set.has(l0Id)) return;
+      l0Set.add(l0Id);
+      nodeDelay += 50;
+      const l0 = state.l0ById[l0Id];
+      if (l0) {
+        const node = createConnNode("l0", l0, "l0");
+        node.dataset.parent = l1.l1IndexId;
+        node.style.animationDelay = `${nodeDelay}ms`;
+        colL0.append(node);
+      } else {
+        const ph = createConnNodePlaceholder("l0", l0Id);
+        ph.dataset.parent = l1.l1IndexId;
+        ph.style.animationDelay = `${nodeDelay}ms`;
+        colL0.append(ph);
+      }
+    });
+  });
+  if (l0Set.size === 0 && matchedL1.length > 0) {
+    colL0.append(createConnEmpty());
+  }
+
+  connectionColumns.append(colL2, colL1, colL0);
+  requestAnimationFrame(() => requestAnimationFrame(() => drawConnectionLines()));
+}
+
+function createConnNode(level, record, type) {
+  const node = document.createElement("div");
+  node.className = `conn-node conn-node-${level}`;
+  if (level === "l2") {
+    node.dataset.id = getRecordId(record);
+    const title = document.createElement("div");
+    title.className = "conn-node-title";
+    title.textContent = type === "l2_project"
+      ? (record.projectName || t("entry.unnamed.project"))
+      : type === "profile"
+        ? t("entry.globalProfile")
+        : (record.dateKey || t("entry.unnamed.time"));
+    const sub = document.createElement("div");
+    sub.className = "conn-node-sub";
+    sub.textContent = shortText(record.summary || record.latestProgress || record.profileText || "", 100);
+    node.append(title, sub);
+  } else if (level === "l1") {
+    node.dataset.id = record.l1IndexId || "";
+    const title = document.createElement("div");
+    title.className = "conn-node-title";
+    title.textContent = record.timePeriod || t("entry.unnamed.window");
+    const sub = document.createElement("div");
+    sub.className = "conn-node-sub";
+    sub.textContent = shortText(record.summary || "", 90);
+    node.append(title, sub);
+  } else if (level === "l0") {
+    node.dataset.id = record.l0IndexId || record.sessionKey || "";
+    const msgs = record.messages || [];
+    const userMsgs = msgs.filter((m) => m.role === "user");
+    const asstMsgs = msgs.filter((m) => m.role === "assistant");
+    const title = document.createElement("div");
+    title.className = "conn-node-title";
+    title.textContent = shortText(userMsgs[userMsgs.length - 1]?.content || t("entry.unnamed.session"), 50);
+    const sub = document.createElement("div");
+    sub.className = "conn-node-sub";
+    sub.textContent = shortText(asstMsgs[asstMsgs.length - 1]?.content || "", 70);
+    node.append(title, sub);
+  }
+
+  node.addEventListener("click", () => {
+    const normLevel = level === "l2" ? type : level;
+    const normalized = normalizeEntry(normLevel, record);
+    if (!normalized) return;
+    let idx = state.visibleItems.findIndex((i) => i.id === normalized.id);
+    if (idx < 0) {
+      state.visibleItems.push(normalized);
+      idx = state.visibleItems.length - 1;
+    }
+    state.selectedIndex = idx;
+    renderDetail();
+    setPanel("detail");
+  });
+  return node;
+}
+
+function createConnNodePlaceholder(level, id) {
+  const node = document.createElement("div");
+  node.className = `conn-node conn-node-${level} conn-node-placeholder`;
+  node.dataset.id = id;
+  const title = document.createElement("div");
+  title.className = "conn-node-title";
+  title.textContent = shortText(id, 24);
+  const sub = document.createElement("div");
+  sub.className = "conn-node-sub";
+  sub.textContent = t("connection.notLoaded");
+  node.append(title, sub);
+  return node;
+}
+
+function createConnEmpty() {
+  const el = document.createElement("div");
+  el.className = "empty-state";
+  el.style.padding = "8px";
+  el.textContent = t("connection.noData");
+  return el;
+}
+
+function drawConnectionLines() {
+  connectionSvg.innerHTML = "";
+  if (!connectionGraph || !connectionPanel.classList.contains("conn-open")) return;
+
+  const graphRect = connectionGraph.getBoundingClientRect();
+  if (graphRect.width === 0 || graphRect.height === 0) return;
+
+  connectionSvg.setAttribute("width", String(graphRect.width));
+  connectionSvg.setAttribute("height", String(graphRect.height));
+  connectionSvg.setAttribute("viewBox", `0 0 ${graphRect.width} ${graphRect.height}`);
+
+  const l2Nodes = connectionGraph.querySelectorAll(".conn-node-l2");
+  const l1Nodes = connectionGraph.querySelectorAll(".conn-node-l1");
+  const l0Nodes = connectionGraph.querySelectorAll(".conn-node-l0");
+  let delay = 100;
+
+  l2Nodes.forEach((l2El) => {
+    const l2R = l2El.getBoundingClientRect();
+    const x1 = l2R.right - graphRect.left;
+    const y1 = l2R.top + l2R.height / 2 - graphRect.top;
+    l1Nodes.forEach((l1El) => {
+      const l1Id = l1El.dataset.id;
+      const l1R = l1El.getBoundingClientRect();
+      const x2 = l1R.left - graphRect.left;
+      const y2 = l1R.top + l1R.height / 2 - graphRect.top;
+      const path = createSvgBezier(x1, y1, x2, y2, delay);
+      path.dataset.l1 = l1Id;
+      connectionSvg.append(path);
+      delay += 80;
+    });
+  });
+
+  l1Nodes.forEach((l1El) => {
+    const l1Id = l1El.dataset.id;
+    const l1R = l1El.getBoundingClientRect();
+    const x1 = l1R.right - graphRect.left;
+    const y1 = l1R.top + l1R.height / 2 - graphRect.top;
+    l0Nodes.forEach((l0El) => {
+      if (l0El.dataset.parent !== l1Id) return;
+      const l0R = l0El.getBoundingClientRect();
+      const x2 = l0R.left - graphRect.left;
+      const y2 = l0R.top + l0R.height / 2 - graphRect.top;
+      const path = createSvgBezier(x1, y1, x2, y2, delay);
+      path.classList.add("conn-line-l1-l0");
+      path.dataset.l1 = l1Id;
+      connectionSvg.append(path);
+      delay += 60;
+    });
+  });
+
+  l1Nodes.forEach((l1El) => {
+    if (!l1El.dataset.hlBound) {
+      l1El.dataset.hlBound = "1";
+      l1El.addEventListener("click", (e) => {
+        e.stopPropagation();
+        highlightL1(l1El.dataset.id);
+      });
+    }
+  });
+}
+
+function clearHighlight() {
+  const graph = connectionGraph;
+  if (!graph) return;
+  delete graph.dataset.highlight;
+  graph.querySelectorAll(".conn-node").forEach((n) => n.classList.remove("conn-dim", "conn-hl"));
+  connectionSvg.querySelectorAll(".conn-line").forEach((p) => p.classList.remove("conn-line-dim", "conn-line-hl"));
+}
+
+function highlightL1(l1Id) {
+  const graph = connectionGraph;
+  if (!graph) return;
+  const isAlready = graph.dataset.highlight === l1Id;
+  clearHighlight();
+  if (isAlready) return;
+
+  graph.dataset.highlight = l1Id;
+  graph.querySelectorAll(".conn-node").forEach((n) => n.classList.add("conn-dim"));
+  graph.querySelectorAll(`.conn-node-l1[data-id="${l1Id}"]`).forEach((n) => { n.classList.remove("conn-dim"); n.classList.add("conn-hl"); });
+  graph.querySelectorAll(`.conn-node-l0[data-parent="${l1Id}"]`).forEach((n) => { n.classList.remove("conn-dim"); n.classList.add("conn-hl"); });
+  graph.querySelectorAll(".conn-node-l2").forEach((n) => { n.classList.remove("conn-dim"); });
+  connectionSvg.querySelectorAll(".conn-line").forEach((p) => {
+    if (p.dataset.l1 === l1Id) { p.classList.remove("conn-line-dim"); p.classList.add("conn-line-hl"); }
+    else { p.classList.add("conn-line-dim"); p.classList.remove("conn-line-hl"); }
+  });
+}
+
+function createSvgBezier(x1, y1, x2, y2, delay = 0) {
+  const ns = "http://www.w3.org/2000/svg";
+  const path = document.createElementNS(ns, "path");
+  const midX = (x1 + x2) / 2;
+  path.setAttribute("d", `M ${x1} ${y1} C ${midX} ${y1}, ${midX} ${y2}, ${x2} ${y2}`);
+  path.classList.add("conn-line");
+  path.style.animationDelay = `${delay}ms`;
+  return path;
 }
 
 /* ── Nav ─────────────────────────────────────────────────── */
@@ -1097,6 +1890,7 @@ async function loadSnapshot() {
   state.baseRaw.l0 = snap.recentSessions || [];
   state.baseRaw.profile = state.globalProfile.profileText ? [state.globalProfile] : [];
   syncBaseItems();
+  buildDataIndexes();
 }
 
 async function loadLevel(level, query = "") {
@@ -1104,11 +1898,16 @@ async function loadLevel(level, query = "") {
   browserTitle.textContent = config.label;
   renderActiveNav();
 
-  if (query.trim()) {
-    const data = await fetchJson(`${config.endpoint}?q=${encodeURIComponent(query)}&limit=40`);
+  state.isSearching = !!query.trim();
+  if (state.isSearching) {
+    state.listPage = 0;
+    const data = await fetchJson(`${config.endpoint}?q=${encodeURIComponent(query)}&limit=100`);
     state.visibleItems = normalizeEntryList(level, data || []);
+    state.searchTotal = state.visibleItems.length;
   } else {
-    state.visibleItems = state.baseItems[level] || [];
+    const offset = state.listPage * state.listPageSize;
+    const data = await fetchJson(`${config.endpoint}?limit=${state.listPageSize}&offset=${offset}`);
+    state.visibleItems = normalizeEntryList(level, data || []);
   }
   renderEntryList();
 }
@@ -1122,13 +1921,13 @@ async function refreshDashboard(msgKey = "status.refreshed", tone = "success", .
 
 function refreshRenderedContent() {
   renderOverview(state.overview);
-  const config = getLevelConfig(state.activeLevel);
-  browserTitle.textContent = config.label;
   syncBaseItems();
-  if (!listQueryInput.value.trim()) {
-    state.visibleItems = state.baseItems[state.activeLevel] || [];
+  buildDataIndexes();
+  if (state.viewMode === "command_center") {
+    renderCommandCenter();
+  } else {
+    loadLevel(state.activeLevel, listQueryInput.value || "");
   }
-  renderEntryList();
 }
 
 /* ── Retrieve ────────────────────────────────────────────── */
@@ -1215,13 +2014,64 @@ async function saveSettings() {
   setActivity("status.settingsSaved", "success", summary);
 }
 
+function showModal({ icon, iconClass, title, body, confirmText, cancelText, confirmClass }) {
+  return new Promise((resolve) => {
+    const overlay = document.getElementById("modalOverlay");
+    const iconEl = document.getElementById("modalIcon");
+    const titleEl = document.getElementById("modalTitle");
+    const bodyEl = document.getElementById("modalBody");
+    const confirmBtn = document.getElementById("modalConfirm");
+    const cancelBtn = document.getElementById("modalCancel");
+
+    iconEl.textContent = icon;
+    iconEl.className = "modal-icon " + (iconClass || "");
+    titleEl.textContent = title;
+    bodyEl.textContent = body;
+    confirmBtn.textContent = confirmText;
+    confirmBtn.className = "modal-btn modal-confirm " + (confirmClass || "");
+    cancelBtn.textContent = cancelText || t("confirm.cancel");
+
+    overlay.classList.add("open");
+
+    function cleanup(result) {
+      overlay.classList.remove("open");
+      confirmBtn.removeEventListener("click", onConfirm);
+      cancelBtn.removeEventListener("click", onCancel);
+      overlay.removeEventListener("click", onBackdrop);
+      resolve(result);
+    }
+    function onConfirm() { cleanup(true); }
+    function onCancel() { cleanup(false); }
+    function onBackdrop(e) { if (e.target === overlay) cleanup(false); }
+
+    confirmBtn.addEventListener("click", onConfirm);
+    cancelBtn.addEventListener("click", onCancel);
+    overlay.addEventListener("click", onBackdrop);
+  });
+}
+
 async function buildNow() {
+  const ok = await showModal({
+    icon: "⟳", iconClass: "icon-sync",
+    title: t("confirm.sync.title"),
+    body: t("confirm.sync.body"),
+    confirmText: t("confirm.sync.ok"),
+  });
+  if (!ok) return;
   setActivity("status.building");
   const s = await postJson("./api/index/run");
   await refreshDashboard("status.built", "success", s.l0Captured ?? 0, s.l1Created ?? 0, s.l2TimeUpdated ?? 0, s.l2ProjectUpdated ?? 0, s.profileUpdated ?? 0);
 }
 
 async function clearMemory() {
+  const ok = await showModal({
+    icon: "⚠", iconClass: "icon-danger",
+    title: t("confirm.clear.title"),
+    body: t("confirm.clear.body"),
+    confirmText: t("confirm.clear.ok"),
+    confirmClass: "danger",
+  });
+  if (!ok) return;
   setActivity("status.clearing", "warning");
   await postJson("./api/clear");
   await refreshDashboard("status.cleared", "warning");
@@ -1230,6 +2080,8 @@ async function clearMemory() {
 async function searchCurrentLevel() {
   setActivity("status.searching");
   await loadLevel(state.activeLevel, listQueryInput.value || "");
+  const clrBtn = document.getElementById("listClearBtn");
+  if (clrBtn) clrBtn.style.display = listQueryInput.value.trim() ? "" : "none";
   setActivity("status.searched", "success");
 }
 
@@ -1241,7 +2093,9 @@ levelTabs.addEventListener("click", async (e) => {
   const level = btn.getAttribute("data-level");
   if (!level || !LEVEL_KEYS.includes(level)) return;
   state.activeLevel = level;
+  state.listPage = 0;
   if (isNavDrawerLayout()) setNavOpen(false);
+  if (state.viewMode !== "list") switchView("list");
   await loadLevel(level, listQueryInput.value || "");
 });
 
@@ -1250,17 +2104,63 @@ buildNowBtn.addEventListener("click", () => void buildNow());
 overviewToggleBtn.addEventListener("click", () => togglePanel("overview"));
 saveSettingsBtn.addEventListener("click", () => void saveSettings());
 clearMemoryBtn.addEventListener("click", () => void clearMemory());
+const listClearBtn = document.getElementById("listClearBtn");
 listSearchBtn.addEventListener("click", () => void searchCurrentLevel());
 listQueryInput.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); void searchCurrentLevel(); } });
+if (listClearBtn) listClearBtn.addEventListener("click", () => {
+  listQueryInput.value = "";
+  state.isSearching = false;
+  state.listPage = 0;
+  if (listClearBtn) listClearBtn.style.display = "none";
+  void loadLevel(state.activeLevel, "");
+});
 retrieveBtn.addEventListener("click", () => void runRetrieve());
 queryInput.addEventListener("keydown", (e) => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); void runRetrieve(); } });
 
-settingsToggleBtn.addEventListener("click", () => togglePanel("settings"));
-retrieveToggleBtn.addEventListener("click", () => togglePanel("retrieve"));
-detailToggleBtn.addEventListener("click", () => togglePanel("detail"));
-reasoningModeInput.addEventListener("change", () => updateSettingsVisibility());
+const settingsPopover = document.getElementById("settingsPopover");
+const navMenuTrigger = document.getElementById("navMenuTrigger");
+
+function closePopover() { settingsPopover?.classList.remove("open"); }
+
+function positionPopover() {
+  if (!navMenuTrigger || !settingsPopover) return;
+  const rect = navMenuTrigger.getBoundingClientRect();
+  settingsPopover.style.left = rect.left + "px";
+  settingsPopover.style.bottom = (window.innerHeight - rect.top + 6) + "px";
+}
+
+navMenuTrigger?.addEventListener("click", (e) => {
+  e.stopPropagation();
+  if (!settingsPopover.classList.contains("open")) {
+    positionPopover();
+  }
+  settingsPopover?.classList.toggle("open");
+});
+
+settingsPopover?.addEventListener("click", (e) => {
+  const item = e.target instanceof Element ? e.target.closest(".popover-item") : null;
+  if (item && (item.id === "refreshBtn" || item.id === "overviewToggleBtn")) closePopover();
+});
+
+document.addEventListener("click", (e) => {
+  if (settingsPopover?.classList.contains("open") &&
+      !settingsPopover.contains(e.target) &&
+      !navMenuTrigger?.contains(e.target)) {
+    closePopover();
+  }
+});
+
+if (retrieveToggleBtn) retrieveToggleBtn.addEventListener("click", () => togglePanel("retrieve"));
+if (detailToggleBtn) detailToggleBtn.addEventListener("click", () => togglePanel("detail"));
+if (reasoningModeToggle) reasoningModeToggle.addEventListener("click", (e) => {
+  const btn = e.target instanceof Element ? e.target.closest("[data-mode]") : null;
+  if (!btn) return;
+  reasoningModeToggle.querySelectorAll(".popover-seg-btn").forEach((b) => b.classList.remove("active"));
+  btn.classList.add("active");
+  updateSettingsVisibility();
+});
 overviewCloseBtn.addEventListener("click", () => setPanel(null));
-settingsCloseBtn.addEventListener("click", () => setPanel(null));
+if (settingsCloseBtn) settingsCloseBtn.addEventListener("click", () => setPanel(null));
 retrieveCloseBtn.addEventListener("click", () => setPanel(null));
 detailCloseBtn.addEventListener("click", () => setPanel(null));
 navToggleBtn.addEventListener("click", () => setNavOpen(true));
@@ -1270,24 +2170,37 @@ window.addEventListener("resize", () => { if (!isNavDrawerLayout()) setNavOpen(f
 
 themeToggle.addEventListener("click", (e) => {
   const btn = e.target instanceof Element ? e.target.closest("[data-theme-value]") : null;
-  if (btn) applyTheme(btn.dataset.themeValue);
+  if (!btn) return;
+  themeToggle.querySelectorAll(".popover-seg-btn").forEach((b) => b.classList.remove("active"));
+  btn.classList.add("active");
+  applyTheme(btn.dataset.themeValue);
 });
 
-langTrigger.addEventListener("click", (e) => {
-  e.stopPropagation();
-  langDropdown.classList.toggle("open");
+if (langToggle) langToggle.addEventListener("click", (e) => {
+  const btn = e.target instanceof Element ? e.target.closest("[data-locale]") : null;
+  if (!btn) return;
+  langToggle.querySelectorAll(".popover-seg-btn").forEach((b) => b.classList.remove("active"));
+  btn.classList.add("active");
+  setLocale(btn.dataset.locale);
 });
 
-langMenu.addEventListener("click", (e) => {
-  const opt = e.target instanceof Element ? e.target.closest("[data-locale]") : null;
-  if (!opt) return;
-  langDropdown.classList.remove("open");
-  setLocale(opt.dataset.locale);
+viewToggleBtn.addEventListener("click", () => {
+  switchView(state.viewMode === "command_center" ? "list" : "command_center");
 });
 
-document.addEventListener("click", (e) => {
-  if (langDropdown && !langDropdown.contains(e.target)) {
-    langDropdown.classList.remove("open");
+boardNavTabs.addEventListener("click", (e) => {
+  const btn = e.target instanceof Element ? e.target.closest("[data-board]") : null;
+  if (!btn) return;
+  const board = btn.dataset.board;
+  if (board && (board === "project" || board === "timeline" || board === "profile")) switchBoard(board);
+});
+
+connectionCloseBtn.addEventListener("click", () => closeConnection());
+connectionBackBtn.addEventListener("click", () => closeConnection());
+
+window.addEventListener("resize", () => {
+  if (state.connectionTarget && connectionPanel.classList.contains("conn-open")) {
+    drawConnectionLines();
   }
 });
 
@@ -1298,7 +2211,24 @@ async function bootstrap() {
   translatePage();
   setActivity("status.loading");
   await loadSnapshot();
-  await loadLevel(state.activeLevel);
+
+  const shell = $(".app-shell");
+  shell.dataset.view = state.viewMode;
+  const isCmd = state.viewMode === "command_center";
+  viewToggleBtn.setAttribute("aria-checked", String(isCmd));
+  const bootLabels = document.querySelectorAll(".view-toggle-label");
+  if (bootLabels.length >= 2) {
+    bootLabels[0].classList.toggle("active", isCmd);
+    bootLabels[1].classList.toggle("active", !isCmd);
+  }
+  if (isCmd) {
+    const h2 = $(".topbar h2");
+    h2.dataset.i18n = "topbar.commandCenter";
+    h2.textContent = t("topbar.commandCenter");
+    renderCommandCenter();
+  } else {
+    await loadLevel(state.activeLevel);
+  }
   renderDetail();
   if ((state.overview.runtimeIssues || []).length > 0) {
     setActivity("status.conflictsDetected", "warning", state.overview.runtimeIssues.length);
