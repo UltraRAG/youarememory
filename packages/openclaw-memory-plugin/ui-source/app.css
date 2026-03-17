@@ -2422,6 +2422,15 @@ body[data-panel="retrieve"] #retrievePanel {
   overflow: hidden;
 }
 
+.conn-node-l2 .conn-node-sub {
+  display: block;
+  -webkit-line-clamp: unset;
+  -webkit-box-orient: unset;
+  overflow: visible;
+  white-space: normal;
+  word-break: break-word;
+}
+
 @keyframes connNodeIn {
   from { opacity: 0; transform: scale(0.92) translateY(4px); }
   to   { opacity: 1; transform: scale(1) translateY(0); }

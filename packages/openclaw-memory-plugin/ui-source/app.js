@@ -1711,7 +1711,7 @@ function createConnNode(level, record, type) {
         : (record.dateKey || t("entry.unnamed.time"));
     const sub = document.createElement("div");
     sub.className = "conn-node-sub";
-    sub.textContent = shortText(record.summary || record.latestProgress || record.profileText || "", 100);
+    sub.textContent = record.summary || record.latestProgress || record.profileText || "";
     node.append(title, sub);
   } else if (level === "l1") {
     node.dataset.id = record.l1IndexId || "";
