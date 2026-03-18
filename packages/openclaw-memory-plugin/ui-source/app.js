@@ -611,7 +611,7 @@ const state = {
   listPageSize: 20,
   isSearching: false,
   searchTotal: 0,
-  connPageSize: 5,
+  connPageSize: 10,
   connL1Page: 0,
   connL0Page: 0,
   connActiveL1: null,
