@@ -587,7 +587,7 @@ body[data-nav="open"] .app-scrim {
   flex-shrink: 0;
 }
 .view-toggle-switch[aria-checked="false"] {
-  background: var(--color-border, #bbb);
+  background: var(--accent, #4e8a5e);
 }
 .view-toggle-thumb {
   position: absolute;

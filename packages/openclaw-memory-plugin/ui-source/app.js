@@ -692,9 +692,9 @@ function updateStatusPill(overview = {}) {
   const conflictCount = Array.isArray(overview.runtimeIssues) ? overview.runtimeIssues.length : 0;
   const startupRepairStatus = String(overview.startupRepairStatus || "idle");
   if (statusPill) {
-    if (conflictCount > 0) {
-      statusPill.textContent = t("status.conflictsDetected", conflictCount);
-      statusPill.dataset.tone = "warning";
+  if (conflictCount > 0) {
+    statusPill.textContent = t("status.conflictsDetected", conflictCount);
+    statusPill.dataset.tone = "warning";
     } else if (startupRepairStatus === "running") {
       statusPill.textContent = t("status.startupRepairPillRunning");
       statusPill.dataset.tone = "pending";
@@ -704,7 +704,7 @@ function updateStatusPill(overview = {}) {
     } else if (pending > 0) {
       statusPill.textContent = t("status.pending", pending, openTopics);
       statusPill.dataset.tone = "pending";
-    } else {
+  } else {
       statusPill.textContent = t("status.ready");
       statusPill.dataset.tone = "ready";
     }
@@ -2484,7 +2484,7 @@ async function bootstrap() {
     h2.textContent = t("topbar.commandCenter");
     renderCommandCenter();
   } else {
-    await loadLevel(state.activeLevel);
+  await loadLevel(state.activeLevel);
   }
   renderDetail();
   updateActivityFromOverview();
