@@ -10,6 +10,8 @@ import {
   type MemoryMessage,
   type MemoryExportBundle,
   type MemoryImportResult,
+  type MemoryUiSnapshot,
+  type StartupRepairStatus,
   nowIso,
 } from "./core/index.js";
 import type { InternalHookEvent, PluginHookAgentEndEvent, PluginHookAgentContext, PluginHookBeforeMessageWriteEvent, PluginHookBeforePromptBuildEvent, PluginHookBeforePromptBuildResult, PluginHookBeforeResetEvent, PluginLogger, PluginRuntimeLike } from "./plugin-api.js";
@@ -25,6 +27,7 @@ const MEMORY_REPAIR_VERSION = "2026-03-18-cross-channel-message-normalization-v1
 const INDEXING_SETTINGS_MIGRATION_VERSION = "2026-03-16-reasoning-mode-settings-v1";
 const PLUGIN_ID = "youarememory-openclaw";
 const RECENT_INBOUND_TTL_MS = 30_000;
+const STARTUP_REPAIR_SNAPSHOT_LIMIT = 200;
 
 interface MemoryBoundaryDiagnostics {
   slotOwner: string;
@@ -166,6 +169,18 @@ function mergeStats(left: HeartbeatStats, right: HeartbeatStats): HeartbeatStats
   };
 }
 
+function sliceUiSnapshot(snapshot: MemoryUiSnapshot, limit: number): MemoryUiSnapshot {
+  return {
+    overview: { ...snapshot.overview },
+    settings: { ...snapshot.settings },
+    recentTimeIndexes: snapshot.recentTimeIndexes.slice(0, limit),
+    recentProjectIndexes: snapshot.recentProjectIndexes.slice(0, limit),
+    recentL1Windows: snapshot.recentL1Windows.slice(0, limit),
+    recentSessions: snapshot.recentSessions.slice(0, limit),
+    globalProfile: { ...snapshot.globalProfile },
+  };
+}
+
 function buildMemoryRuntimeSystemContext(evidenceBlock: string): string {
   return [
     "## YouAreMemory Runtime",
@@ -210,6 +225,9 @@ export class MemoryPluginRuntime {
   private indexingInProgress = false;
   private started = false;
   private stopped = false;
+  private startupRepairStatus: StartupRepairStatus = "idle";
+  private startupRepairMessage = "";
+  private startupRepairSnapshot: MemoryUiSnapshot | undefined;
 
   constructor(options: MemoryPluginRuntimeOptions) {
     this.logger = safeLog(options.logger);
@@ -263,6 +281,7 @@ export class MemoryPluginRuntime {
           exportMemoryBundle: () => this.repository.exportMemoryBundle(),
           importMemoryBundle: (bundle) => this.replaceMemoryBundle(bundle),
           getRuntimeOverview: () => this.getRuntimeOverview(),
+          getStartupRepairSnapshot: (limit) => this.getStartupRepairSnapshot(limit),
         },
         this.logger,
       );
@@ -275,6 +294,25 @@ export class MemoryPluginRuntime {
     const normalized = this.repository.saveIndexingSettings(settings, this.config.defaultIndexingSettings);
     this.repository.setPipelineState("indexingSettingsMigration", INDEXING_SETTINGS_MIGRATION_VERSION);
     return normalized;
+  }
+
+  private setStartupRepairState(
+    status: StartupRepairStatus,
+    options?: { message?: string; snapshot?: MemoryUiSnapshot },
+  ): void {
+    this.startupRepairStatus = status;
+    if (status === "idle") {
+      this.startupRepairMessage = "";
+      this.startupRepairSnapshot = undefined;
+      return;
+    }
+    this.startupRepairMessage = options?.message?.trim() ?? "";
+    this.startupRepairSnapshot = options?.snapshot;
+  }
+
+  private getStartupRepairSnapshot(limit: number): MemoryUiSnapshot | undefined {
+    if (this.startupRepairStatus === "idle" || !this.startupRepairSnapshot) return undefined;
+    return sliceUiSnapshot(this.startupRepairSnapshot, limit);
   }
 
   private clearEphemeralMemoryState(): void {
@@ -294,6 +332,7 @@ export class MemoryPluginRuntime {
   }
 
   async replaceMemoryBundle(bundle: MemoryExportBundle): Promise<MemoryImportResult> {
+    this.setStartupRepairState("idle");
     this.clearEphemeralMemoryState();
     if (this.queuePromise) {
       try {
@@ -582,6 +621,8 @@ export class MemoryPluginRuntime {
     | "workspaceBootstrapPresent"
     | "memoryRuntimeHealthy"
     | "runtimeIssues"
+    | "startupRepairStatus"
+    | "startupRepairMessage"
   > {
     const queuedSessions = this.queuedFullRun
       ? Math.max(1, this.debouncedSessions.size + this.queuedSessionKeys.size)
@@ -605,6 +646,8 @@ export class MemoryPluginRuntime {
       workspaceBootstrapPresent: diagnostics.workspaceBootstrapPresent,
       memoryRuntimeHealthy: diagnostics.memoryRuntimeHealthy,
       runtimeIssues: diagnostics.runtimeIssues,
+      startupRepairStatus: this.startupRepairStatus,
+      ...(this.startupRepairMessage ? { startupRepairMessage: this.startupRepairMessage } : {}),
     };
   }
 
@@ -634,6 +677,9 @@ export class MemoryPluginRuntime {
           : await this.indexer.runHeartbeat({ reason, sessionKeys: sessionKeys ?? [] });
         aggregate = mergeStats(aggregate, stats);
         logIndexStats(this.logger, reason, stats);
+        if (runAll && this.startupRepairStatus === "failed" && !reason.includes("repair")) {
+          this.setStartupRepairState("idle");
+        }
       }
     } finally {
       this.indexingInProgress = false;
@@ -714,16 +760,30 @@ export class MemoryPluginRuntime {
   private startBackgroundRepair(): void {
     const repairedVersion = this.repository.getPipelineState("repairVersion");
     if (repairedVersion === MEMORY_REPAIR_VERSION) return;
+    const cachedSnapshot = this.repository.getUiSnapshot(STARTUP_REPAIR_SNAPSHOT_LIMIT);
     void (async () => {
       try {
         const repair = this.repository.repairL0Sessions((record) => sanitizeL0Record(record, this.config));
-        this.repository.resetDerivedIndexes();
+        if (repair.updated === 0 && repair.removed === 0) {
+          this.repository.setPipelineState("repairVersion", MEMORY_REPAIR_VERSION);
+          this.logger.info?.("[youarememory] startup repair skipped: no l0 changes needed");
+          return;
+        }
+        this.setStartupRepairState("running", {
+          message: "startup repair rebuild in progress",
+          snapshot: cachedSnapshot,
+        });
         const stats = await this.flushAllNow("repair");
         this.logger.info?.(
           `[youarememory] repaired l0 updated=${repair.updated} removed=${repair.removed}; rebuilt l1=${stats.l1Created}, l2_time=${stats.l2TimeUpdated}, l2_project=${stats.l2ProjectUpdated}, profile=${stats.profileUpdated}, failed=${stats.failed}`,
         );
         this.repository.setPipelineState("repairVersion", MEMORY_REPAIR_VERSION);
+        this.setStartupRepairState("idle");
       } catch (error) {
+        this.setStartupRepairState("failed", {
+          message: error instanceof Error ? error.message : String(error),
+          snapshot: cachedSnapshot,
+        });
         this.logger.warn?.(`[youarememory] startup repair failed: ${String(error)}`);
       }
     })();

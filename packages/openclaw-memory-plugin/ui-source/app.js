@@ -78,6 +78,11 @@ const LOCALES = {
     "status.retrieved": "检索完成",
     "status.loading": "加载中…",
     "status.ready": "已就绪",
+    "status.startupRepairRunning": "正在加载已有记忆，后台校验中…",
+    "status.startupRepairPillRunning": "后台校验中",
+    "status.startupRepairFailed": "启动校验失败，暂时显示上次记忆快照",
+    "status.startupRepairFailedWithDetail": "启动校验失败，暂时显示上次记忆快照：{0}",
+    "status.startupRepairPillFailed": "启动校验失败",
     "status.loadFail": "加载失败：{0}",
     "status.queryRequired": "请输入检索问题",
     "status.settingsSaved": "设置已保存 · {0}",
@@ -280,6 +285,11 @@ const LOCALES = {
     "status.retrieved": "Retrieval complete",
     "status.loading": "Loading…",
     "status.ready": "Ready",
+    "status.startupRepairRunning": "Loading existing memory while startup validation runs…",
+    "status.startupRepairPillRunning": "Startup validation",
+    "status.startupRepairFailed": "Startup validation failed; showing the last memory snapshot",
+    "status.startupRepairFailedWithDetail": "Startup validation failed; showing the last memory snapshot: {0}",
+    "status.startupRepairPillFailed": "Startup failed",
     "status.loadFail": "Load failed: {0}",
     "status.queryRequired": "Please enter a query",
     "status.settingsSaved": "Saved · {0}",
@@ -680,9 +690,16 @@ function updateStatusPill(overview = {}) {
   const openTopics = Number(overview.openTopics ?? 0);
   const lastIndexed = overview.lastIndexedAt ? formatTime(overview.lastIndexedAt) : t("nav.waiting");
   const conflictCount = Array.isArray(overview.runtimeIssues) ? overview.runtimeIssues.length : 0;
+  const startupRepairStatus = String(overview.startupRepairStatus || "idle");
   if (statusPill) {
     if (conflictCount > 0) {
       statusPill.textContent = t("status.conflictsDetected", conflictCount);
+      statusPill.dataset.tone = "warning";
+    } else if (startupRepairStatus === "running") {
+      statusPill.textContent = t("status.startupRepairPillRunning");
+      statusPill.dataset.tone = "pending";
+    } else if (startupRepairStatus === "failed") {
+      statusPill.textContent = t("status.startupRepairPillFailed");
       statusPill.dataset.tone = "warning";
     } else if (pending > 0) {
       statusPill.textContent = t("status.pending", pending, openTopics);
@@ -693,6 +710,29 @@ function updateStatusPill(overview = {}) {
     }
   }
   navLastIndexed.textContent = lastIndexed;
+}
+
+function updateActivityFromOverview(overview = state.overview) {
+  const runtimeIssues = Array.isArray(overview.runtimeIssues) ? overview.runtimeIssues : [];
+  const startupRepairStatus = String(overview.startupRepairStatus || "idle");
+  const startupRepairMessage = String(overview.startupRepairMessage || "").trim();
+  if (runtimeIssues.length > 0) {
+    setActivity("status.conflictsDetected", "warning", runtimeIssues.length);
+    return;
+  }
+  if (startupRepairStatus === "running") {
+    setActivity("status.startupRepairRunning", "warning");
+    return;
+  }
+  if (startupRepairStatus === "failed") {
+    if (startupRepairMessage) {
+      setActivity("status.startupRepairFailedWithDetail", "warning", startupRepairMessage);
+    } else {
+      setActivity("status.startupRepairFailed", "warning");
+    }
+    return;
+  }
+  setActivity("status.ready", "success");
 }
 
 function formatConflictSummary(conflict) {
@@ -2054,6 +2094,10 @@ async function refreshDashboard(msgKey = "status.refreshed", tone = "success", .
   setActivity("status.refreshing");
   await loadSnapshot();
   await loadLevel(state.activeLevel, listQueryInput.value || "");
+  if (state.overview.startupRepairStatus === "running" || state.overview.startupRepairStatus === "failed") {
+    updateActivityFromOverview();
+    return;
+  }
   setActivity(msgKey, tone, ...args);
 }
 
@@ -2443,11 +2487,7 @@ async function bootstrap() {
     await loadLevel(state.activeLevel);
   }
   renderDetail();
-  if ((state.overview.runtimeIssues || []).length > 0) {
-    setActivity("status.conflictsDetected", "warning", state.overview.runtimeIssues.length);
-  } else {
-    setActivity("status.ready", "success");
-  }
+  updateActivityFromOverview();
 }
 
 bootstrap().catch((err) => {

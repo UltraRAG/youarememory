@@ -11,6 +11,7 @@ import {
   ReasoningRetriever,
   type MemoryExportBundle,
   type MemoryImportResult,
+  type MemoryUiSnapshot,
 } from "./core/index.js";
 import type { PluginLogger } from "./plugin-api.js";
 
@@ -44,7 +45,10 @@ export interface UiServerControls {
     | "workspaceBootstrapPresent"
     | "memoryRuntimeHealthy"
     | "runtimeIssues"
+    | "startupRepairStatus"
+    | "startupRepairMessage"
   >;
+  getStartupRepairSnapshot: (limit: number) => MemoryUiSnapshot | undefined;
 }
 
 const CONTENT_TYPES: Record<string, string> = {
@@ -128,6 +132,16 @@ function parsePath(pathname: string, prefix: string): string {
   if (!pathname.startsWith(prefix)) return "";
   const raw = pathname.slice(prefix.length);
   return raw.startsWith("/") ? raw : `/${raw}`;
+}
+
+function mergeOverview(
+  base: DashboardOverview,
+  runtime: ReturnType<UiServerControls["getRuntimeOverview"]>,
+): DashboardOverview {
+  return {
+    ...base,
+    ...runtime,
+  };
 }
 
 async function readJsonBody(req: IncomingMessage): Promise<Record<string, unknown>> {
@@ -222,10 +236,13 @@ export class LocalUiServer {
     const query = url.searchParams.get("q") ?? "";
     const limit = parseLimit(url.searchParams.get("limit"), 20);
     const offset = Math.max(0, parseInt(url.searchParams.get("offset") ?? "0", 10) || 0);
-    const overview = (): DashboardOverview => ({
-      ...this.repository.getOverview(),
-      ...this.controls.getRuntimeOverview(),
-    });
+    const runtimeOverview = (): ReturnType<UiServerControls["getRuntimeOverview"]> => this.controls.getRuntimeOverview();
+    const cachedSnapshot = (): MemoryUiSnapshot | undefined => this.controls.getStartupRepairSnapshot(limit);
+    const overview = (): DashboardOverview => {
+      const runtime = runtimeOverview();
+      const cached = cachedSnapshot();
+      return mergeOverview(cached?.overview ?? this.repository.getOverview(), runtime);
+    };
     if (relativePath === "/api/clear") {
       if (upperMethod !== "POST") return sendMethodNotAllowed(res, "POST");
       return sendJson(res, this.repository.clearAllMemoryData());
@@ -268,6 +285,14 @@ export class LocalUiServer {
       return sendJson(res, await this.controls.runIndexNow());
     }
     if (relativePath === "/api/snapshot") {
+      const cached = cachedSnapshot();
+      if (cached) {
+        return sendJson(res, {
+          ...cached,
+          overview: mergeOverview(cached.overview, runtimeOverview()),
+          settings: this.controls.getSettings(),
+        });
+      }
       return sendJson(res, {
         ...this.repository.getUiSnapshot(limit),
         overview: overview(),

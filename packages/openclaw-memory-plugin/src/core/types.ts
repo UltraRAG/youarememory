@@ -189,6 +189,7 @@ export interface RetrievalResult {
 }
 
 export type RecallMode = "llm" | "local_fallback" | "none";
+export type StartupRepairStatus = "idle" | "running" | "failed";
 
 export interface DashboardOverview {
   totalL0: number;
@@ -215,6 +216,8 @@ export interface DashboardOverview {
   memoryRuntimeHealthy?: boolean;
   runtimeIssues?: string[];
   lastIndexedAt?: string;
+  startupRepairStatus?: StartupRepairStatus;
+  startupRepairMessage?: string;
 }
 
 export interface MemoryUiSnapshot {
