@@ -562,7 +562,7 @@ const viewToggleBtn = $("#viewToggleBtn");
 
 /* ── Level config ────────────────────────────────────────── */
 
-const LEVEL_KEYS = ["l1", "l2_project", "l2_time", "l0", "profile"];
+const LEVEL_KEYS = ["profile", "l2_project", "l2_time", "l1", "l0"];
 
 function getLevelConfig(level) {
   const endpoints = {
@@ -2394,7 +2394,7 @@ navMenuTrigger?.addEventListener("click", (e) => {
 
 settingsPopover?.addEventListener("click", (e) => {
   const item = e.target instanceof Element ? e.target.closest(".popover-item") : null;
-  if (item && (item.id === "refreshBtn" || item.id === "overviewToggleBtn" || item.id === "exportMemoryBtn" || item.id === "importMemoryBtn")) {
+  if (item && (item.id === "overviewToggleBtn" || item.id === "exportMemoryBtn" || item.id === "importMemoryBtn")) {
     closePopover();
   }
 });

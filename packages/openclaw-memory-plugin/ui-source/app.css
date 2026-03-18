@@ -1015,6 +1015,37 @@ body[data-nav="open"] .app-scrim {
   user-select: none;
 }
 
+.topbar-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-3);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background .15s, color .15s;
+  white-space: nowrap;
+}
+
+.topbar-action-btn:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.topbar-action-btn svg {
+  flex-shrink: 0;
+}
+
+.topbar-divider-v {
+  width: 1px;
+  height: 14px;
+  background: var(--border);
+  flex-shrink: 0;
+}
+
 .topbar-index-info {
   display: inline-flex;
   align-items: center;
