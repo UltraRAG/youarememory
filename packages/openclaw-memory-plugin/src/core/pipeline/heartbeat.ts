@@ -109,12 +109,9 @@ function buildLocalDateKey(timestamp: string): string {
 }
 
 const PROJECT_STATUS_RANK: Record<ProjectDetail["status"], number> = {
-  blocked: 5,
-  in_progress: 4,
-  planned: 3,
-  on_hold: 2,
-  done: 1,
-  unknown: 0,
+  done: 3,
+  in_progress: 2,
+  planned: 1,
 };
 
 const GENERIC_PROJECT_SUMMARY_PATTERNS = [
@@ -218,7 +215,7 @@ function fallbackRewriteProjectDetail(context: ProjectRewriteContext, l1: L1Wind
   return {
     ...incomingProject,
     name: chooseProjectName(existingProject?.projectName ?? "", rewritten?.name || incomingProject.name),
-    status: preferProjectStatus(existingProject?.currentStatus ?? "unknown", rewritten?.status ?? incomingProject.status),
+    status: rewritten?.status ?? incomingProject.status ?? existingProject?.currentStatus ?? "planned",
     summary,
     latestProgress,
     confidence: Math.max(incomingProject.confidence, rewritten?.confidence ?? 0),

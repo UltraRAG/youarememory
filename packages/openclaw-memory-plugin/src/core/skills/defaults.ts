@@ -60,16 +60,16 @@ export const DEFAULT_PROJECT_STATUS_RULES: ProjectStatusRulesFile = {
   defaultStatus: "in_progress",
   rules: [
     {
-      status: "completed",
+      status: "done",
       keywords: ["完成", "done", "已上线"],
     },
     {
-      status: "blocked",
-      keywords: ["阻塞", "失败", "报错"],
+      status: "planned",
+      keywords: ["计划", "准备"],
     },
     {
-      status: "planning",
-      keywords: ["计划", "准备"],
+      status: "in_progress",
+      keywords: ["推进", "进行中", "跟进"],
     },
   ],
 };

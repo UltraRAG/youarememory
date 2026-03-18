@@ -115,10 +115,7 @@ const LOCALES = {
     "entry.globalProfile": "全局画像",
     "project.planned": "计划中",
     "project.in_progress": "进行中",
-    "project.blocked": "阻塞",
-    "project.on_hold": "暂停",
     "project.done": "已完成",
-    "project.unknown": "未知",
     "project.statusLabel": "状态：{0}",
     "meta.date": "日期",
     "meta.source": "来源",
@@ -320,10 +317,7 @@ const LOCALES = {
     "entry.globalProfile": "Global Profile",
     "project.planned": "Planned",
     "project.in_progress": "In Progress",
-    "project.blocked": "Blocked",
-    "project.on_hold": "On Hold",
     "project.done": "Done",
-    "project.unknown": "Unknown",
     "project.statusLabel": "Status: {0}",
     "meta.date": "Date",
     "meta.source": "Source",
@@ -584,7 +578,12 @@ const OVERVIEW_KEYS = {
 };
 
 function formatStatus(value) {
-  return t(`project.${value}`) || value || "-";
+  const normalized = value === "done" || value === "completed" || value === "complete"
+    ? "done"
+    : value === "blocked" || value === "on_hold" || value === "in_progress" || value === "in progress"
+      ? "in_progress"
+      : "planned";
+  return t(`project.${normalized}`) || normalized || "-";
 }
 
 /* ── State ───────────────────────────────────────────────── */
@@ -1388,13 +1387,13 @@ function renderProjectBoard() {
     return;
   }
   const groups = {};
-  const statusOrder = ["in_progress", "planned", "blocked", "on_hold", "done"];
+  const statusOrder = ["in_progress", "planned", "done"];
   projects.forEach((p) => {
-    const s = p.currentStatus || "unknown";
+    const s = p.currentStatus || "planned";
     if (!groups[s]) groups[s] = [];
     groups[s].push(p);
   });
-  const allStatuses = [...statusOrder, ...Object.keys(groups).filter((s) => !statusOrder.includes(s))];
+  const allStatuses = statusOrder;
   allStatuses.forEach((status) => {
     const items = groups[status];
     if (!items || items.length === 0) return;
@@ -1421,7 +1420,7 @@ function createProjectCard(project) {
   const card = document.createElement("button");
   card.type = "button";
   card.className = "board-card";
-  const status = project.currentStatus || "unknown";
+  const status = project.currentStatus || "planned";
   card.dataset.status = status;
   const id = project.l2IndexId || project.projectKey || project.projectName || "";
   card.dataset.id = id;

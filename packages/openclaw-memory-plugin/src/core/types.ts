@@ -22,7 +22,7 @@ export interface FactCandidate {
   confidence: number;
 }
 
-export type ProjectStatus = "planned" | "in_progress" | "blocked" | "on_hold" | "done" | "unknown";
+export type ProjectStatus = "planned" | "in_progress" | "done";
 export type ReasoningMode = "answer_first" | "accuracy_first";
 
 export interface IndexingSettings {

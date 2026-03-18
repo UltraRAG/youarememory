@@ -19,6 +19,7 @@ import type {
   MemoryImportResult,
   MemoryTransferCounts,
   MemoryUiSnapshot,
+  ProjectStatus,
 } from "../types.js";
 import { MEMORY_EXPORT_FORMAT_VERSION } from "../types.js";
 import { buildLinkId, nowIso } from "../utils/id.js";
@@ -121,6 +122,17 @@ function normalizeFactCandidate(value: unknown, field: string): FactCandidate {
   };
 }
 
+function normalizeStoredProjectStatus(value: unknown): ProjectStatus {
+  if (typeof value !== "string") return "planned";
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "planned") return "planned";
+  if (normalized === "in_progress" || normalized === "in progress") return "in_progress";
+  if (normalized === "blocked" || normalized === "on_hold" || normalized === "on hold") return "in_progress";
+  if (normalized === "unknown") return "planned";
+  if (normalized === "done" || normalized === "completed" || normalized === "complete") return "done";
+  return "planned";
+}
+
 function normalizeProjectDetail(value: unknown, field: string): L1WindowRecord["projectDetails"][number] {
   if (!isRecord(value)) throw new MemoryBundleValidationError(`Invalid ${field}`);
   const confidence = typeof value.confidence === "number" && Number.isFinite(value.confidence)
@@ -129,7 +141,7 @@ function normalizeProjectDetail(value: unknown, field: string): L1WindowRecord["
   return {
     key: requireString(value.key, `${field}.key`),
     name: readString(value.name, `${field}.name`),
-    status: requireString(value.status, `${field}.status`) as L1WindowRecord["projectDetails"][number]["status"],
+    status: normalizeStoredProjectStatus(requireString(value.status, `${field}.status`)),
     summary: readString(value.summary, `${field}.summary`),
     latestProgress: readString(value.latestProgress, `${field}.latestProgress`),
     confidence,
@@ -177,7 +189,7 @@ function normalizeL2ProjectRecord(value: unknown, index: number): L2ProjectIndex
     projectKey: requireString(value.projectKey, `l2ProjectIndexes[${index}].projectKey`),
     projectName: readString(value.projectName, `l2ProjectIndexes[${index}].projectName`),
     summary: readString(value.summary, `l2ProjectIndexes[${index}].summary`),
-    currentStatus: requireString(value.currentStatus, `l2ProjectIndexes[${index}].currentStatus`) as L2ProjectIndexRecord["currentStatus"],
+    currentStatus: normalizeStoredProjectStatus(requireString(value.currentStatus, `l2ProjectIndexes[${index}].currentStatus`)),
     latestProgress: readString(value.latestProgress, `l2ProjectIndexes[${index}].latestProgress`),
     l1Source: normalizeStringArray(value.l1Source, `l2ProjectIndexes[${index}].l1Source`),
     createdAt: requireString(value.createdAt, `l2ProjectIndexes[${index}].createdAt`),
@@ -260,6 +272,7 @@ function parseActiveTopicBufferRow(row: DbRow): ActiveTopicBufferRecord {
 }
 
 function parseL1Row(row: DbRow): L1WindowRecord {
+  const rawProjectDetails = safeJsonParse(String(row.project_details_json ?? "[]"), []);
   return {
     l1IndexId: String(row.l1_index_id),
     sessionKey: String(row.session_key ?? ""),
@@ -270,7 +283,9 @@ function parseL1Row(row: DbRow): L1WindowRecord {
     facts: safeJsonParse(String(row.facts_json ?? "[]"), []),
     situationTimeInfo: String(row.situation_time_info ?? ""),
     projectTags: safeJsonParse(String(row.project_tags_json ?? "[]"), []),
-    projectDetails: safeJsonParse(String(row.project_details_json ?? "[]"), []),
+    projectDetails: Array.isArray(rawProjectDetails)
+      ? rawProjectDetails.map((item, index) => normalizeProjectDetail(item, `l1.projectDetails[${index}]`))
+      : [],
     l0Source: safeJsonParse(String(row.l0_source_json ?? "[]"), []),
     createdAt: String(row.created_at),
   };
@@ -293,7 +308,7 @@ function parseL2ProjectRow(row: DbRow): L2ProjectIndexRecord {
     projectKey: String(row.project_key ?? row.project_name),
     projectName: String(row.project_name),
     summary: String(row.summary),
-    currentStatus: String(row.current_status) as L2ProjectIndexRecord["currentStatus"],
+    currentStatus: normalizeStoredProjectStatus(row.current_status),
     latestProgress: String(row.latest_progress),
     l1Source: safeJsonParse(String(row.l1_source_json ?? "[]"), []),
     createdAt: String(row.created_at),

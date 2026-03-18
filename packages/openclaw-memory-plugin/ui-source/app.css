@@ -1753,29 +1753,20 @@ body[data-panel="retrieve"] #retrievePanel {
 [data-theme="light"] {
   --status-progress:  #0d9373;
   --status-planned:   #3b82f6;
-  --status-blocked:   #dc4a41;
-  --status-hold:      #8b8f8a;
   --status-done:      #1ba854;
-  --status-unknown:   var(--text-3);
 
   --status-progress-soft: rgba(13,147,115,0.10);
   --status-planned-soft:  rgba(59,130,246,0.10);
-  --status-blocked-soft:  rgba(220,74,65,0.10);
-  --status-hold-soft:     rgba(139,143,138,0.08);
   --status-done-soft:     rgba(27,168,84,0.10);
 }
 
 [data-theme="dark"] {
   --status-progress:  #3cb88e;
   --status-planned:   #60a5fa;
-  --status-blocked:   #f87171;
-  --status-hold:      #6b7280;
   --status-done:      #4ade80;
 
   --status-progress-soft: rgba(60,184,142,0.12);
   --status-planned-soft:  rgba(96,165,250,0.12);
-  --status-blocked-soft:  rgba(248,113,113,0.10);
-  --status-hold-soft:     rgba(107,114,128,0.10);
   --status-done-soft:     rgba(74,222,128,0.10);
 }
 
@@ -2024,10 +2015,7 @@ body[data-panel="retrieve"] #retrievePanel {
 
 .board-card[data-status="in_progress"]::before { background: var(--status-progress); }
 .board-card[data-status="planned"]::before     { background: var(--status-planned); }
-.board-card[data-status="blocked"]::before     { background: var(--status-blocked); }
-.board-card[data-status="on_hold"]::before     { background: var(--status-hold); }
 .board-card[data-status="done"]::before        { background: var(--status-done); }
-.board-card[data-status="unknown"]::before     { background: var(--text-3); }
 
 .board-card:hover {
   transform: translateY(-2px);
@@ -2062,8 +2050,6 @@ body[data-panel="retrieve"] #retrievePanel {
 
 .board-card-status[data-status="in_progress"] { background: var(--status-progress-soft); color: var(--status-progress); }
 .board-card-status[data-status="planned"]     { background: var(--status-planned-soft);  color: var(--status-planned); }
-.board-card-status[data-status="blocked"]     { background: var(--status-blocked-soft);  color: var(--status-blocked); }
-.board-card-status[data-status="on_hold"]     { background: var(--status-hold-soft);     color: var(--status-hold); }
 .board-card-status[data-status="done"]        { background: var(--status-done-soft);     color: var(--status-done); }
 
 .board-card-body {

@@ -324,7 +324,7 @@ Use this exact JSON shape:
     {
       "key": "stable english identifier, lower-kebab-case",
       "name": "project name as the user would recognize it",
-      "status": "planned | in_progress | blocked | on_hold | done | unknown",
+      "status": "planned | in_progress | done",
       "summary": "rolling 1-2 sentence summary: what this project is + current phase + next step/blocker when known",
       "latest_progress": "short latest meaningful progress or blocker, without repeating the full project background",
       "confidence": 0.0
@@ -395,7 +395,7 @@ Use this exact JSON shape:
     {
       "key": "stable english identifier, lower-kebab-case",
       "name": "project name as the user would recognize it",
-      "status": "planned | in_progress | blocked | on_hold | done | unknown",
+      "status": "planned | in_progress | done",
       "summary": "rolling 1-2 sentence summary: what this project is + current phase + next step/blocker when known",
       "latest_progress": "short latest meaningful progress or blocker, without repeating the full project background",
       "confidence": 0.0
@@ -462,7 +462,7 @@ Use this exact JSON shape:
     {
       "key": "same stable english identifier as the incoming project",
       "name": "project name as the user would recognize it",
-      "status": "planned | in_progress | blocked | on_hold | done | unknown",
+      "status": "planned | in_progress | done",
       "summary": "rolling 1-2 sentence project memory with background + stage progression + current phase + next step/blocker when known",
       "latest_progress": "short latest meaningful progress or blocker",
       "confidence": 0.0
@@ -1040,14 +1040,15 @@ function clampConfidence(value: unknown, fallback: number): number {
 }
 
 function normalizeStatus(value: unknown): ProjectStatus {
-  if (typeof value !== "string") return "unknown";
+  if (typeof value !== "string") return "planned";
   const normalized = value.trim().toLowerCase();
   if (normalized === "planned") return "planned";
   if (normalized === "in_progress" || normalized === "in progress") return "in_progress";
-  if (normalized === "blocked") return "blocked";
-  if (normalized === "on_hold" || normalized === "on hold") return "on_hold";
+  if (normalized === "blocked") return "in_progress";
+  if (normalized === "on_hold" || normalized === "on hold") return "in_progress";
+  if (normalized === "unknown") return "planned";
   if (normalized === "done" || normalized === "completed" || normalized === "complete") return "done";
-  return "unknown";
+  return "planned";
 }
 
 function buildFallbackSituationTimeInfo(timestamp: string, summary: string): string {
