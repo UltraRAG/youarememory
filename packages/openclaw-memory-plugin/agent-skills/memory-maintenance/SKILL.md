@@ -1,12 +1,12 @@
 ---
 name: memory-maintenance
-description: Diagnose and maintain YouAreMemory index health using scripts and tools. Use when installation, indexing, or data quality looks wrong.
-metadata: {"openclaw":{"skillKey":"youarememory-openclaw","requires":{"config":["plugins.entries.youarememory-openclaw.enabled"]}}}
+description: Diagnose and maintain ClawXMemory index health using scripts and tools. Use when installation, indexing, or data quality looks wrong.
+metadata: {"openclaw":{"skillKey":"clawxmemory-openclaw","requires":{"config":["plugins.entries.clawxmemory-openclaw.enabled"]}}}
 ---
 
 # Memory Maintenance
 
-Use this skill for diagnosis and maintenance of YouAreMemory storage/indexes.
+Use this skill for diagnosis and maintenance of ClawXMemory storage/indexes.
 
 ## Mixed Mode Policy
 
@@ -30,7 +30,7 @@ Use this skill for diagnosis and maintenance of YouAreMemory storage/indexes.
 
 ## Script Defaults
 
-- Default DB path: `~/.openclaw/youarememory/memory.sqlite`
+- Default DB path: `~/.openclaw/clawxmemory/memory.sqlite`
 - You can override with `--db /absolute/path/to/memory.sqlite`
 
 ## Common Debug Cases

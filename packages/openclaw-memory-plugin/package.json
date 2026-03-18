@@ -1,5 +1,5 @@
 {
-  "name": "@youarememory/youarememory-openclaw",
+  "name": "@clawxmemory/clawxmemory-openclaw",
   "version": "0.1.0",
   "description": "OpenClaw memory-slot plugin with L0/L1/L2 local indexes and a minimal dashboard UI.",
   "type": "module",

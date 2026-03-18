@@ -5,8 +5,13 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
-const PLUGIN_ID = "youarememory-openclaw";
-const WORKSPACE_NAME = "@youarememory/youarememory-openclaw";
+const PLUGIN_ID = "clawxmemory-openclaw";
+const LEGACY_PLUGIN_ID = "youarememory-openclaw";
+const WORKSPACE_NAME = "@clawxmemory/clawxmemory-openclaw";
+const DEFAULT_DATA_DIR = path.join(os.homedir(), ".openclaw", "clawxmemory");
+const LEGACY_DEFAULT_DATA_DIR = path.join(os.homedir(), ".openclaw", "youarememory");
+const DEFAULT_UI_PATH_PREFIX = "/clawxmemory";
+const LEGACY_UI_PATH_PREFIX = "/youarememory";
 const RESTART_TIMEOUT_MS = process.platform === "win32" ? 15_000 : 8_000;
 const RESTART_KILL_GRACE_MS = 1_000;
 const HEALTH_TIMEOUT_MS = process.platform === "win32" ? 45_000 : 20_000;
@@ -27,7 +32,7 @@ function resolveRepoRoot(importMetaUrl) {
 }
 
 function resolveUiUrl() {
-  return `http://127.0.0.1:39393/youarememory/?v=${Date.now()}`;
+  return `http://127.0.0.1:39393/clawxmemory/?v=${Date.now()}`;
 }
 
 function resolveStateDir() {
@@ -328,6 +333,26 @@ function ensureObject(parent, key) {
   return parent[key];
 }
 
+function asObject(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : undefined;
+}
+
+function normalizePluginConfigBranding(pluginConfig) {
+  if (!pluginConfig || typeof pluginConfig !== "object" || Array.isArray(pluginConfig)) return;
+  if (pluginConfig.dataDir === LEGACY_DEFAULT_DATA_DIR) {
+    pluginConfig.dataDir = DEFAULT_DATA_DIR;
+  }
+  if (pluginConfig.dbPath === path.join(LEGACY_DEFAULT_DATA_DIR, "memory.sqlite")) {
+    pluginConfig.dbPath = path.join(DEFAULT_DATA_DIR, "memory.sqlite");
+  }
+  if (pluginConfig.skillsDir === path.join(LEGACY_DEFAULT_DATA_DIR, "skills")) {
+    pluginConfig.skillsDir = path.join(DEFAULT_DATA_DIR, "skills");
+  }
+  if (pluginConfig.uiPathPrefix === LEGACY_UI_PATH_PREFIX) {
+    pluginConfig.uiPathPrefix = DEFAULT_UI_PATH_PREFIX;
+  }
+}
+
 async function ensurePluginLoadPath(pluginPath) {
   printStep("Register plugin source path");
   const config = (await readOpenClawConfig()) ?? {};
@@ -353,6 +378,7 @@ async function applyManagedPluginConfig(pluginPath, { resetInstallMetadata = fal
   const entries = ensureObject(plugins, "entries");
   const pluginEntry = ensureObject(entries, PLUGIN_ID);
   const pluginHooks = ensureObject(pluginEntry, "hooks");
+  const pluginConfig = ensureObject(pluginEntry, "config");
   const internalHooks = ensureObject(ensureObject(ensureObject(config, "hooks"), "internal"), "entries");
   const sessionMemory = ensureObject(internalHooks, "session-memory");
   const agents = ensureObject(config, "agents");
@@ -366,6 +392,8 @@ async function applyManagedPluginConfig(pluginPath, { resetInstallMetadata = fal
     ? load.paths.filter((entry) => typeof entry === "string" && entry.trim())
     : [];
 
+  normalizePluginConfigBranding(pluginConfig);
+
   load.paths = [normalizedPluginPath, ...currentPaths.filter((entry) => path.resolve(entry) !== normalizedPluginPath)];
   slots.memory = PLUGIN_ID;
   pluginEntry.enabled = true;
@@ -375,8 +403,13 @@ async function applyManagedPluginConfig(pluginPath, { resetInstallMetadata = fal
   memorySearch.enabled = false;
   memoryFlush.enabled = false;
 
-  if (resetInstallMetadata && plugins.installs && typeof plugins.installs === "object") {
-    delete plugins.installs[PLUGIN_ID];
+  delete entries[LEGACY_PLUGIN_ID];
+
+  if (plugins.installs && typeof plugins.installs === "object") {
+    delete plugins.installs[LEGACY_PLUGIN_ID];
+    if (resetInstallMetadata) {
+      delete plugins.installs[PLUGIN_ID];
+    }
     if (Object.keys(plugins.installs).length === 0) {
       delete plugins.installs;
     }
@@ -403,7 +436,7 @@ async function applyManagedPluginConfig(pluginPath, { resetInstallMetadata = fal
 
 async function isUiReachable() {
   try {
-    const response = await fetch("http://127.0.0.1:39393/youarememory/", {
+    const response = await fetch("http://127.0.0.1:39393/clawxmemory/", {
       signal: AbortSignal.timeout(SHORT_COMMAND_TIMEOUT_MS),
     });
     return response.ok;
@@ -445,7 +478,7 @@ async function runConfigMutation(repoRoot, label, command, args, verifyState) {
 }
 
 function maybeOpenBrowser(url) {
-  if (process.env.YAM_OPEN_BROWSER === "0") return;
+  if (process.env.CLAWXMEMORY_OPEN_BROWSER === "0") return;
   if (process.platform === "darwin") {
     const child = spawn("open", [url], { stdio: "ignore", detached: true });
     child.unref();
@@ -468,7 +501,7 @@ async function buildPlugin(repoRoot) {
 }
 
 async function runReloadFlow(repoRoot, options = {}) {
-  printBanner("YouAreMemory Plugin Reload", "Link config, restart gateway, and verify the memory runtime.");
+  printBanner("ClawXMemory Plugin Reload", "Link config, restart gateway, and verify the memory runtime.");
   const { skipBuild = false, resetInstallMetadata = false } = options;
   if (!skipBuild) {
     await buildPlugin(repoRoot);
@@ -532,7 +565,7 @@ export async function relinkMemoryPlugin({ importMetaUrl } = {}) {
   const repoRoot = resolveRepoRoot(importMetaUrl);
   const installDir = path.join(resolveStateDir(), "extensions", PLUGIN_ID);
 
-  printBanner("YouAreMemory Plugin Relink", "Build, relink, update config, and restart the gateway.");
+  printBanner("ClawXMemory Plugin Relink", "Build, relink, update config, and restart the gateway.");
   await buildPlugin(repoRoot);
 
   printStep("Clean extension directory");

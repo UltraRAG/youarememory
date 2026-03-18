@@ -25,7 +25,7 @@ import { join, resolve } from "node:path";
 
 const MEMORY_REPAIR_VERSION = "2026-03-18-cross-channel-message-normalization-v14";
 const INDEXING_SETTINGS_MIGRATION_VERSION = "2026-03-16-reasoning-mode-settings-v1";
-const PLUGIN_ID = "youarememory-openclaw";
+const PLUGIN_ID = "clawxmemory-openclaw";
 const RECENT_INBOUND_TTL_MS = 30_000;
 const STARTUP_REPAIR_SNAPSHOT_LIMIT = 200;
 
@@ -143,7 +143,7 @@ function shouldLogStats(stats: HeartbeatStats): boolean {
 function logIndexStats(logger: PluginLogger, reason: string, stats: HeartbeatStats): void {
   if (!shouldLogStats(stats)) return;
   logger.info?.(
-    `[youarememory] indexed reason=${reason} l0=${stats.l0Captured}, l1=${stats.l1Created}, l2_time=${stats.l2TimeUpdated}, l2_project=${stats.l2ProjectUpdated}, profile=${stats.profileUpdated}, failed=${stats.failed}`,
+    `[clawxmemory] indexed reason=${reason} l0=${stats.l0Captured}, l1=${stats.l1Created}, l2_time=${stats.l2TimeUpdated}, l2_project=${stats.l2ProjectUpdated}, profile=${stats.profileUpdated}, failed=${stats.failed}`,
   );
 }
 
@@ -183,10 +183,10 @@ function sliceUiSnapshot(snapshot: MemoryUiSnapshot, limit: number): MemoryUiSna
 
 function buildMemoryRuntimeSystemContext(evidenceBlock: string): string {
   return [
-    "## YouAreMemory Runtime",
-    "Dynamic conversation memory for this turn is provided by the active YouAreMemory memory-slot plugin.",
+    "## ClawXMemory Runtime",
+    "Dynamic conversation memory for this turn is provided by the active ClawXMemory memory-slot plugin.",
     "For questions about prior chats, people, preferences, projects, timelines, or past recommendations:",
-    "- Treat YouAreMemory injected evidence as the authoritative dynamic memory source for this turn.",
+    "- Treat ClawXMemory injected evidence as the authoritative dynamic memory source for this turn.",
     "- Do not inspect USER.md, MEMORY.md, or memory/*.md to decide whether memory exists or whether this is a fresh conversation.",
     "- Only inspect workspace files when the user explicitly asks to read, edit, or debug those files.",
     evidenceBlock.trim() ? `\n${evidenceBlock.trim()}` : "",
@@ -338,7 +338,7 @@ export class MemoryPluginRuntime {
       try {
         await this.queuePromise;
       } catch (error) {
-        this.logger.warn?.(`[youarememory] pending index queue failed before import: ${String(error)}`);
+        this.logger.warn?.(`[clawxmemory] pending index queue failed before import: ${String(error)}`);
       }
     }
     this.clearEphemeralMemoryState();
@@ -423,7 +423,7 @@ export class MemoryPluginRuntime {
         messages: pendingMessages,
       });
       if (captured) {
-        this.logger.info?.(`[youarememory] captured pending l0 before ${reason} session=${previousSessionKey}`);
+        this.logger.info?.(`[clawxmemory] captured pending l0 before ${reason} session=${previousSessionKey}`);
       }
     }
     const nextGeneration = (this.conversationGenerationByRawSession.get(trimmed) ?? 0) + 1;
@@ -438,10 +438,10 @@ export class MemoryPluginRuntime {
     }
 
     void this.flushSessionNow(previousSessionKey, reason).catch((error) => {
-      this.logger.warn?.(`[youarememory] ${reason} failed session=${previousSessionKey}: ${String(error)}`);
+      this.logger.warn?.(`[clawxmemory] ${reason} failed session=${previousSessionKey}: ${String(error)}`);
     });
     this.logger.info?.(
-      `[youarememory] opened new conversation window raw_session=${trimmed} previous=${previousSessionKey} next=${nextSessionKey} reason=${reason}`,
+      `[clawxmemory] opened new conversation window raw_session=${trimmed} previous=${previousSessionKey} next=${nextSessionKey} reason=${reason}`,
     );
   }
 
@@ -492,15 +492,15 @@ export class MemoryPluginRuntime {
         settings.reasoningMode === "answer_first"
         && elapsedMs > settings.maxAutoReplyLatencyMs + 300
       ) {
-        this.logger.warn?.(`[youarememory] recall slow query_ms=${elapsedMs} prompt_chars=${prompt.length}`);
+        this.logger.warn?.(`[clawxmemory] recall slow query_ms=${elapsedMs} prompt_chars=${prompt.length}`);
       }
       const injected = Boolean(retrieved.context?.trim());
       this.logger.info?.(
-        `[youarememory] recall mode=${retrieved.debug?.mode ?? "none"} reasoning_mode=${settings.reasoningMode} latency_cap_ms=${settings.reasoningMode === "answer_first" ? settings.maxAutoReplyLatencyMs : "none"} enough_at=${retrieved.enoughAt} injected=${injected} elapsed_ms=${retrieved.debug?.elapsedMs ?? elapsedMs} cache_hit=${retrieved.debug?.cacheHit ? "1" : "0"}`,
+        `[clawxmemory] recall mode=${retrieved.debug?.mode ?? "none"} reasoning_mode=${settings.reasoningMode} latency_cap_ms=${settings.reasoningMode === "answer_first" ? settings.maxAutoReplyLatencyMs : "none"} enough_at=${retrieved.enoughAt} injected=${injected} elapsed_ms=${retrieved.debug?.elapsedMs ?? elapsedMs} cache_hit=${retrieved.debug?.cacheHit ? "1" : "0"}`,
       );
       return { prependSystemContext: buildMemoryRuntimeSystemContext(retrieved.context) };
     } catch (error) {
-      this.logger.warn?.(`[youarememory] recall failed: ${String(error)}`);
+      this.logger.warn?.(`[clawxmemory] recall failed: ${String(error)}`);
       return { prependSystemContext: buildMemoryRuntimeSystemContext("") };
     }
   };
@@ -539,7 +539,7 @@ export class MemoryPluginRuntime {
     const sessionKey = this.getEffectiveSessionKey(rawSessionKey);
     if (this.activeSessionKey && this.activeSessionKey !== sessionKey) {
       void this.flushSessionNow(this.activeSessionKey, "session_boundary").catch((error) => {
-        this.logger.warn?.(`[youarememory] session_boundary failed: ${String(error)}`);
+        this.logger.warn?.(`[clawxmemory] session_boundary failed: ${String(error)}`);
       });
     }
     this.activeSessionKey = sessionKey;
@@ -562,7 +562,7 @@ export class MemoryPluginRuntime {
     });
     if (captured) {
       this.logger.info?.(
-        `[youarememory] captured l0 session=${sessionKey} indexed=pending trigger=idle|timer|session_boundary|manual`,
+        `[clawxmemory] captured l0 session=${sessionKey} indexed=pending trigger=idle|timer|session_boundary|manual`,
       );
       this.scheduleIdleIndex(sessionKey);
     }
@@ -591,7 +591,7 @@ export class MemoryPluginRuntime {
           messages,
         });
         if (captured) {
-          this.logger.info?.(`[youarememory] captured pending l0 before reset session=${sessionKey}`);
+          this.logger.info?.(`[clawxmemory] captured pending l0 before reset session=${sessionKey}`);
         }
       }
       await this.flushSessionNow(sessionKey, "before_reset");
@@ -599,7 +599,7 @@ export class MemoryPluginRuntime {
         this.activeSessionKey = undefined;
       }
     } catch (error) {
-      this.logger.warn?.(`[youarememory] before_reset flush failed session=${sessionKey}: ${String(error)}`);
+      this.logger.warn?.(`[clawxmemory] before_reset flush failed session=${sessionKey}: ${String(error)}`);
     }
   };
 
@@ -713,7 +713,7 @@ export class MemoryPluginRuntime {
         this.clearIdleTimer(sessionKey);
       }
       void this.requestIndexRun("scheduled").catch((error) => {
-        this.logger.warn?.(`[youarememory] scheduled index failed: ${String(error)}`);
+        this.logger.warn?.(`[clawxmemory] scheduled index failed: ${String(error)}`);
       });
     }, intervalMinutes * 60_000);
   }
@@ -739,7 +739,7 @@ export class MemoryPluginRuntime {
       this.idleIndexTimers.delete(sessionKey);
       this.debouncedSessions.delete(sessionKey);
       void this.requestIndexRun("message_capture", [sessionKey]).catch((error) => {
-        this.logger.warn?.(`[youarememory] async message_capture failed: ${String(error)}`);
+        this.logger.warn?.(`[clawxmemory] async message_capture failed: ${String(error)}`);
       });
     }, delayMs);
     this.idleIndexTimers.set(sessionKey, timer);
@@ -766,7 +766,7 @@ export class MemoryPluginRuntime {
         const repair = this.repository.repairL0Sessions((record) => sanitizeL0Record(record, this.config));
         if (repair.updated === 0 && repair.removed === 0) {
           this.repository.setPipelineState("repairVersion", MEMORY_REPAIR_VERSION);
-          this.logger.info?.("[youarememory] startup repair skipped: no l0 changes needed");
+          this.logger.info?.("[clawxmemory] startup repair skipped: no l0 changes needed");
           return;
         }
         this.setStartupRepairState("running", {
@@ -775,7 +775,7 @@ export class MemoryPluginRuntime {
         });
         const stats = await this.flushAllNow("repair");
         this.logger.info?.(
-          `[youarememory] repaired l0 updated=${repair.updated} removed=${repair.removed}; rebuilt l1=${stats.l1Created}, l2_time=${stats.l2TimeUpdated}, l2_project=${stats.l2ProjectUpdated}, profile=${stats.profileUpdated}, failed=${stats.failed}`,
+          `[clawxmemory] repaired l0 updated=${repair.updated} removed=${repair.removed}; rebuilt l1=${stats.l1Created}, l2_time=${stats.l2TimeUpdated}, l2_project=${stats.l2ProjectUpdated}, profile=${stats.profileUpdated}, failed=${stats.failed}`,
         );
         this.repository.setPipelineState("repairVersion", MEMORY_REPAIR_VERSION);
         this.setStartupRepairState("idle");
@@ -784,7 +784,7 @@ export class MemoryPluginRuntime {
           message: error instanceof Error ? error.message : String(error),
           snapshot: cachedSnapshot,
         });
-        this.logger.warn?.(`[youarememory] startup repair failed: ${String(error)}`);
+        this.logger.warn?.(`[clawxmemory] startup repair failed: ${String(error)}`);
       }
     })();
   }
@@ -833,7 +833,7 @@ export class MemoryPluginRuntime {
 
     return {
       slotOwner,
-      dynamicMemoryRuntime: slotOwner === PLUGIN_ID ? "YouAreMemory" : slotOwner || "unbound",
+      dynamicMemoryRuntime: slotOwner === PLUGIN_ID ? "ClawXMemory" : slotOwner || "unbound",
       workspaceBootstrapPresent,
       memoryRuntimeHealthy: runtimeIssues.length === 0,
       runtimeIssues,
@@ -843,11 +843,11 @@ export class MemoryPluginRuntime {
   private logMemoryBoundaryDiagnostics(): void {
     const diagnostics = this.collectMemoryBoundaryDiagnostics();
     if (diagnostics.memoryRuntimeHealthy) {
-      this.logger.info?.("[youarememory] dynamic memory runtime ready: active memory slot is YouAreMemory.");
+      this.logger.info?.("[clawxmemory] dynamic memory runtime ready: active memory slot is ClawXMemory.");
       return;
     }
     this.logger.warn?.(
-      `[youarememory] dynamic memory runtime issues detected: ${diagnostics.runtimeIssues.join(" | ")}`,
+      `[clawxmemory] dynamic memory runtime issues detected: ${diagnostics.runtimeIssues.join(" | ")}`,
     );
   }
 }

@@ -9,7 +9,7 @@ const LOCALES = {
     "nav.profile": "全局画像",
     "nav.lastIndexed": "最近索引",
     "nav.waiting": "等待索引",
-    "topbar.title": "YouAreMemory",
+    "topbar.title": "ClawXMemory",
     "topbar.idle": "等待操作",
     "topbar.refresh": "刷新",
     "topbar.build": "索引同步",
@@ -175,7 +175,7 @@ const LOCALES = {
     "boundary.shadowNotQueued": "未排队",
     "boundary.ownerMissing": "未绑定",
     "boundary.noConflict": "无问题",
-    "boundary.runtimeYouAreMemory": "YouAreMemory",
+    "boundary.runtimeClawXMemory": "ClawXMemory",
     "boundary.runtimeMisconfigured": "配置异常",
     "boundary.workspaceBootstrap": "这是 OpenClaw 宿主注入的静态 Project Context，不是插件冲突",
     "boundary.conflictMemoryCore": "memory-core 还没完全关闭",
@@ -217,7 +217,7 @@ const LOCALES = {
     "nav.profile": "Profile",
     "nav.lastIndexed": "Last indexed",
     "nav.waiting": "Waiting",
-    "topbar.title": "YouAreMemory",
+    "topbar.title": "ClawXMemory",
     "topbar.idle": "Idle",
     "topbar.refresh": "Refresh",
     "topbar.build": "Sync Index",
@@ -383,7 +383,7 @@ const LOCALES = {
     "boundary.shadowNotQueued": "Not queued",
     "boundary.ownerMissing": "Unbound",
     "boundary.noConflict": "No issues",
-    "boundary.runtimeYouAreMemory": "YouAreMemory",
+    "boundary.runtimeClawXMemory": "ClawXMemory",
     "boundary.runtimeMisconfigured": "Misconfigured",
     "boundary.workspaceBootstrap": "This is OpenClaw host Project Context, not a plugin conflict",
     "boundary.conflictMemoryCore": "memory-core is still enabled somewhere",
@@ -850,7 +850,7 @@ function renderOverview(overview = {}) {
     createMetricCard(
       t("overview.dynamicRuntime"),
       dynamicMemoryRuntime || t("boundary.runtimeMisconfigured"),
-      memoryRuntimeHealthy ? t("boundary.runtimeYouAreMemory") : primaryConflict,
+      memoryRuntimeHealthy ? t("boundary.runtimeClawXMemory") : primaryConflict,
       memoryRuntimeHealthy ? "success" : "danger",
     ),
     createMetricCard(
@@ -2062,7 +2062,7 @@ async function postJson(url, body) {
 function parseDownloadFilename(headerValue) {
   const value = String(headerValue || "");
   const match = value.match(/filename="([^"]+)"/i);
-  return match?.[1] || "youarememory-memory-export.json";
+  return match?.[1] || "clawxmemory-memory-export.json";
 }
 
 /* ── Data loading ────────────────────────────────────────── */

@@ -1440,7 +1440,7 @@ export class LlmMemoryExtractor {
     );
 
     this.logger?.info?.(
-      `[youarememory] llm extraction complete summary=${summary.slice(0, 60)} projects=${projectDetails.length} facts=${facts.length}`,
+      `[clawxmemory] llm extraction complete summary=${summary.slice(0, 60)} projects=${projectDetails.length} facts=${facts.length}`,
     );
 
     return {
@@ -1471,7 +1471,7 @@ export class LlmMemoryExtractor {
       const completed = normalizeProjectDetails(parsed.projects);
       return completed.length > 0 ? completed : input.projectDetails;
     } catch (error) {
-      this.logger?.warn?.(`[youarememory] project completion fallback: ${String(error)}`);
+      this.logger?.warn?.(`[clawxmemory] project completion fallback: ${String(error)}`);
       return input.projectDetails;
     }
   }
@@ -1515,7 +1515,7 @@ export class LlmMemoryExtractor {
         ),
       };
     } catch (error) {
-      this.logger?.warn?.(`[youarememory] topic shift fallback: ${String(error)}`);
+      this.logger?.warn?.(`[clawxmemory] topic shift fallback: ${String(error)}`);
       return { topicChanged: false, topicSummary: fallbackSummary };
     }
   }
@@ -1565,7 +1565,7 @@ export class LlmMemoryExtractor {
             : input.project.name),
       };
     } catch (error) {
-      this.logger?.warn?.(`[youarememory] project resolution fallback for ${input.project.key}: ${String(error)}`);
+      this.logger?.warn?.(`[clawxmemory] project resolution fallback for ${input.project.key}: ${String(error)}`);
       return input.project;
     }
   }
@@ -1629,7 +1629,7 @@ export class LlmMemoryExtractor {
         };
       });
     } catch (error) {
-      this.logger?.warn?.(`[youarememory] project batch resolution fallback: ${String(error)}`);
+      this.logger?.warn?.(`[clawxmemory] project batch resolution fallback: ${String(error)}`);
       return input.projects;
     }
   }
@@ -1647,7 +1647,7 @@ export class LlmMemoryExtractor {
       const summary = typeof parsed.summary === "string" ? normalizeWhitespace(parsed.summary) : "";
       if (summary) return truncate(summary, 280);
     } catch (error) {
-      this.logger?.warn?.(`[youarememory] daily summary fallback: ${String(error)}`);
+      this.logger?.warn?.(`[clawxmemory] daily summary fallback: ${String(error)}`);
     }
     return truncate(input.l1.situationTimeInfo || input.l1.summary || input.existingSummary, 280);
   }
@@ -1682,7 +1682,7 @@ export class LlmMemoryExtractor {
         };
       });
     } catch (error) {
-      this.logger?.warn?.(`[youarememory] project memory rewrite fallback: ${String(error)}`);
+      this.logger?.warn?.(`[clawxmemory] project memory rewrite fallback: ${String(error)}`);
       throw error;
     }
   }
@@ -1700,7 +1700,7 @@ export class LlmMemoryExtractor {
       const profileText = typeof parsed.profile_text === "string" ? normalizeWhitespace(parsed.profile_text) : "";
       if (profileText) return truncate(profileText, 420);
     } catch (error) {
-      this.logger?.warn?.(`[youarememory] global profile fallback: ${String(error)}`);
+      this.logger?.warn?.(`[clawxmemory] global profile fallback: ${String(error)}`);
     }
 
     const fallbackFacts = input.l1.facts.map((fact) => fact.factValue).filter(Boolean).slice(0, 8).join("；");
@@ -1725,7 +1725,7 @@ export class LlmMemoryExtractor {
         lookupQueries: baseOnly ? [] : normalizeLookupQueries(parsed.lookup_queries, defaultQuery),
       };
     } catch (error) {
-      this.logger?.warn?.(`[youarememory] hop1 lookup fallback: ${String(error)}`);
+      this.logger?.warn?.(`[clawxmemory] hop1 lookup fallback: ${String(error)}`);
       return {
         memoryRelevant: true,
         baseOnly: false,
@@ -1815,10 +1815,10 @@ export class LlmMemoryExtractor {
             enoughAt,
           };
         } catch (splitError) {
-          this.logger?.warn?.(`[youarememory] hop2 l2 split fallback failed: ${String(splitError)}`);
+          this.logger?.warn?.(`[clawxmemory] hop2 l2 split fallback failed: ${String(splitError)}`);
         }
       }
-      this.logger?.warn?.(`[youarememory] hop2 l2 fallback: ${String(error)}`);
+      this.logger?.warn?.(`[clawxmemory] hop2 l2 fallback: ${String(error)}`);
       return {
         intent: input.profile ? "fact" : "general",
         selectedL2Ids: [],
@@ -1853,7 +1853,7 @@ export class LlmMemoryExtractor {
         enoughAt,
       };
     } catch (error) {
-      this.logger?.warn?.(`[youarememory] hop3 l1 fallback: ${String(error)}`);
+      this.logger?.warn?.(`[clawxmemory] hop3 l1 fallback: ${String(error)}`);
       return {
         useProfile: Boolean(input.profile?.profileText.trim()),
         selectedL1Ids: [],
@@ -1886,7 +1886,7 @@ export class LlmMemoryExtractor {
         enoughAt,
       };
     } catch (error) {
-      this.logger?.warn?.(`[youarememory] hop4 l0 fallback: ${String(error)}`);
+      this.logger?.warn?.(`[clawxmemory] hop4 l0 fallback: ${String(error)}`);
       return {
         selectedL0Ids: [],
         enoughAt: "none",

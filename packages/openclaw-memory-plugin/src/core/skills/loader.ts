@@ -184,7 +184,7 @@ export function loadSkillsRuntime(options: LoadSkillsOptions = {}): SkillsRuntim
   for (const skillsDir of candidateDirs) {
     const loaded = tryLoadSkillsFromDir(skillsDir);
     if (loaded.metadata.source === "files") {
-      logger.info?.(`[youarememory] skills loaded from ${skillsDir}`);
+      logger.info?.(`[clawxmemory] skills loaded from ${skillsDir}`);
       return loaded;
     }
     runtime = loaded;
@@ -195,12 +195,12 @@ export function loadSkillsRuntime(options: LoadSkillsOptions = {}): SkillsRuntim
     const builtIn = tryLoadSkillsFromDir(defaultSkillsDir);
     if (builtIn.metadata.source === "files") {
       logger.warn?.(
-        `[youarememory] custom skillsDir unavailable (${resolve(options.skillsDir)}); falling back to built-in skills at ${defaultSkillsDir}`,
+        `[clawxmemory] custom skillsDir unavailable (${resolve(options.skillsDir)}); falling back to built-in skills at ${defaultSkillsDir}`,
       );
       return builtIn;
     }
   }
 
-  logger.warn?.(`[youarememory] skills loaded with fallback. errors=${fallback.metadata.errors.join(" | ")}`);
+  logger.warn?.(`[clawxmemory] skills loaded with fallback. errors=${fallback.metadata.errors.join(" | ")}`);
   return fallback;
 }

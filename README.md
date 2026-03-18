@@ -1,6 +1,6 @@
-# YouAreMemory
+# ClawXMemory
 
-YouAreMemory 是一个给 OpenClaw 用的本地优先记忆插件。它会自动记录对话、构建多层记忆索引、在回答前做记忆召回，并提供一个本地看板让你查看当前记忆状态。
+ClawXMemory 是一个给 OpenClaw 用的本地优先记忆插件。它会自动记录对话、构建多层记忆索引、在回答前做记忆召回，并提供一个本地看板让你查看当前记忆状态。
 
 如果你只是想装起来用，先看下面的“5 分钟安装”。如果你想在这个基础上继续开发，也直接看这份 README，不需要再翻多份重复文档。
 
@@ -35,8 +35,8 @@ npm run relink:memory-plugin
 - 构建插件
 - 修复本地插件链接
 - 绑定 OpenClaw 的 `memory` slot
-- 启用 `youarememory-openclaw`
-- 开启 `plugins.entries.youarememory-openclaw.hooks.allowPromptInjection = true`
+- 启用 `clawxmemory-openclaw`
+- 开启 `plugins.entries.clawxmemory-openclaw.hooks.allowPromptInjection = true`
 - 重启 gateway
 - 等待健康检查通过
 - 打开本地看板
@@ -46,7 +46,7 @@ npm run relink:memory-plugin
 安装完成后，至少要满足这几件事：
 
 ```bash
-openclaw plugins info youarememory-openclaw
+openclaw plugins info clawxmemory-openclaw
 openclaw gateway status --json
 ```
 
@@ -58,31 +58,31 @@ openclaw gateway status --json
 
 然后浏览器可以打开：
 
-- `http://127.0.0.1:39393/youarememory/`
+- `http://127.0.0.1:39393/clawxmemory/`
 
 ## OpenClaw 原生 memory 和本插件是什么关系
 
-很多人第一次接上 YouAreMemory 时，会误以为 OpenClaw 还在用它自己的原生 memory。这里要先分清两层边界：
+很多人第一次接上 ClawXMemory 时，会误以为 OpenClaw 还在用它自己的原生 memory。这里要先分清两层边界：
 
 - `memory slot`
   - 这是回答前的动态记忆 provider
-  - 现在应该由 `youarememory-openclaw` 接管
+  - 现在应该由 `clawxmemory-openclaw` 接管
 - `Project Context`
   - 这是 OpenClaw 宿主自己的 workspace bootstrap 注入链路
   - 它会继续把 `AGENTS.md / USER.md / MEMORY.md / BOOTSTRAP.md` 之类文件放进系统提示
   - 这不是 memory slot，也不是我们插件应该去重写的东西
 
-YouAreMemory 的目标是：**完全替代动态对话记忆**，但**不修改用户 workspace 文件**。也就是说：
+ClawXMemory 的目标是：**完全替代动态对话记忆**，但**不修改用户 workspace 文件**。也就是说：
 
-- 回答前的动态历史记忆，由 YouAreMemory 负责
+- 回答前的动态历史记忆，由 ClawXMemory 负责
 - OpenClaw 的 workspace bootstrap 仍然是宿主静态上下文
 - 插件会在自己的 system-context 合同里明确“本轮该信谁”
 - 插件不会自动改写 `~/.openclaw/workspace/*`
 
 为了避免 OpenClaw 原生动态 memory 和我们并行工作，这个仓库默认会收口这些配置：
 
-- `plugins.slots.memory = "youarememory-openclaw"`
-- `plugins.entries.youarememory-openclaw.hooks.allowPromptInjection = true`
+- `plugins.slots.memory = "clawxmemory-openclaw"`
+- `plugins.entries.clawxmemory-openclaw.hooks.allowPromptInjection = true`
 - `plugins.entries.memory-core.enabled = false`
 - `hooks.internal.entries.session-memory.enabled = false`
 - `agents.defaults.memorySearch.enabled = false`
@@ -118,7 +118,7 @@ npm run reload:memory-plugin
 它会自动：
 
 - 构建当前插件
-- 确认 `memory` slot 指向 `youarememory-openclaw`
+- 确认 `memory` slot 指向 `clawxmemory-openclaw`
 - 关闭 OpenClaw 原生动态 memory 的并行配置
 - 启用插件
 - 重启 gateway
@@ -169,12 +169,12 @@ npm run reload:memory-plugin
 ### 4. 我只想 30 秒确认插件真的活着
 
 ```bash
-openclaw plugins info youarememory-openclaw
+openclaw plugins info clawxmemory-openclaw
 openclaw gateway status --json
 python - <<'PY'
 import urllib.request
-html = urllib.request.urlopen("http://127.0.0.1:39393/youarememory/?v=check", timeout=5).read().decode("utf-8", "ignore")
-print(all(marker in html for marker in ["YouAreMemory", "记忆看板", "检索调试"]))
+html = urllib.request.urlopen("http://127.0.0.1:39393/clawxmemory/?v=check", timeout=5).read().decode("utf-8", "ignore")
+print(all(marker in html for marker in ["ClawXMemory", "记忆看板", "检索调试"]))
 PY
 ```
 
@@ -247,13 +247,13 @@ npm run dev:plugin
 如果你要单独调检索：
 
 ```bash
-npm run debug:retrieve --workspace @youarememory/youarememory-openclaw -- --query "项目进展"
+npm run debug:retrieve --workspace @clawxmemory/clawxmemory-openclaw -- --query "项目进展"
 ```
 
 ## 项目结构
 
 ```text
-youarememory/
+clawxmemory/
 ├── packages/
 │   └── openclaw-memory-plugin/          # OpenClaw memory 插件和本地看板
 ├── docs/

@@ -16,7 +16,7 @@ function toLimit(value, fallback) {
   return parsed;
 }
 
-const dbPath = resolve(parseArg("--db", join(homedir(), ".openclaw", "youarememory", "memory.sqlite")));
+const dbPath = resolve(parseArg("--db", join(homedir(), ".openclaw", "clawxmemory", "memory.sqlite")));
 const query = parseArg("--query", "");
 const limit = toLimit(parseArg("--limit", "6"), 6);
 const skillsDirRaw = parseArg("--skills-dir", "");

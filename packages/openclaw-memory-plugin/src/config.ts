@@ -44,7 +44,7 @@ export function buildPluginConfig(raw: unknown): PluginRuntimeConfig {
   const cfg = (raw ?? {}) as Record<string, unknown>;
   const dataDir = typeof cfg.dataDir === "string" && cfg.dataDir.trim()
     ? cfg.dataDir
-    : join(homedir(), ".openclaw", "youarememory");
+    : join(homedir(), ".openclaw", "clawxmemory");
   const dbPath = typeof cfg.dbPath === "string" && cfg.dbPath.trim()
     ? cfg.dbPath
     : join(dataDir, "memory.sqlite");
@@ -78,7 +78,7 @@ export function buildPluginConfig(raw: unknown): PluginRuntimeConfig {
     uiEnabled: toBoolean(cfg.uiEnabled, true),
     uiHost: typeof cfg.uiHost === "string" && cfg.uiHost.trim() ? cfg.uiHost : "127.0.0.1",
     uiPort: Math.max(1024, toInteger(cfg.uiPort, 39393)),
-    uiPathPrefix: typeof cfg.uiPathPrefix === "string" && cfg.uiPathPrefix.trim() ? cfg.uiPathPrefix : "/youarememory",
+    uiPathPrefix: typeof cfg.uiPathPrefix === "string" && cfg.uiPathPrefix.trim() ? cfg.uiPathPrefix : "/clawxmemory",
   };
   if (skillsDir) {
     runtime.skillsDir = skillsDir;

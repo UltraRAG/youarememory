@@ -118,7 +118,7 @@ function sendJsonDownload(res: ServerResponse, body: unknown, filename: string):
 
 function buildExportFilename(exportedAt: string): string {
   const safe = exportedAt.replace(/[^\dTZ-]/g, "-").replace(/-+/g, "-");
-  return `youarememory-memory-${safe || "export"}.json`;
+  return `clawxmemory-memory-${safe || "export"}.json`;
 }
 
 function parseLimit(value: string | null, fallback: number): number {
@@ -183,7 +183,7 @@ export class LocalUiServer {
       this.listening = false;
       this.started = false;
       const message = error instanceof Error ? error.message : String(error);
-      this.logger.warn?.(`[youarememory] dashboard server failed: ${message}`);
+      this.logger.warn?.(`[clawxmemory] dashboard server failed: ${message}`);
     });
   }
 
@@ -192,7 +192,7 @@ export class LocalUiServer {
     this.started = true;
     this.server.listen(this.options.port, this.options.host, () => {
       this.logger.info?.(
-        `[youarememory] dashboard ready at http://${this.options.host}:${this.options.port}${this.prefix}/`,
+        `[clawxmemory] dashboard ready at http://${this.options.host}:${this.options.port}${this.prefix}/`,
       );
     });
   }
@@ -221,7 +221,7 @@ export class LocalUiServer {
       }
       return this.handleStatic(relativePath, res);
     } catch (error) {
-      this.logger.warn?.(`[youarememory] ui request failed: ${String(error)}`);
+      this.logger.warn?.(`[clawxmemory] ui request failed: ${String(error)}`);
       return sendError(res, String(error));
     }
   }

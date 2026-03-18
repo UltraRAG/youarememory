@@ -1,4 +1,4 @@
-# YouAreMemory 代码审查指南（插件优先版）
+# ClawXMemory 代码审查指南（插件优先版）
 
 本指南面向 OpenClaw 插件实现。
 
@@ -78,5 +78,5 @@
 ```bash
 npm run build
 npm run typecheck
-npm run debug:retrieve --workspace @youarememory/youarememory-openclaw -- --query "项目进展"
+npm run debug:retrieve --workspace @clawxmemory/clawxmemory-openclaw -- --query "项目进展"
 ```

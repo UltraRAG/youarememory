@@ -10,7 +10,7 @@ function parseArg(name, fallback = "") {
   return process.argv[idx + 1] ?? fallback;
 }
 
-const dbPath = resolve(parseArg("--db", join(homedir(), ".openclaw", "youarememory", "memory.sqlite")));
+const dbPath = resolve(parseArg("--db", join(homedir(), ".openclaw", "clawxmemory", "memory.sqlite")));
 
 if (!existsSync(dbPath)) {
   console.error(JSON.stringify({

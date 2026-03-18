@@ -1,6 +1,6 @@
-# YouAreMemory OpenClaw 插件
+# ClawXMemory OpenClaw 插件
 
-`@youarememory/youarememory-openclaw` 是仓库里的 OpenClaw `memory` 插件实现。
+`@clawxmemory/clawxmemory-openclaw` 是仓库里的 OpenClaw `memory` 插件实现。
 
 它负责：
 
@@ -35,10 +35,10 @@ OpenClaw 里应确保：
 {
   "plugins": {
     "slots": {
-      "memory": "youarememory-openclaw"
+      "memory": "clawxmemory-openclaw"
     },
     "entries": {
-      "youarememory-openclaw": {
+      "clawxmemory-openclaw": {
         "enabled": true,
         "hooks": {
           "allowPromptInjection": true
@@ -57,5 +57,5 @@ OpenClaw 里应确保：
 ## 调试
 
 ```bash
-npm run debug:retrieve --workspace @youarememory/youarememory-openclaw -- --query "项目进展"
+npm run debug:retrieve --workspace @clawxmemory/clawxmemory-openclaw -- --query "项目进展"
 ```

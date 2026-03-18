@@ -7,8 +7,8 @@ function isGatewayRuntimeProcess(): boolean {
 }
 
 const plugin = {
-  id: "youarememory-openclaw",
-  name: "YouAreMemory OpenClaw Plugin",
+  id: "clawxmemory-openclaw",
+  name: "ClawXMemory OpenClaw Plugin",
   description: "L0/L1/L2 local-first memory plugin for OpenClaw.",
   kind: "memory" as const,
 
@@ -27,7 +27,7 @@ const plugin = {
     const liveRuntimeEnabled = isGatewayRuntimeProcess();
     if (api.registerService) {
       api.registerService({
-        id: "youarememory-runtime",
+        id: "clawxmemory-runtime",
         start: () => {
           if (liveRuntimeEnabled) runtime.start();
         },

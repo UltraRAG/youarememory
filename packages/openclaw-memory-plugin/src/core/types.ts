@@ -103,7 +103,7 @@ export interface IndexLinkRecord {
   createdAt: string;
 }
 
-export const MEMORY_EXPORT_FORMAT_VERSION = "youarememory-memory-bundle.v1" as const;
+export const MEMORY_EXPORT_FORMAT_VERSION = "clawxmemory-memory-bundle.v1" as const;
 
 export interface MemoryExportBundle {
   formatVersion: typeof MEMORY_EXPORT_FORMAT_VERSION;

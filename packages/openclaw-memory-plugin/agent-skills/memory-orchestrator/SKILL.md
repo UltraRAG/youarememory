@@ -1,7 +1,7 @@
 ---
 name: memory-orchestrator
-description: Orchestrate YouAreMemory retrieval using memory_recall and fallback search_l2/search_l1/search_l0. Use when the user asks for historical context, project progress, timeline, or profile facts.
-metadata: {"openclaw":{"skillKey":"youarememory-openclaw","requires":{"config":["plugins.entries.youarememory-openclaw.enabled"]}}}
+description: Orchestrate ClawXMemory retrieval using memory_recall and fallback search_l2/search_l1/search_l0. Use when the user asks for historical context, project progress, timeline, or profile facts.
+metadata: {"openclaw":{"skillKey":"clawxmemory-openclaw","requires":{"config":["plugins.entries.clawxmemory-openclaw.enabled"]}}}
 ---
 
 # Memory Orchestrator

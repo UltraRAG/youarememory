@@ -1,6 +1,6 @@
 {
-  "id": "youarememory-openclaw",
-  "name": "YouAreMemory OpenClaw Plugin",
+  "id": "clawxmemory-openclaw",
+  "name": "ClawXMemory OpenClaw Plugin",
   "description": "Multi-level memory plugin (L0/L1/L2) with local-first SQLite and ChatGPT-style UI.",
   "version": "0.1.0",
   "kind": "memory",
@@ -94,18 +94,18 @@
       },
       "uiPathPrefix": {
         "type": "string",
-        "default": "/youarememory"
+        "default": "/clawxmemory"
       }
     }
   },
   "uiHints": {
     "dbPath": {
       "label": "SQLite Path",
-      "placeholder": "~/.openclaw/youarememory/memory.sqlite"
+      "placeholder": "~/.openclaw/clawxmemory/memory.sqlite"
     },
     "skillsDir": {
       "label": "Skills Directory",
-      "placeholder": "~/.openclaw/youarememory/skills"
+      "placeholder": "~/.openclaw/clawxmemory/skills"
     },
     "captureStrategy": {
       "label": "Capture Strategy",

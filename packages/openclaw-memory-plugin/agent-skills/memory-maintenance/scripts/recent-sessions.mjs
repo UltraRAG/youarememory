@@ -24,7 +24,7 @@ function safeJsonParse(raw, fallback) {
   }
 }
 
-const dbPath = resolve(parseArg("--db", join(homedir(), ".openclaw", "youarememory", "memory.sqlite")));
+const dbPath = resolve(parseArg("--db", join(homedir(), ".openclaw", "clawxmemory", "memory.sqlite")));
 const limit = parsePositiveInt(parseArg("--limit", "5"), 5);
 
 if (!existsSync(dbPath)) {

@@ -363,7 +363,7 @@ export class HeartbeatIndexer {
     const timestamp = input.timestamp ?? nowIso();
     const recent = this.repository.listRecentL0(1)[0];
     if (recent?.sessionKey === input.sessionKey && !hasNewContent(recent.messages, input.messages)) {
-      this.logger?.info?.(`[youarememory] skip duplicate l0 capture for session=${input.sessionKey}`);
+      this.logger?.info?.(`[clawxmemory] skip duplicate l0 capture for session=${input.sessionKey}`);
       return undefined;
     }
     const payload = JSON.stringify(input.messages);
@@ -490,7 +490,7 @@ export class HeartbeatIndexer {
 
     this.repository.deleteActiveTopicBuffer(sessionKey);
     this.logger?.info?.(
-      `[youarememory] closed topic session=${sessionKey} reason=${reason} l1=${l1.l1IndexId} l0=${records.length}`,
+      `[clawxmemory] closed topic session=${sessionKey} reason=${reason} l1=${l1.l1IndexId} l0=${records.length}`,
     );
   }
 
@@ -616,7 +616,7 @@ export class HeartbeatIndexer {
         } catch (error) {
           stats.failed += 1;
           this.logger?.warn?.(
-            `[youarememory] heartbeat failed reason=${reason} session=${records[0]?.sessionKey ?? "unknown"} l0=${records[0]?.l0IndexId ?? "unknown"}: ${String(error)}`,
+            `[clawxmemory] heartbeat failed reason=${reason} session=${records[0]?.sessionKey ?? "unknown"} l0=${records[0]?.l0IndexId ?? "unknown"}: ${String(error)}`,
           );
         }
       }
@@ -633,7 +633,7 @@ export class HeartbeatIndexer {
         } catch (error) {
           stats.failed += 1;
           this.logger?.warn?.(
-            `[youarememory] close topic failed reason=${reason} session=${sessionKey}: ${String(error)}`,
+            `[clawxmemory] close topic failed reason=${reason} session=${sessionKey}: ${String(error)}`,
           );
         }
       }
@@ -646,7 +646,7 @@ export class HeartbeatIndexer {
         } catch (error) {
           stats.failed += 1;
           this.logger?.warn?.(
-            `[youarememory] close topic failed reason=${reason} session=${buffer.sessionKey}: ${String(error)}`,
+            `[clawxmemory] close topic failed reason=${reason} session=${buffer.sessionKey}: ${String(error)}`,
           );
         }
       }

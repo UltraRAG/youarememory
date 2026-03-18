@@ -1,4 +1,4 @@
-# YouAreMemory 设计说明（中文）
+# ClawXMemory 设计说明（中文）
 
 这份文档回答四个核心问题：
 
@@ -11,7 +11,7 @@
 
 ## 1. 项目简介
 
-YouAreMemory 通过多级索引升级 OpenClaw 的记忆机制，目标是保持 OpenClaw 即插即用：
+ClawXMemory 通过多级索引升级 OpenClaw 的记忆机制，目标是保持 OpenClaw 即插即用：
 
 - 自动采集对话
 - 自动构建多层索引
@@ -374,7 +374,7 @@ before_prompt_build:
      - selectedL0Ids
      - enoughAt = l1 | l0 | none
   10. 最终只注入被选中的 profile + L2 + L1 + L0
-  11. 通过 prependSystemContext 把 YouAreMemory 运行时合同和检索证据一起前置注入到本轮 system prompt
+  11. 通过 prependSystemContext 把 ClawXMemory 运行时合同和检索证据一起前置注入到本轮 system prompt
 ```
 
 当前实现里：
@@ -392,7 +392,7 @@ before_prompt_build:
 这里要严格区分两层：
 
 - `memory slot`
-  - 由 `youarememory-openclaw` 接管
+  - 由 `clawxmemory-openclaw` 接管
   - 这是动态对话记忆 provider
 - `Project Context`
   - 这是 OpenClaw 宿主自己的 workspace bootstrap 注入
@@ -403,7 +403,7 @@ before_prompt_build:
 - 用插件完全接管动态对话记忆
 - 关闭原生动态 memory 的并行配置
 - 不自动改写用户的 workspace bootstrap 文件
-- 在 `prependSystemContext` 里加入 YouAreMemory 运行时合同，明确“记忆问题优先相信插件注入证据；只有用户明确要看文件时才去读 workspace 文件”
+- 在 `prependSystemContext` 里加入 ClawXMemory 运行时合同，明确“记忆问题优先相信插件注入证据；只有用户明确要看文件时才去读 workspace 文件”
 
 ---
 
