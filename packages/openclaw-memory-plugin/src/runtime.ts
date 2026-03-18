@@ -12,7 +12,7 @@ import {
   type MemoryImportResult,
   nowIso,
 } from "./core/index.js";
-import type { PluginHookAgentEndEvent, PluginHookAgentContext, PluginHookBeforeMessageWriteEvent, PluginHookBeforePromptBuildEvent, PluginHookBeforePromptBuildResult, PluginHookBeforeResetEvent, PluginLogger, PluginRuntimeLike } from "./plugin-api.js";
+import type { InternalHookEvent, PluginHookAgentEndEvent, PluginHookAgentContext, PluginHookBeforeMessageWriteEvent, PluginHookBeforePromptBuildEvent, PluginHookBeforePromptBuildResult, PluginHookBeforeResetEvent, PluginLogger, PluginRuntimeLike } from "./plugin-api.js";
 import { buildPluginConfig, type PluginRuntimeConfig } from "./config.js";
 import { isSessionBoundaryMarkerMessage, normalizeMessages, normalizeTranscriptMessage } from "./message-utils.js";
 import { buildPluginTools } from "./tools.js";
@@ -21,9 +21,10 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 
-const MEMORY_REPAIR_VERSION = "2026-03-13-topic-driven-memory-v13";
+const MEMORY_REPAIR_VERSION = "2026-03-18-cross-channel-message-normalization-v14";
 const INDEXING_SETTINGS_MIGRATION_VERSION = "2026-03-16-reasoning-mode-settings-v1";
 const PLUGIN_ID = "youarememory-openclaw";
+const RECENT_INBOUND_TTL_MS = 30_000;
 
 interface MemoryBoundaryDiagnostics {
   slotOwner: string;
@@ -77,6 +78,15 @@ function shouldSkipCapture(event: Record<string, unknown>, ctx: Record<string, u
   return ["exec-event", "cron-event"].includes(provider)
     || ["heartbeat", "cron", "memory"].includes(trigger)
     || sessionKey.startsWith("temp:");
+}
+
+function isControlCommandText(text: string): boolean {
+  return /^\/(?:new|reset|stop)(?:\s|$)/i.test(text.trim());
+}
+
+function truncateMessageText(text: string, maxMessageChars: number): string {
+  if (text.length <= maxMessageChars) return text;
+  return `${text.slice(0, maxMessageChars)}...`;
 }
 
 function sanitizeStoredMessages(messages: MemoryMessage[]): MemoryMessage[] {
@@ -189,6 +199,7 @@ export class MemoryPluginRuntime {
   private readonly queuedSessionKeys = new Set<string>();
   private readonly effectiveSessionKeyByRawSession = new Map<string, string>();
   private readonly conversationGenerationByRawSession = new Map<string, number>();
+  private readonly recentInboundBySession = new Map<string, number>();
 
   private heartbeatTimer: ReturnType<typeof setInterval> | undefined;
   private uiServer: LocalUiServer | undefined;
@@ -278,6 +289,7 @@ export class MemoryPluginRuntime {
     this.activeSessionKey = undefined;
     this.effectiveSessionKeyByRawSession.clear();
     this.conversationGenerationByRawSession.clear();
+    this.recentInboundBySession.clear();
     this.retriever.resetTransientState();
   }
 
@@ -321,8 +333,32 @@ export class MemoryPluginRuntime {
     this.pendingBySession.clear();
     this.effectiveSessionKeyByRawSession.clear();
     this.conversationGenerationByRawSession.clear();
+    this.recentInboundBySession.clear();
     this.uiServer?.stop();
     this.repository.close();
+  }
+
+  private appendPendingMessage(sessionKey: string, message: MemoryMessage): void {
+    const pending = this.pendingBySession.get(sessionKey) ?? [];
+    const previous = pending[pending.length - 1];
+    if (!previous || previous.role !== message.role || previous.content !== message.content) {
+      pending.push(message);
+      this.pendingBySession.set(sessionKey, pending);
+    }
+  }
+
+  private markRecentInbound(sessionKey: string): void {
+    this.recentInboundBySession.set(sessionKey, Date.now());
+  }
+
+  private hasRecentInbound(sessionKey: string): boolean {
+    const receivedAt = this.recentInboundBySession.get(sessionKey);
+    if (!receivedAt) return false;
+    if (Date.now() - receivedAt > RECENT_INBOUND_TTL_MS) {
+      this.recentInboundBySession.delete(sessionKey);
+      return false;
+    }
+    return true;
   }
 
   private getEffectiveSessionKey(rawSessionKey: string): string {
@@ -357,6 +393,7 @@ export class MemoryPluginRuntime {
     this.effectiveSessionKeyByRawSession.set(trimmed, nextSessionKey);
 
     this.pendingBySession.delete(previousSessionKey);
+    this.recentInboundBySession.delete(previousSessionKey);
     if (this.activeSessionKey === previousSessionKey) {
       this.activeSessionKey = undefined;
     }
@@ -368,6 +405,31 @@ export class MemoryPluginRuntime {
       `[youarememory] opened new conversation window raw_session=${trimmed} previous=${previousSessionKey} next=${nextSessionKey} reason=${reason}`,
     );
   }
+
+  handleInternalMessageReceived = (event: InternalHookEvent): void => {
+    if (event.type !== "message" || event.action !== "received") return;
+    const rawSessionKey = typeof event.sessionKey === "string" ? event.sessionKey.trim() : "";
+    if (!rawSessionKey || rawSessionKey.startsWith("temp:")) return;
+
+    const context = event.context && typeof event.context === "object"
+      ? event.context as Record<string, unknown>
+      : undefined;
+    const rawContent = typeof context?.content === "string" ? context.content.trim() : "";
+    if (!rawContent || isControlCommandText(rawContent)) return;
+
+    const sessionKey = this.getEffectiveSessionKey(rawSessionKey);
+    const normalized: MemoryMessage = {
+      role: "user",
+      content: truncateMessageText(rawContent, this.config.maxMessageChars),
+    };
+    const rawMessageId = typeof context?.messageId === "string" ? context.messageId.trim() : "";
+    if (rawMessageId) {
+      normalized.msgId = rawMessageId;
+    }
+
+    this.appendPendingMessage(sessionKey, normalized);
+    this.markRecentInbound(sessionKey);
+  };
 
   handleBeforePromptBuild = async (
     event: PluginHookBeforePromptBuildEvent,
@@ -421,13 +483,13 @@ export class MemoryPluginRuntime {
       maxMessageChars: this.config.maxMessageChars,
     });
     if (!normalized) return;
-
-    const pending = this.pendingBySession.get(sessionKey) ?? [];
-    const previous = pending[pending.length - 1];
-    if (!previous || previous.role !== normalized.role || previous.content !== normalized.content) {
-      pending.push(normalized);
-      this.pendingBySession.set(sessionKey, pending);
+    if (normalized.role === "user" && this.hasRecentInbound(sessionKey)) {
+      const pending = this.pendingBySession.get(sessionKey) ?? [];
+      if (pending[pending.length - 1]?.role === "user") {
+        return;
+      }
     }
+    this.appendPendingMessage(sessionKey, normalized);
   };
 
   handleAgentEnd = async (event: PluginHookAgentEndEvent, ctx: PluginHookAgentContext): Promise<void> => {
@@ -445,6 +507,7 @@ export class MemoryPluginRuntime {
 
     const pending = this.pendingBySession.get(sessionKey) ?? [];
     this.pendingBySession.delete(sessionKey);
+    this.recentInboundBySession.delete(sessionKey);
     let messages = sanitizeStoredMessages(pending);
     if (messages.length === 0) {
       const rawMessages = Array.isArray(event.messages) ? event.messages : [];
@@ -477,6 +540,7 @@ export class MemoryPluginRuntime {
     try {
       const pending = this.pendingBySession.get(sessionKey) ?? [];
       this.pendingBySession.delete(sessionKey);
+      this.recentInboundBySession.delete(sessionKey);
       let messages = sanitizeStoredMessages(pending);
       if (messages.length === 0 && Array.isArray(event.messages)) {
         messages = sanitizeL0Record({ sessionKey, messages: event.messages }, this.config);

@@ -12,7 +12,6 @@ export function registerMemoryHooks(
     runtime.handleBeforePromptBuild,
     { priority: 60 },
   );
-  api.on("before_message_write", runtime.handleBeforeMessageWrite);
   api.on("agent_end", runtime.handleAgentEnd);
   api.on("before_reset", runtime.handleBeforeReset);
 }

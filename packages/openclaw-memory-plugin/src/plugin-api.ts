@@ -78,6 +78,15 @@ export interface PluginHookBeforeResetEvent {
   reason?: string;
 }
 
+export interface InternalHookEvent {
+  type: string;
+  action: string;
+  sessionKey: string;
+  context: Record<string, unknown>;
+  timestamp: Date;
+  messages: string[];
+}
+
 export interface PluginHookHandlerMap {
   before_prompt_build: (
     event: PluginHookBeforePromptBuildEvent,
@@ -110,6 +119,11 @@ export interface OpenClawPluginApi {
   registerTool?: (
     factory: ((ctx: Record<string, unknown>) => PluginTool[] | PluginTool | null | undefined) | (() => PluginTool[]),
     options?: { names?: string[] },
+  ) => void;
+  registerHook?: (
+    events: string | string[],
+    handler: (event: InternalHookEvent) => Promise<void> | void,
+    options?: { entry?: unknown; name?: string; description?: string; register?: boolean },
   ) => void;
   registerService?: (service: PluginService) => void;
 }

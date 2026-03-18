@@ -365,6 +365,12 @@ function computeTokenScore(query: string, candidates: string[]): number {
   return best;
 }
 
+function buildSearchableMessageText(messages: MemoryMessage[]): string {
+  return messages
+    .map((message) => `${message.role}: ${message.content}`)
+    .join("\n");
+}
+
 function normalizeIndexingSettings(
   input: Partial<IndexingSettings> | undefined,
   defaults: IndexingSettings,
@@ -726,7 +732,7 @@ export class MemoryRepository {
     const rows = this.listRecentL0(Math.max(50, limit * 10));
     const scored = rows.map((item) => ({
       item,
-      score: computeTokenScore(query, [item.sessionKey, JSON.stringify(item.messages)]),
+      score: computeTokenScore(query, [item.sessionKey, buildSearchableMessageText(item.messages)]),
     }));
     return scored
       .filter((hit) => hit.score > 0.2)

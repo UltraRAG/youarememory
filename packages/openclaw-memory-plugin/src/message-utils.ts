@@ -4,24 +4,67 @@ const MEMORY_CONTEXT_HEADER = "You are using multi-level memory indexes for this
 const MEMORY_CONTEXT_FOOTER = "Treat the above as authoritative prior memory when it is relevant. Prioritize the user's latest request, and do not claim memory is missing or that this is a fresh conversation if the answer is already shown above.";
 export const SESSION_START_PREFIX = "A new session was started via /new or /reset.";
 const SLUG_PROMPT_PREFIX = "Based on this conversation, generate a short 1-2 word filename slug";
+const MAX_CONTENT_EXTRACTION_DEPTH = 5;
 
 function truncate(text: string, maxLength: number): string {
   if (maxLength <= 0 || text.length <= maxLength) return text;
   return `${text.slice(0, maxLength)}...`;
 }
 
-function extractTextFromContent(content: unknown): string {
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : undefined;
+}
+
+function pushUniqueText(target: string[], value: string): void {
+  const normalized = value.trim();
+  if (!normalized || target.includes(normalized)) return;
+  target.push(normalized);
+}
+
+function extractTextFromObject(content: Record<string, unknown>, depth: number): string {
+  const type = typeof content.type === "string" ? content.type.toLowerCase() : "";
+  if (["toolcall", "toolresult", "image", "input_image", "file", "media"].includes(type)) {
+    return "";
+  }
+  if (["text", "input_text", "output_text", "paragraph"].includes(type) && typeof content.text === "string") {
+    return content.text;
+  }
+  if (typeof content.text === "string" && type === "message_text") {
+    return content.text;
+  }
+
+  const parts: string[] = [];
+  const prioritizedKeys = ["text", "body", "message", "content", "caption", "prompt", "value"];
+  const listKeys = ["parts", "items", "blocks", "segments", "chunks"];
+
+  for (const key of prioritizedKeys) {
+    const extracted = extractTextFromContent(content[key], depth + 1);
+    pushUniqueText(parts, extracted);
+  }
+  for (const key of listKeys) {
+    const extracted = extractTextFromContent(content[key], depth + 1);
+    pushUniqueText(parts, extracted);
+  }
+
+  return parts.join("\n").trim();
+}
+
+function extractTextFromContent(content: unknown, depth = 0): string {
+  if (depth > MAX_CONTENT_EXTRACTION_DEPTH) return "";
   if (typeof content === "string") return content;
   if (Array.isArray(content)) {
     const blocks: string[] = [];
     for (const block of content) {
-      if (!block || typeof block !== "object") continue;
-      const b = block as Record<string, unknown>;
-      if (b.type === "text" && typeof b.text === "string") {
-        blocks.push(b.text);
-      }
+      const extracted = extractTextFromContent(block, depth + 1);
+      pushUniqueText(blocks, extracted);
     }
     return blocks.join("\n");
+  }
+  const object = asRecord(content);
+  if (object) {
+    return extractTextFromObject(object, depth);
   }
   return "";
 }
@@ -39,48 +82,174 @@ function stripInjectedMemoryContext(text: string): string {
   return text.trim();
 }
 
+function compactWhitespace(text: string): string {
+  const lines = text
+    .replace(/\r/g, "")
+    .split("\n")
+    .map((line) => line.trimEnd());
+
+  const compact: string[] = [];
+  let previousEmpty = false;
+  for (const line of lines) {
+    const empty = line.trim().length === 0;
+    if (empty && previousEmpty) continue;
+    compact.push(empty ? "" : line);
+    previousEmpty = empty;
+  }
+  return compact.join("\n").trim();
+}
+
+function normalizeSenderHint(value: string): string {
+  return value.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function collectSenderHints(text: string): string[] {
+  const hints = new Set<string>();
+  const blockPattern = /(?:Conversation info|Sender)\s*\(untrusted metadata\)\s*:\s*```(?:json)?\s*([\s\S]*?)\s*```/gi;
+  const inlinePattern = /(?:Conversation info|Sender)\s*\(untrusted metadata\)\s*:\s*(\{[\s\S]*?\})/gi;
+
+  const add = (value: unknown): void => {
+    if (typeof value !== "string") return;
+    const normalized = normalizeSenderHint(value);
+    if (!normalized) return;
+    hints.add(normalized);
+  };
+
+  const parseBlock = (raw: string): void => {
+    try {
+      const parsed = JSON.parse(raw);
+      const object = asRecord(parsed);
+      if (!object) return;
+      add(object.sender);
+      add(object.sender_id);
+      add(object.sender_label);
+    } catch {
+      // Ignore malformed metadata blocks.
+    }
+  };
+
+  for (const match of text.matchAll(blockPattern)) {
+    parseBlock(match[1] ?? "");
+  }
+  for (const match of text.matchAll(inlinePattern)) {
+    parseBlock(match[1] ?? "");
+  }
+
+  return Array.from(hints);
+}
+
 function stripUntrustedSenderMetadata(text: string): string {
-  const codeFencePattern = /Sender\s*\(untrusted metadata\)\s*:\s*```(?:json)?[\s\S]*?```\s*/gi;
-  const inlineJsonPattern = /Sender\s*\(untrusted metadata\)\s*:\s*\{[\s\S]*?\}\s*/gi;
+  const codeFencePattern = /(?:Conversation info|Sender)\s*\(untrusted metadata\)\s*:\s*```(?:json)?[\s\S]*?```\s*/gi;
+  const inlineJsonPattern = /(?:Conversation info|Sender)\s*\(untrusted metadata\)\s*:\s*\{[\s\S]*?\}\s*/gi;
   return text
     .replace(codeFencePattern, "")
     .replace(inlineJsonPattern, "");
+}
+
+function stripQuotedContextBlocks(text: string): string {
+  return text
+    .replace(/(?:Chat history since last reply|Replied message)\s*\(untrusted[^)]*\)\s*:\s*```(?:json)?[\s\S]*?```\s*/gi, "")
+    .replace(/\[Chat messages since your last reply - for context\][\s\S]*?(?=\[Current message - respond to this\]|$)/gi, "");
+}
+
+function extractCurrentMessageSegment(text: string): string {
+  const marker = "[Current message - respond to this]";
+  const index = text.lastIndexOf(marker);
+  if (index < 0) return text;
+  return text.slice(index + marker.length).trim();
 }
 
 function stripLeadingTimestampPrefix(text: string): string {
   return text.replace(/^\s*\[[^\]\n]*(?:\d{4}-\d{1,2}-\d{1,2}|GMT|UTC)[^\]\n]*\]\s*/i, "");
 }
 
-function stripLeadingSenderNoiseLines(text: string): string {
+function stripAttachmentScaffolding(text: string): string {
+  let cleaned = text
+    .replace(/^\[media attached:[^\n]*\]\s*/gim, "")
+    .replace(/^To send an image back,[^\n]*$/gim, "");
+
+  const fileTagIndex = cleaned.search(/\n<file\b/i);
+  if (fileTagIndex >= 0) {
+    cleaned = cleaned.slice(0, fileTagIndex);
+  }
+  return cleaned.replace(/<file\b[^>]*>/gi, "");
+}
+
+function stripLeadingCurrentMessageEnvelope(text: string): string {
+  const match = text.match(/^(?:\[[^\]\n]{1,320}\]\s*)+([^:\n]{1,120}):\s*([\s\S]*)$/);
+  if (!match) return text;
+  return (match[2] ?? "").trim();
+}
+
+function looksLikeOpaqueSenderLabel(label: string): boolean {
+  const trimmed = label.trim();
+  if (!trimmed || trimmed.length > 120) return false;
+  if (/^[A-Za-z0-9_.@()\- ]+$/.test(trimmed) && (/[0-9_]/.test(trimmed) || /^[A-Za-z][A-Za-z0-9_.@()\- ]{4,}$/.test(trimmed))) {
+    return true;
+  }
+  return false;
+}
+
+function stripLeadingSenderPrefix(text: string, senderHints: string[]): string {
+  const lines = text.split("\n");
+  const firstLine = lines[0]?.trim() ?? "";
+  const match = firstLine.match(/^([^:\n]{1,120}):\s*([\s\S]*)$/);
+  if (!match) return text;
+
+  const label = normalizeSenderHint(match[1] ?? "");
+  const shouldStrip = senderHints.includes(label) || looksLikeOpaqueSenderLabel(match[1] ?? "");
+  if (!shouldStrip) return text;
+
+  lines[0] = match[2] ?? "";
+  return lines.join("\n").trim();
+}
+
+function stripLeadingMentions(text: string): string {
+  let cleaned = text.trimStart();
+  while (true) {
+    const next = cleaned.replace(/^@[\w.-]+\s*/i, "");
+    if (next === cleaned) break;
+    cleaned = next.trimStart();
+  }
+  return cleaned;
+}
+
+function stripLeadingMessageEnvelopeLines(text: string): string {
   const lines = text.split("\n");
   const isNoiseLine = (line: string): boolean => {
     const value = line.trim();
     if (!value) return true;
     if (value === "```" || value.toLowerCase() === "```json") return true;
     if (value === "{" || value === "}") return true;
-    if (/^Sender\s*\(untrusted metadata\)\s*:?/i.test(value)) return true;
-    if (/^"label"\s*:/.test(value)) return true;
-    if (/^"id"\s*:/.test(value)) return true;
-    if (/^\[[^\]\n]*(?:\d{4}-\d{1,2}-\d{1,2}|GMT|UTC)[^\]\n]*\]$/.test(value)) return true;
+    if (/^(?:Conversation info|Sender)\s*\(untrusted metadata\)\s*:?/i.test(value)) return true;
+    if (/^(?:Chat history since last reply|Replied message)\s*\(untrusted[^)]*\)\s*:?/i.test(value)) return true;
+    if (/^\[message_id:[^\]]+\]$/i.test(value)) return true;
+    if (/^\[[^\]\n]*(?:for context|Current message - respond to this)[^\]\n]*\]$/i.test(value)) return true;
+    if (/^\[[^\]\n]*(?:\d{4}-\d{1,2}-\d{1,2}|GMT|UTC|channel:\d+)[^\]\n]*\]\s*[^:\n]{1,120}:\s*/i.test(value)) return true;
     return false;
   };
 
   while (lines.length > 0 && isNoiseLine(lines[0]!)) {
     lines.shift();
   }
+
   return lines.join("\n").trim();
 }
 
 function stripUserNoise(text: string): string {
   if (!text) return "";
-  const hadSenderMetadata = /Sender\s*\(untrusted metadata\)\s*:?/i.test(text);
+  const senderHints = collectSenderHints(text);
   let cleaned = stripInjectedMemoryContext(text);
+  cleaned = extractCurrentMessageSegment(cleaned);
+  cleaned = stripQuotedContextBlocks(cleaned);
+  cleaned = stripAttachmentScaffolding(cleaned);
   cleaned = stripUntrustedSenderMetadata(cleaned);
+  cleaned = stripLeadingCurrentMessageEnvelope(cleaned);
   cleaned = stripLeadingTimestampPrefix(cleaned);
-  if (hadSenderMetadata) {
-    cleaned = stripLeadingSenderNoiseLines(cleaned);
-  }
-  return cleaned.trim();
+  cleaned = stripLeadingMessageEnvelopeLines(cleaned);
+  cleaned = stripLeadingSenderPrefix(cleaned, senderHints);
+  cleaned = stripLeadingMentions(cleaned);
+  return compactWhitespace(cleaned);
 }
 
 function stripAssistantThinking(text: string): string {
@@ -134,14 +303,14 @@ function hasToolCallContent(content: unknown): boolean {
 
 function shouldSkipUserMessage(content: string): boolean {
   if (!content) return true;
-  return content.startsWith(SESSION_START_PREFIX) || content.startsWith(SLUG_PROMPT_PREFIX);
+  return content.includes(SESSION_START_PREFIX) || content.startsWith(SLUG_PROMPT_PREFIX);
 }
 
 export function isSessionBoundaryMarkerMessage(rawMessage: unknown): boolean {
   if (!rawMessage || typeof rawMessage !== "object") return false;
   const msg = rawMessage as Record<string, unknown>;
-  const content = extractTextFromContent(msg.content).trim();
-  return content.startsWith(SESSION_START_PREFIX);
+  const content = stripUserNoise(extractTextFromContent(msg.content).trim());
+  return content.includes(SESSION_START_PREFIX);
 }
 
 function shouldSkipAssistantMessage(rawContent: unknown, content: string): boolean {
@@ -163,11 +332,16 @@ function normalizeSingleMessage(
 ): MemoryMessage | undefined {
   if (!raw || typeof raw !== "object") return undefined;
   const msg = raw as Record<string, unknown>;
-  const role = typeof msg.role === "string" ? msg.role : "";
+  const nestedMessage = asRecord(msg.message);
+  const role = typeof msg.role === "string"
+    ? msg.role
+    : typeof nestedMessage?.role === "string"
+      ? nestedMessage.role
+      : "";
   if (role !== "user" && role !== "assistant") return undefined;
   if (role === "assistant" && !options.includeAssistant) return undefined;
 
-  const rawContent = msg.content;
+  const rawContent = msg.content ?? nestedMessage?.content;
   const rawText = extractTextFromContent(rawContent).trim();
   const content = role === "user"
     ? stripUserNoise(rawText)
@@ -181,8 +355,13 @@ function normalizeSingleMessage(
     role,
     content: truncate(content, options.maxMessageChars),
   };
-  if (typeof msg.id === "string") {
-    normalized.msgId = msg.id;
+  const rawId = typeof msg.id === "string"
+    ? msg.id
+    : typeof nestedMessage?.id === "string"
+      ? nestedMessage.id
+      : undefined;
+  if (rawId) {
+    normalized.msgId = rawId;
   }
   return normalized;
 }
