@@ -1641,13 +1641,13 @@ function renderConnectionGraph(l2Record, type) {
   connectionColumns.innerHTML = "";
   connectionSvg.innerHTML = "";
 
-  const allL1Ids = l2Record.l1Source || l2Record.sourceL1Ids || [];
+  const allL1Ids = [...(l2Record.l1Source || l2Record.sourceL1Ids || [])].reverse();
   state.connL1Ids = allL1Ids;
 
   const l0Map = {};
   allL1Ids.forEach((id) => {
     const l1 = state.l1ById[id];
-    l0Map[id] = l1 ? (l1.l0Source || []) : [];
+    l0Map[id] = l1 ? [...(l1.l0Source || [])].reverse() : [];
   });
   state.connL0Map = l0Map;
 
@@ -1665,12 +1665,10 @@ function renderConnectionGraph(l2Record, type) {
   const colL1 = document.createElement("div");
   colL1.className = "conn-col";
   colL1.dataset.role = "l1";
-  colL1.innerHTML = `<div class="conn-col-header">${t("connection.l1")}</div>`;
 
   const colL0 = document.createElement("div");
   colL0.className = "conn-col";
   colL0.dataset.role = "l0";
-  colL0.innerHTML = `<div class="conn-col-header">${t("connection.l0")}</div>`;
 
   connectionColumns.append(colL2, colL1, colL0);
   fillConnColumns();
@@ -1681,12 +1679,8 @@ function fillConnColumns() {
   const colL0 = connectionColumns.querySelector('[data-role="l0"]');
   if (!colL1 || !colL0) return;
 
-  const headerL1 = colL1.querySelector(".conn-col-header");
-  const headerL0 = colL0.querySelector(".conn-col-header");
   colL1.innerHTML = "";
   colL0.innerHTML = "";
-  if (headerL1) colL1.append(headerL1);
-  if (headerL0) colL0.append(headerL0);
 
   connectionSvg.innerHTML = "";
   clearHighlight();
@@ -1697,12 +1691,16 @@ function fillConnColumns() {
   state.connL1Page = Math.min(state.connL1Page, l1TotalPages - 1);
   const l1Slice = allL1.slice(state.connL1Page * ps, (state.connL1Page + 1) * ps);
 
+  const l1Header = document.createElement("div");
+  l1Header.className = "conn-col-header";
+  l1Header.innerHTML = `<span>${t("connection.l1")}</span>`;
   if (l1TotalPages > 1) {
-    colL1.append(createConnPager(state.connL1Page, l1TotalPages,
+    l1Header.append(createConnPager(state.connL1Page, l1TotalPages,
       () => { state.connL1Page--; state.connActiveL1 = null; state.connL0Page = 0; fillConnColumns(); },
       () => { state.connL1Page++; state.connActiveL1 = null; state.connL0Page = 0; fillConnColumns(); },
     ));
   }
+  colL1.append(l1Header);
 
   if (!state.connActiveL1 && l1Slice.length > 0) {
     state.connActiveL1 = l1Slice[0];
@@ -1732,12 +1730,16 @@ function fillConnColumns() {
   state.connL0Page = Math.min(state.connL0Page, l0TotalPages - 1);
   const l0Slice = activeL0Ids.slice(state.connL0Page * ps, (state.connL0Page + 1) * ps);
 
+  const l0Header = document.createElement("div");
+  l0Header.className = "conn-col-header";
+  l0Header.innerHTML = `<span>${t("connection.l0")}</span>`;
   if (l0TotalPages > 1) {
-    colL0.append(createConnPager(state.connL0Page, l0TotalPages,
+    l0Header.append(createConnPager(state.connL0Page, l0TotalPages,
       () => { state.connL0Page--; fillConnColumns(); },
       () => { state.connL0Page++; fillConnColumns(); },
     ));
   }
+  colL0.append(l0Header);
 
   l0Slice.forEach((l0Id) => {
     nodeDelay += 50;

@@ -2348,6 +2348,9 @@ body[data-panel="retrieve"] #retrievePanel {
 }
 
 .conn-col-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
@@ -2355,6 +2358,7 @@ body[data-panel="retrieve"] #retrievePanel {
   color: var(--text-3);
   padding: 0 0 6px;
   border-bottom: 1px solid var(--border);
+  min-height: 24px;
 }
 
 /* ─── Connection Nodes ─────────────────────────────────── */
@@ -2473,21 +2477,21 @@ body[data-panel="retrieve"] #retrievePanel {
 /* ─── Connection Pager ────────────────────────────────────── */
 
 .conn-pager {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 2px 0 4px;
+  gap: 4px;
+  margin-left: auto;
+  flex-shrink: 0;
 }
 
 .conn-pager-btn {
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
   border: 1px solid var(--border);
   background: var(--card);
   color: var(--text-2);
-  font-size: 16px;
+  font-size: 14px;
   line-height: 1;
   cursor: pointer;
   display: inline-flex;
