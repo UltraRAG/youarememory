@@ -40,6 +40,7 @@ const LOCALES = {
     "settings.theme.dark": "深色",
     "settings.theme.auto": "跟随系统",
     "settings.language": "界面语言",
+    "settings.accentColor": "主题色",
     "settings.export": "导出记忆",
     "settings.import": "导入记忆",
     "settings.clear": "清除所有记忆",
@@ -247,6 +248,7 @@ const LOCALES = {
     "settings.theme.dark": "Dark",
     "settings.theme.auto": "System",
     "settings.language": "Language",
+    "settings.accentColor": "Accent color",
     "settings.export": "Export Memory",
     "settings.import": "Import Memory",
     "settings.clear": "Clear All Memory",
@@ -475,9 +477,23 @@ function applyTheme(pref) {
   });
 }
 
+function applyAccent(accent) {
+  localStorage.setItem("ym-accent", accent);
+  if (accent === "blue") {
+    delete document.documentElement.dataset.accent;
+  } else {
+    document.documentElement.dataset.accent = accent;
+  }
+  document.querySelectorAll("#accentPicker .accent-dot").forEach((dot) => {
+    dot.classList.toggle("active", dot.dataset.accent === accent);
+  });
+}
+
 function initTheme() {
   const pref = localStorage.getItem("ym-theme") || "light";
   applyTheme(pref);
+  const accent = localStorage.getItem("ym-accent") || "blue";
+  applyAccent(accent);
   window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
     const current = localStorage.getItem("ym-theme") || "light";
     if (current === "auto") applyTheme("auto");
@@ -2431,6 +2447,13 @@ themeToggle.addEventListener("click", (e) => {
   themeToggle.querySelectorAll(".popover-seg-btn").forEach((b) => b.classList.remove("active"));
   btn.classList.add("active");
   applyTheme(btn.dataset.themeValue);
+});
+
+const accentPicker = document.getElementById("accentPicker");
+if (accentPicker) accentPicker.addEventListener("click", (e) => {
+  const dot = e.target instanceof Element ? e.target.closest("[data-accent]") : null;
+  if (!dot) return;
+  applyAccent(dot.dataset.accent);
 });
 
 if (langToggle) langToggle.addEventListener("click", (e) => {
