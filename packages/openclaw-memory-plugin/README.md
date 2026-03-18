@@ -15,7 +15,7 @@
 
 安装、使用、更新、排障和二次开发说明已经统一放到仓库根 README：
 
-- [README.md](/Users/meisen/Desktop/youarememory/README.md)
+- [README.md](../../README.md)
 
 ## 这个包更适合什么时候看
 

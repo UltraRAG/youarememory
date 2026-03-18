@@ -1,154 +1,342 @@
 # ClawXMemory
 
-ClawXMemory 是一个给 OpenClaw 用的本地优先记忆插件。它会自动记录对话、构建多层记忆索引、在回答前做记忆召回，并提供一个本地看板让你查看当前记忆状态。
+**让 OpenClaw 真正记住你。**
 
-如果你只是想装起来用，先看下面的“5 分钟安装”。如果你想在这个基础上继续开发，也直接看这份 README，不需要再翻多份重复文档。
+ClawXMemory 是一个面向 OpenClaw 的本地优先多层记忆插件。它会自动从对话里沉淀原始对话、记忆片段、项目记忆、时间记忆和个人画像，并在下一次回答前主动召回真正相关的上下文。
 
-## 它能做什么
+- **不是聊天记录搜索**：它会持续聚合项目进展、时间线和个人画像，而不是让你自己翻历史消息。
+- **本地优先**：所有记忆都落在本地 SQLite，不依赖云端存储。
+- **即插即用**：安装后直接接管 OpenClaw 的动态记忆层，正常对话即可开始积累记忆。
 
-- 自动把每轮对话存成 `L0`
-- 在话题闭合时构建 `L1`
-- 维护两类 `L2`
-  - 按天的时间记忆
-  - 可持续归并的项目记忆
-- 维护一份单例 `GlobalProfileRecord`，表示用户稳定画像
-- 在 OpenClaw 的 `before_prompt_build` 阶段自动注入记忆上下文
-- 提供本地记忆看板，查看项目、时间线、画像和索引状态
-
-## 5 分钟安装
-
-前提：
-
-- 已安装 `Node.js >= 24`
-- 已安装并能正常使用 `openclaw`
-- 当前目录就是这个仓库根目录
-
-第一次安装，或者你怀疑插件链接脏了，执行：
+## Quick Start
 
 ```bash
 npm install
 npm run relink:memory-plugin
+openclaw plugins info clawxmemory-openclaw
 ```
 
-这个命令会自动完成：
+打开看板：
 
-- 构建插件
-- 修复本地插件链接
-- 绑定 OpenClaw 的 `memory` slot
-- 启用 `clawxmemory-openclaw`
-- 开启 `plugins.entries.clawxmemory-openclaw.hooks.allowPromptInjection = true`
-- 重启 gateway
-- 等待健康检查通过
-- 打开本地看板
+```text
+http://127.0.0.1:39393/clawxmemory/
+```
 
-## 第一次看到什么算成功
+---
 
-安装完成后，至少要满足这几件事：
+## 为什么不是聊天记录搜索
+
+聊天记录搜索解决的是“我手动去找过去说过什么”，而 ClawXMemory 解决的是“系统自动替我维护长期上下文”。
+
+- 它不会只保留零散摘要，而是把同一主题下的多轮对话持续聚合成**项目记忆**
+- 它不会只按会话切片，而是把每天发生的事情整理成**记忆时间线**
+- 它不会只记住单条事实，而是会逐步更新你的**个人画像**
+- 它不会等你主动搜索，而是在回答前做检索和下钻，只把真正相关的记忆注入当前 prompt
+
+---
+
+## 项目介绍
+
+ClawXMemory 的目标很直接：让 OpenClaw 的记忆从“临时上下文”升级为“长期上下文系统”。
+
+安装完成后，你无需手动整理笔记、维护摘要或标记重要对话。插件会在后台自动完成：
+
+- 记录每轮原始对话
+- 在话题自然闭合时生成记忆片段
+- 按主题和时间继续聚合成长期记忆
+- 在后续提问时自动召回相关上下文
+
+它适合这些场景：
+
+- 长周期项目推进：论文、产品、求职、比赛、旅行、创作
+- 持续关系和生活事项：朋友近况、约定、偏好、后续安排
+- 需要 AI 跨多轮、多天、多主题保持一致上下文的工作流
+
+---
+
+## 核心能力
+
+| 能力 | 说明 |
+|------|------|
+| 自动记忆 | 正常对话即可，插件自动采集、聚合、更新记忆 |
+| 多层索引 | 从原始对话到项目记忆、时间记忆、个人画像逐层组织 |
+| 智能召回 | 回答前自动检索、筛选、下钻相关记忆，而不是盲目拼接历史 |
+| 本地优先 | 数据默认存放在本地 SQLite，不经过云端 |
+| 可视化看板 | 提供画布视图、列表视图和记忆连线，便于查看与排查 |
+| 导入导出 | 支持将记忆打包迁移到另一台设备上的 ClawXMemory |
+
+---
+
+## 快速开始
+
+### 1. 前置条件
+
+- Node.js `>= 24`
+- 已安装并可正常使用 OpenClaw
+
+### 2. 安装
+
+如果你是从仓库源码启动：
+
+```bash
+git clone <repo-url>
+cd <repo-dir>
+npm install
+npm run relink:memory-plugin
+```
+
+`relink` 会自动完成构建、插件链接、配置绑定、网关重启和健康检查。
+
+### 3. 验证安装
 
 ```bash
 openclaw plugins info clawxmemory-openclaw
 openclaw gateway status --json
 ```
 
-你应该看到：
+你应确认：
 
-- `Status: loaded`
-- `runtime.status = running`
-- `rpc.ok = true`
+- `clawxmemory-openclaw` 的 `Status: loaded`
+- `plugins.slots.memory` 已由 ClawXMemory 接管
+- 网关运行正常，且本地 UI 可访问：
 
-然后浏览器可以打开：
-
-- `http://127.0.0.1:39393/clawxmemory/`
-
-## OpenClaw 原生 memory 和本插件是什么关系
-
-很多人第一次接上 ClawXMemory 时，会误以为 OpenClaw 还在用它自己的原生 memory。这里要先分清两层边界：
-
-- `memory slot`
-  - 这是回答前的动态记忆 provider
-  - 现在应该由 `clawxmemory-openclaw` 接管
-- `Project Context`
-  - 这是 OpenClaw 宿主自己的 workspace bootstrap 注入链路
-  - 它会继续把 `AGENTS.md / USER.md / MEMORY.md / BOOTSTRAP.md` 之类文件放进系统提示
-  - 这不是 memory slot，也不是我们插件应该去重写的东西
-
-ClawXMemory 的目标是：**完全替代动态对话记忆**，但**不修改用户 workspace 文件**。也就是说：
-
-- 回答前的动态历史记忆，由 ClawXMemory 负责
-- OpenClaw 的 workspace bootstrap 仍然是宿主静态上下文
-- 插件会在自己的 system-context 合同里明确“本轮该信谁”
-- 插件不会自动改写 `~/.openclaw/workspace/*`
-
-为了避免 OpenClaw 原生动态 memory 和我们并行工作，这个仓库默认会收口这些配置：
-
-- `plugins.slots.memory = "clawxmemory-openclaw"`
-- `plugins.entries.clawxmemory-openclaw.hooks.allowPromptInjection = true`
-- `plugins.entries.memory-core.enabled = false`
-- `hooks.internal.entries.session-memory.enabled = false`
-- `agents.defaults.memorySearch.enabled = false`
-- `agents.defaults.compaction.memoryFlush.enabled = false`
-- 插件不再暴露 `memory_search`
-
-## 日常怎么用
-
-正常对话就行，不需要手动调用工具。
-
-插件会自动做这些事：
-
-1. 每轮对话先落 `L0`
-2. 用户停下来一小段时间后，后台判断话题是否转变
-3. 话题闭合时生成 `L1`
-4. 基于新的 `L1` 更新 `L2` 项目、`L2` 时间和全局画像
-5. 下次提问时，在回答前自动做记忆召回
-
-如果你打开看板，常用操作只有三个：
-
-- `刷新`：重新拉取当前数据
-- `立即构建`：立刻把当前开放话题强制落成索引
-- `清空并重建`：清掉派生索引后，从已有 `L0` 全量重放
-
-## 改完代码后怎么更新
-
-大多数情况下，你只需要：
-
-```bash
-npm run reload:memory-plugin
+```text
+http://127.0.0.1:39393/clawxmemory/
 ```
 
-它会自动：
+---
 
-- 构建当前插件
-- 确认 `memory` slot 指向 `clawxmemory-openclaw`
-- 关闭 OpenClaw 原生动态 memory 的并行配置
-- 启用插件
-- 重启 gateway
-- 校验插件和网关状态
-- 打开最新 UI
+## 安装与验证
 
-什么时候用 `reload`，什么时候用 `relink`：
+### OpenClaw 会被怎样接管
 
-- `reload:memory-plugin`
-  - 日常开发和日常更新都用这个
-  - 适合“我刚改了代码，想重新加载看看”
-- `relink:memory-plugin`
-  - 首次安装
-  - 插件链接损坏
-  - `plugin id mismatch`
-  - OpenClaw 找不到当前仓库插件
+ClawXMemory 会接管 OpenClaw 的动态记忆槽位，但不会修改你的 workspace 文件。
+
+安装后，动态记忆链路由它负责：
+
+- 自动采集对话
+- 自动构建记忆索引
+- 在 `before_prompt_build` 前注入相关记忆
+
+而这些仍然属于 OpenClaw 宿主：
+
+- `AGENTS.md`、`USER.md` 等静态上下文
+- workspace 本地文件系统
+- 其他非 memory 类型插件
+
+### 首次启动后会发生什么
+
+一旦插件成功加载：
+
+1. 你继续像平时一样和 OpenClaw 对话
+2. 对话会先沉淀为原始对话
+3. 话题闭合后自动生成记忆片段
+4. 记忆片段进一步更新项目记忆、记忆时间线和个人画像
+5. 下次提问时，相关记忆会在回答前自动注入
+
+---
+
+## 日常使用
+
+### 正常对话即可开始记忆
+
+大多数时候你不需要做任何额外操作。ClawXMemory 会在后台自动完成以下工作：
+
+1. 每轮对话自动记录为原始对话
+2. 当系统检测到话题自然闭合时，生成记忆片段
+3. 新的记忆片段会继续汇总成项目记忆、记忆时间线和个人画像
+4. 下一次提问时，系统会只召回真正相关的记忆
+
+### 什么时候会形成不同类型的记忆
+
+- **原始对话**：每轮对话结束后写入
+- **记忆片段**：一个话题告一段落时生成
+- **项目记忆**：当多个记忆片段持续指向同一主题或项目时更新
+- **记忆时间线**：按天聚合同一天的重要活动和进展
+- **个人画像**：随着更多对话积累，持续更新偏好、长期特征和稳定背景
+
+### 看板里可以做什么
+
+在本地看板里，你可以：
+
+- 浏览项目记忆、记忆时间线和个人画像
+- 切换到列表视图查看底层索引
+- 点击记忆节点查看 L2 → L1 → L0 的连线关系
+- 搜索已有记忆
+- 导出当前全部记忆
+- 导入另一台设备上的 ClawXMemory 记忆包
+
+### 常用操作说明
+
+| 操作 | 说明 |
+|------|------|
+| 刷新 | 重新拉取当前最新数据 |
+| 索引同步 | 立即把当前开放话题同步进索引 |
+| 导出记忆 | 导出当前所有记忆数据，便于迁移和备份 |
+| 导入记忆 | 用导出的记忆包覆盖当前设备上的记忆 |
+| 清除记忆 | 清空派生索引，并从现有原始对话重新回放 |
+
+---
+
+## 看板与记忆视图
+
+ClawXMemory 当前提供两种主要视图：
+
+### 画布视图
+
+画布视图更适合从“长期上下文”的角度看记忆系统当前在维护什么。
+
+- **项目记忆**：按主题或持续性事项组织的长期记忆
+- **记忆时间线**：按天组织的重要活动和进展
+- **个人画像**：用户偏好、长期特征和稳定背景
+
+点击任一节点后，可以进入**记忆连线**视图，查看它和底层记忆片段、原始对话之间的关系。
+
+### 列表视图
+
+列表视图更适合排查和精查具体索引内容。
+
+| 列表层级 | 含义 |
+|------|------|
+| **项目记忆（L2）** | 按主题聚合后的长期项目记忆 |
+| **时间记忆（L2）** | 按日期聚合后的时间记忆 |
+| **记忆片段（L1）** | 已闭合话题的结构化摘要 |
+| **原始对话（L0）** | 最原始的对话消息记录 |
+| **个人画像** | 单例个人画像记录 |
+
+---
+
+## 记忆是如何工作的
+
+对大多数用户来说，只需要知道 ClawXMemory 会把对话逐层组织成更适合长期召回的结构。
+
+```text
+对话轮次 ──→ 原始对话
+               │
+               ▼
+          话题闭合检测
+               │
+               ▼
+          记忆片段（L1）
+           ┌───┴───┐
+           ▼       ▼
+  项目记忆（L2）  时间记忆（L2）
+           │
+           ▼
+        个人画像
+```
+
+如果你需要技术视角，可以把它理解为四层记忆索引：
+
+| 层级 | 用户视角 | 存储内容 |
+|------|------|------|
+| `L0` | 原始对话 | 最原始的对话消息 |
+| `L1` | 记忆片段 | 一个闭合话题的摘要、事实和标签 |
+| `L2` 项目 | 项目记忆 | 同一主题下持续更新的长期聚合记忆 |
+| `L2` 时间 | 时间记忆 | 同一天内活动和进展的聚合摘要 |
+| 全局记录 | 个人画像 | 偏好、长期特征、稳定背景 |
+
+召回时，系统不是把所有历史对话塞进 prompt，而是执行一个逐层筛选、下钻到具体证据的检索流程。
+
+更完整的数据结构、字段语义和检索链路说明请看：
+
+- [docs/memory-design.md](docs/memory-design.md)
+
+---
+
+## 与 OpenClaw 的关系
+
+ClawXMemory **完全替代 OpenClaw 的动态对话记忆层**，但**不修改 workspace 文件**。
+
+| 职责 | 归属 |
+|------|------|
+| 动态对话记忆（回答前注入历史上下文） | ClawXMemory |
+| Workspace 静态上下文（AGENTS.md、USER.md 等） | OpenClaw |
+
+安装时会自动配置这些关键项，避免原生记忆和插件同时工作：
+
+- `plugins.slots.memory` → `clawxmemory-openclaw`
+- `plugins.entries.memory-core.enabled` → `false`
+- `hooks.internal.entries.session-memory.enabled` → `false`
+- `agents.defaults.memorySearch.enabled` → `false`
+
+---
+
+## 开发与调试
+
+如果你准备二次开发或审查实现，可以从这里开始。
+
+### 项目结构
+
+```text
+ClawXMemory/
+├── packages/
+│   └── openclaw-memory-plugin/
+│       ├── src/
+│       │   ├── index.ts
+│       │   ├── runtime.ts
+│       │   ├── hooks.ts
+│       │   └── core/
+│       │       ├── storage/
+│       │       ├── pipeline/
+│       │       ├── retrieval/
+│       │       └── skills/
+│       └── ui-source/
+├── docs/
+└── scripts/
+```
+
+### 关键文件
+
+| 文件 | 说明 |
+|------|------|
+| `packages/openclaw-memory-plugin/src/index.ts` | 插件入口 |
+| `packages/openclaw-memory-plugin/src/runtime.ts` | 运行态、hook 接线、UI server 协调 |
+| `packages/openclaw-memory-plugin/src/core/pipeline/heartbeat.ts` | L0 → L1 → L2 的构建管线 |
+| `packages/openclaw-memory-plugin/src/core/retrieval/reasoning-loop.ts` | 多跳记忆检索 |
+| `packages/openclaw-memory-plugin/src/core/storage/sqlite.ts` | SQLite 数据层 |
+| `packages/openclaw-memory-plugin/ui-source/app.js` | 看板前端逻辑 |
+
+### 开发循环
+
+```bash
+# 修改 src/ 或 ui-source/
+npm run reload:memory-plugin
+
+# 类型检查
+npm run typecheck
+
+# 调试检索
+npm run debug:retrieve --workspace @clawxmemory/clawxmemory-openclaw -- --query "项目进展"
+```
+
+### reload vs relink
+
+| 命令 | 场景 |
+|------|------|
+| `npm run reload:memory-plugin` | 日常开发、代码更新后重新加载 |
+| `npm run relink:memory-plugin` | 首次安装、插件链接损坏、`plugin id mismatch` |
+
+---
 
 ## 常见问题
 
-### 1. 命令执行后终端一直卡住
+### 1. 插件没有加载成功
 
-现在推荐只用：
+先检查：
 
 ```bash
-npm run reload:memory-plugin
+openclaw plugins info clawxmemory-openclaw
+openclaw gateway status --json
 ```
 
-不要再手动粘贴长串 `openclaw gateway restart` 组合命令。仓库里的 reload 脚本已经对常见卡住场景做了健康检查和超时兜底。
+如果插件未加载或 memory slot 未接管，优先执行：
 
-### 2. 页面看起来还是旧版
+```bash
+npm run relink:memory-plugin
+```
+
+### 2. 页面显示旧内容
 
 先执行：
 
@@ -156,114 +344,27 @@ npm run reload:memory-plugin
 npm run reload:memory-plugin
 ```
 
-如果还不对，再强刷浏览器：`Cmd + Shift + R`
+然后强刷浏览器：
 
-### 3. 升级后索引很奇怪
+- macOS: `Cmd + Shift + R`
 
-直接在看板里做一次：
+### 3. 索引看起来不对，怎么重建
 
-1. 打开 `设置`
-2. 点击 `清空并重建`
-3. 等待从现有 `L0` 重新回放
+在看板设置中点击**清除记忆**，系统会保留原始对话，并从现有原始对话重新回放生成上层索引。
 
-### 4. 我只想 30 秒确认插件真的活着
+### 4. `reload` 和 `relink` 有什么区别
 
-```bash
-openclaw plugins info clawxmemory-openclaw
-openclaw gateway status --json
-python - <<'PY'
-import urllib.request
-html = urllib.request.urlopen("http://127.0.0.1:39393/clawxmemory/?v=check", timeout=5).read().decode("utf-8", "ignore")
-print(all(marker in html for marker in ["ClawXMemory", "记忆看板", "检索调试"]))
-PY
-```
+- `reload`：用于日常改代码后重新加载插件
+- `relink`：用于首次安装、插件链接损坏或 OpenClaw 配置未正确绑定插件
 
-## 看板里能看到什么
+### 5. 进入看板后为什么有时会看到“正在加载已有记忆”
 
-当前看板是极简数据面板风格，主要看这几块：
+启动时插件可能会在后台做一次只读校验或必要修复。当前实现会优先保留已有快照，避免看板短暂空白。
 
-- 顶部状态和操作
-- 近期 `L2` 项目
-- 近期 `L2` 时间记忆
-- 最近 `L1`
-- 最近 `L0`
-- 单例全局画像
-- 当前 `memory slot` 是否真的是我们
-- 当前动态记忆运行时是否健康
-- 宿主 workspace bootstrap 是否存在
-- 最近一次 recall 是否真的注入了我们的记忆
+---
 
-它主要用来回答三个问题：
+## 深入文档
 
-- 现在到底记住了什么
-- 当前索引有没有构建异常
-- 检索为什么命中了某条记忆
-
-## 二次开发入口
-
-如果你想在这个插件基础上继续开发，先记住下面几个目录：
-
-```text
-packages/openclaw-memory-plugin/src
-packages/openclaw-memory-plugin/ui-source
-docs/memory-design.md
-```
-
-最常改的地方：
-
-- `packages/openclaw-memory-plugin/src/index.ts`
-  - 插件入口，负责组装 runtime、注册 hook 和 tools
-- `packages/openclaw-memory-plugin/src/runtime.ts`
-  - 插件运行态壳层，负责队列、timer、UI server、`before_reset` flush
-- `packages/openclaw-memory-plugin/src/hooks.ts`
-  - OpenClaw lifecycle hook 接线
-- `packages/openclaw-memory-plugin/src/core/**`
-  - 真正的记忆核心：落库、索引构建、检索、LLM 抽取
-- `packages/openclaw-memory-plugin/ui-source/**`
-  - 看板前端
-
-推荐开发循环：
-
-1. 改 `src` 或 `ui-source`
-2. 执行 `npm run reload:memory-plugin`
-3. 打开看板或直接去 OpenClaw 对话验证
-4. 如果改动影响旧索引结构，用“清空并重建”
-
-如果你在改推理链路，最重要的入口是：
-
-- `packages/openclaw-memory-plugin/src/runtime.ts`
-  - OpenClaw `before_prompt_build` 的实际注入点
-- `packages/openclaw-memory-plugin/src/core/retrieval/reasoning-loop.ts`
-  - 三跳动态检索、逐层下钻、本地 fallback
-- `packages/openclaw-memory-plugin/src/tools.ts`
-  - 暴露给 OpenClaw 的工具面
-
-如果你只是在调 TS 编译：
-
-```bash
-npm run dev:plugin
-```
-
-如果你要单独调检索：
-
-```bash
-npm run debug:retrieve --workspace @clawxmemory/clawxmemory-openclaw -- --query "项目进展"
-```
-
-## 项目结构
-
-```text
-clawxmemory/
-├── packages/
-│   └── openclaw-memory-plugin/          # OpenClaw memory 插件和本地看板
-├── docs/
-│   ├── memory-design.md                 # 设计说明
-│   ├── code-review-guide.md             # 代码审查入口
-└── scripts/                             # reload / relink 等辅助脚本
-```
-
-## 还想看更深入的设计
-
-- 设计说明：[docs/memory-design.md](/Users/meisen/Desktop/youarememory/docs/memory-design.md)
-- 代码审查入口：[docs/code-review-guide.md](/Users/meisen/Desktop/youarememory/docs/code-review-guide.md)
-- 插件包说明：[packages/openclaw-memory-plugin/README.md](/Users/meisen/Desktop/youarememory/packages/openclaw-memory-plugin/README.md)
+- [docs/memory-design.md](docs/memory-design.md)
+- [docs/code-review-guide.md](docs/code-review-guide.md)
+- [packages/openclaw-memory-plugin/README.md](packages/openclaw-memory-plugin/README.md)
