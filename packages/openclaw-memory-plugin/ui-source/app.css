@@ -527,6 +527,7 @@ body[data-nav="open"] .app-scrim {
   color: var(--text-3);
   font-size: 12px;
   font-weight: 600;
+  white-space: nowrap;
   cursor: pointer;
   transition: all 0.15s ease;
 }
@@ -1198,26 +1199,171 @@ body[data-nav="open"] .app-scrim {
   font-weight: 500;
 }
 
-/* ─── Overview strip ────────────────────────────────────── */
+/* ─── Overview panel ────────────────────────────────────── */
 
 .overview-scroll {
   min-height: 0;
   height: 100%;
   overflow: auto;
   overscroll-behavior: contain;
-  border-radius: 12px;
+  padding: 4px 2px 16px;
 }
 
 .overview-strip {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 1px;
-  background: var(--border);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
   min-width: 0;
 }
+
+/* ── Group container ─── */
+
+.ov-group {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-raised);
+  overflow: hidden;
+}
+
+.ov-group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.ov-group-icon {
+  width: 18px;
+  height: 18px;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.ov-group-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--text-2);
+}
+
+/* ── Hero row (group 1 — big numbers) ─── */
+
+.ov-hero-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0;
+}
+
+.ov-hero-cell {
+  padding: 16px 16px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  position: relative;
+}
+
+.ov-hero-cell + .ov-hero-cell {
+  border-left: 1px solid var(--border);
+}
+
+.ov-hero-value {
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+
+.ov-hero-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-3);
+  letter-spacing: 0.02em;
+}
+
+.ov-hero-note {
+  font-size: 11px;
+  color: var(--text-3);
+  opacity: 0.7;
+}
+
+/* ── Metric grid (groups 2-4) ─── */
+
+.ov-metric-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.ov-metric-cell {
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.ov-metric-cell:nth-child(odd) {
+  border-right: 1px solid var(--border);
+}
+
+.ov-metric-grid .ov-metric-cell:nth-last-child(-n+2) {
+  border-bottom: none;
+}
+
+.ov-metric-left {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.ov-metric-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-3);
+  letter-spacing: 0.02em;
+}
+
+.ov-metric-note {
+  font-size: 11px;
+  color: var(--text-3);
+  opacity: 0.65;
+}
+
+.ov-metric-val {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Status dot indicator ─── */
+
+.ov-status-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+.ov-status-dot[data-tone="success"] { background: var(--accent); }
+.ov-status-dot[data-tone="danger"]  { background: var(--danger); }
+.ov-status-dot[data-tone="warning"] { background: var(--warning); }
+.ov-status-dot[data-tone="default"] { background: var(--text-3); }
+
+.ov-metric-val[data-tone="success"] { color: var(--accent); }
+.ov-metric-val[data-tone="danger"]  { color: var(--danger); }
+.ov-metric-val[data-tone="warning"] { color: var(--warning); }
+
+/* ── Legacy metric-card (kept for potential reuse) ─── */
 
 .metric-card {
   padding: 14px 16px;
@@ -1227,28 +1373,15 @@ body[data-nav="open"] .app-scrim {
   gap: 4px;
 }
 
-.metric-card[data-tone="success"] .metric-value {
-  color: var(--accent);
-}
-
-.metric-card[data-tone="danger"] {
-  background: color-mix(in srgb, var(--bg-raised) 92%, var(--warning) 8%);
-}
-
-.metric-card[data-tone="danger"] .metric-value {
-  color: var(--warning);
-}
-
 .metric-label {
   font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
   color: var(--text-3);
   font-weight: 600;
 }
 
 .metric-value {
-  font-size: 26px;
+  font-size: 22px;
   line-height: 1;
   letter-spacing: -0.03em;
   font-weight: 700;
@@ -2029,52 +2162,6 @@ body[data-panel="retrieve"] #retrievePanel {
 .app-shell[data-view="command_center"] #levelTabs { display: none !important; }
 
 /* ═══════════════════════════════════════════════════════════
-   Summary Header
-   ═══════════════════════════════════════════════════════════ */
-
-.summary-header {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
-  flex-shrink: 0;
-}
-
-.stat-card {
-  padding: 16px 18px;
-  border-radius: 12px;
-  background: var(--bg-raised);
-  border: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.stat-card:hover {
-  border-color: var(--border-strong);
-  box-shadow: var(--shadow-sm);
-}
-
-.stat-value {
-  font-size: 28px;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-  color: var(--text);
-}
-
-.stat-card[data-stat="projects"] .stat-value { color: var(--accent); }
-.stat-card[data-stat="time"] .stat-value     { color: var(--accent); }
-
-.stat-label {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-3);
-  letter-spacing: 0.02em;
-}
-
-/* ═══════════════════════════════════════════════════════════
    Board Tabs
    ═══════════════════════════════════════════════════════════ */
 
@@ -2501,11 +2588,13 @@ body[data-panel="retrieve"] #retrievePanel {
 }
 
 .connection-header {
+  position: relative;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  justify-content: center;
   flex-shrink: 0;
+  min-height: 38px;
+  padding-left: 0;
 }
 
 .connection-header h3 {
@@ -2513,6 +2602,14 @@ body[data-panel="retrieve"] #retrievePanel {
   font-size: 15px;
   font-weight: 700;
   letter-spacing: -0.01em;
+  text-align: center;
+}
+
+.connection-header .conn-back-btn {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
 }
 
 /* ─── Connection Graph ─────────────────────────────────── */
@@ -2724,26 +2821,7 @@ body[data-panel="retrieve"] #retrievePanel {
    Command Center — Responsive
    ═══════════════════════════════════════════════════════════ */
 
-@media (max-width: 960px) {
-  .summary-header {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
 @media (max-width: 640px) {
-  .summary-header {
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-  }
-
-  .stat-card {
-    padding: 12px 14px;
-  }
-
-  .stat-value {
-    font-size: 22px;
-  }
-
   .board-card-grid {
     grid-template-columns: 1fr;
   }

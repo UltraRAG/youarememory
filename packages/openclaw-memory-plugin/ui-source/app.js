@@ -2,11 +2,11 @@
 
 const LOCALES = {
   zh: {
-    "nav.l1": "L1 窗口",
-    "nav.l2_project": "L2 项目",
-    "nav.l2_time": "L2 时间",
-    "nav.l0": "L0 会话",
-    "nav.profile": "全局画像",
+    "nav.l1": "记忆片段（L1）",
+    "nav.l2_project": "项目记忆（L2）",
+    "nav.l2_time": "时间记忆（L2）",
+    "nav.l0": "原始对话（L0）",
+    "nav.profile": "个人画像",
     "nav.lastIndexed": "最近索引",
     "nav.waiting": "等待索引",
     "topbar.title": "ClawXMemory",
@@ -18,7 +18,6 @@ const LOCALES = {
     "topbar.retrieve": "检索",
     "topbar.detail": "详情",
     "overview.title": "运行概览",
-    "overview.scrollHint": "固定高度 · 可滚动",
     "stream.searchPlaceholder": "搜索当前层级",
     "stream.search": "搜索",
     "stream.clear": "清空",
@@ -30,20 +29,20 @@ const LOCALES = {
     "detail.empty": "选择左侧记录查看详情",
     "settings.title": "设置",
     "settings.mode": "推理模式",
-    "settings.mode.help": "回答优先遵守最大可接受时延；准确优先不受时延限制。",
-    "settings.mode.answer_first": "回答优先",
+    "settings.mode.help": "效率优先遵守最大可接受时延；准确优先不受时延限制。",
+    "settings.mode.answer_first": "效率优先",
     "settings.mode.accuracy_first": "准确优先",
     "settings.maxLatency": "最大可接受时延（毫秒）",
     "settings.save": "保存设置",
-    "settings.theme": "显示主题",
+    "settings.theme": "主题",
     "settings.theme.light": "浅色",
     "settings.theme.dark": "深色",
     "settings.theme.auto": "跟随系统",
-    "settings.language": "界面语言",
+    "settings.language": "语言",
     "settings.accentColor": "主题色",
     "settings.export": "导出记忆",
     "settings.import": "导入记忆",
-    "settings.clear": "清除所有记忆",
+    "settings.clear": "清除记忆",
     "settings.dangerZone": "危险操作",
     "retrieve.title": "检索调试",
     "retrieve.placeholder": "输入问题，例如：这个项目最近进展到哪一步了？",
@@ -55,7 +54,7 @@ const LOCALES = {
     "confirm.sync.title": "索引同步",
     "confirm.sync.body": "将扫描最近对话并更新记忆索引，这可能需要一些时间。",
     "confirm.sync.ok": "开始同步",
-    "confirm.clear.title": "清除所有记忆",
+    "confirm.clear.title": "清除记忆",
     "confirm.clear.body": "此操作将删除所有已索引的记忆数据，且不可撤销。确定继续吗？",
     "confirm.clear.ok": "确认清除",
     "confirm.import.title": "导入记忆",
@@ -88,16 +87,16 @@ const LOCALES = {
     "status.queryRequired": "请输入检索问题",
     "status.settingsSaved": "设置已保存 · {0}",
     "status.pending": "待索引 {0} · 开放 {1}",
-    "level.l1.label": "L1 话题窗口",
-    "level.l2_project.label": "L2 项目",
-    "level.l2_time.label": "L2 时间",
-    "level.l0.label": "L0 会话",
-    "level.profile.label": "全局画像",
+    "level.l1.label": "记忆片段（L1）",
+    "level.l2_project.label": "项目记忆（L2）",
+    "level.l2_time.label": "时间记忆（L2）",
+    "level.l0.label": "原始对话（L0）",
+    "level.profile.label": "个人画像",
     "level.l1.empty": "暂无 L1 记录",
     "level.l2_project.empty": "暂无 L2 项目索引",
     "level.l2_time.empty": "暂无 L2 时间索引",
     "level.l0.empty": "暂无 L0 会话",
-    "level.profile.empty": "暂无全局画像",
+    "level.profile.empty": "暂无个人画像",
     "detail.summary": "摘要",
     "detail.situation": "时间情景",
     "detail.projects": "项目",
@@ -118,7 +117,7 @@ const LOCALES = {
     "entry.unnamed.project": "未命名项目",
     "entry.unnamed.window": "未命名窗口",
     "entry.unnamed.session": "未命名会话",
-    "entry.globalProfile": "全局画像",
+    "entry.globalProfile": "个人画像",
     "project.planned": "计划中",
     "project.in_progress": "进行中",
     "project.done": "已完成",
@@ -153,13 +152,18 @@ const LOCALES = {
     "overview.dynamicRuntime": "动态记忆运行时",
     "overview.workspaceBootstrap": "Workspace Bootstrap",
     "overview.runtimeIssues": "运行时问题",
+    "overview.group.memory": "记忆概况",
+    "overview.group.recall": "最近召回",
+    "overview.group.reasoning": "推理与预算",
+    "overview.group.health": "系统健康",
+    "overview.pending": "待索引",
     "recall.llm": "LLM 快选",
     "recall.local_fallback": "本地降级",
     "recall.none": "无注入",
     "recall.path.auto": "自动回答",
     "recall.path.explicit": "显式深检索",
     "recall.path.shadow": "后台备案命中",
-    "reasoning.answer_first": "回答优先",
+    "reasoning.answer_first": "效率优先",
     "reasoning.accuracy_first": "准确优先",
     "boundary.healthy": "正常",
     "boundary.conflicted": "未就绪",
@@ -192,9 +196,9 @@ const LOCALES = {
     "enough.none": "无",
     "topbar.commandCenter": "画布视图",
     "topbar.listView": "列表视图",
-    "board.project": "项目看版",
-    "board.timeline": "时间线看版",
-    "board.profile": "用户画像",
+    "board.project": "项目记忆",
+    "board.timeline": "记忆时间线",
+    "board.profile": "个人画像",
     "board.profile.empty": "暂无画像数据",
     "board.profile.topics": "关联话题",
     "board.profile.viewConn": "查看记忆连线",
@@ -210,11 +214,11 @@ const LOCALES = {
     "connection.notLoaded": "未加载",
   },
   en: {
-    "nav.l1": "L1 Window",
-    "nav.l2_project": "L2 Project",
-    "nav.l2_time": "L2 Time",
-    "nav.l0": "L0 Session",
-    "nav.profile": "Profile",
+    "nav.l1": "Memory Snippets (L1)",
+    "nav.l2_project": "Project Memory (L2)",
+    "nav.l2_time": "Time Memory (L2)",
+    "nav.l0": "Raw Dialogues (L0)",
+    "nav.profile": "Personal Profile",
     "nav.lastIndexed": "Last indexed",
     "nav.waiting": "Waiting",
     "topbar.title": "ClawXMemory",
@@ -226,7 +230,6 @@ const LOCALES = {
     "topbar.retrieve": "Retrieve",
     "topbar.detail": "Detail",
     "overview.title": "Runtime Overview",
-    "overview.scrollHint": "Fixed height · Scrollable",
     "stream.searchPlaceholder": "Search current level",
     "stream.search": "Search",
     "stream.clear": "Clear",
@@ -238,8 +241,8 @@ const LOCALES = {
     "detail.empty": "Select a record to view details",
     "settings.title": "Settings",
     "settings.mode": "Reasoning mode",
-    "settings.mode.help": "Answer first obeys the max acceptable latency; accuracy first ignores that latency cap.",
-    "settings.mode.answer_first": "Answer first",
+    "settings.mode.help": "Speed first obeys the max acceptable latency; accuracy first ignores that latency cap.",
+    "settings.mode.answer_first": "Speed first",
     "settings.mode.accuracy_first": "Accuracy first",
     "settings.maxLatency": "Max acceptable latency (ms)",
     "settings.save": "Save",
@@ -251,7 +254,7 @@ const LOCALES = {
     "settings.accentColor": "Accent color",
     "settings.export": "Export Memory",
     "settings.import": "Import Memory",
-    "settings.clear": "Clear All Memory",
+    "settings.clear": "Clear Memory",
     "settings.dangerZone": "Danger Zone",
     "retrieve.title": "Retrieve Debug",
     "retrieve.placeholder": "Enter a question, e.g. What's the latest progress?",
@@ -263,7 +266,7 @@ const LOCALES = {
     "confirm.sync.title": "Sync Index",
     "confirm.sync.body": "This will scan recent conversations and update the memory index. It may take a moment.",
     "confirm.sync.ok": "Start Sync",
-    "confirm.clear.title": "Clear All Memory",
+    "confirm.clear.title": "Clear Memory",
     "confirm.clear.body": "This will permanently delete all indexed memory data. This action cannot be undone. Continue?",
     "confirm.clear.ok": "Confirm Clear",
     "confirm.import.title": "Import Memory",
@@ -296,11 +299,11 @@ const LOCALES = {
     "status.queryRequired": "Please enter a query",
     "status.settingsSaved": "Saved · {0}",
     "status.pending": "Pending {0} · Open {1}",
-    "level.l1.label": "L1 Topic Window",
-    "level.l2_project.label": "L2 Project",
-    "level.l2_time.label": "L2 Time",
-    "level.l0.label": "L0 Session",
-    "level.profile.label": "Global Profile",
+    "level.l1.label": "Memory Snippets (L1)",
+    "level.l2_project.label": "Project Memory (L2)",
+    "level.l2_time.label": "Time Memory (L2)",
+    "level.l0.label": "Raw Dialogues (L0)",
+    "level.profile.label": "Personal Profile",
     "level.l1.empty": "No L1 records",
     "level.l2_project.empty": "No L2 project indexes",
     "level.l2_time.empty": "No L2 time indexes",
@@ -326,7 +329,7 @@ const LOCALES = {
     "entry.unnamed.project": "Unnamed project",
     "entry.unnamed.window": "Unnamed window",
     "entry.unnamed.session": "Unnamed session",
-    "entry.globalProfile": "Global Profile",
+    "entry.globalProfile": "Personal Profile",
     "project.planned": "Planned",
     "project.in_progress": "In Progress",
     "project.done": "Done",
@@ -361,13 +364,18 @@ const LOCALES = {
     "overview.dynamicRuntime": "Dynamic Memory Runtime",
     "overview.workspaceBootstrap": "Workspace Bootstrap",
     "overview.runtimeIssues": "Runtime Issues",
+    "overview.group.memory": "Memory Stats",
+    "overview.group.recall": "Last Recall",
+    "overview.group.reasoning": "Reasoning & Budget",
+    "overview.group.health": "System Health",
+    "overview.pending": "Pending",
     "recall.llm": "LLM Fast Path",
     "recall.local_fallback": "Local Fallback",
     "recall.none": "No Memory",
     "recall.path.auto": "Auto reply",
     "recall.path.explicit": "Explicit deep recall",
     "recall.path.shadow": "Shadow cache hit",
-    "reasoning.answer_first": "Answer first",
+    "reasoning.answer_first": "Speed first",
     "reasoning.accuracy_first": "Accuracy first",
     "boundary.healthy": "Healthy",
     "boundary.conflicted": "Misconfigured",
@@ -400,9 +408,9 @@ const LOCALES = {
     "enough.none": "None",
     "topbar.commandCenter": "Canvas View",
     "topbar.listView": "List View",
-    "board.project": "Projects",
-    "board.timeline": "Timeline",
-    "board.profile": "Profile",
+    "board.project": "Project Memory",
+    "board.timeline": "Memory Timeline",
+    "board.profile": "Personal Profile",
     "board.profile.empty": "No profile data yet",
     "board.profile.topics": "Related Topics",
     "board.profile.viewConn": "View Memory Connections",
@@ -562,7 +570,6 @@ const langCurrentLabel = $("#langCurrentLabel");
 const langMenu = $("#langMenu");
 
 const commandCenter = $("#commandCenter");
-const summaryHeader = $("#summaryHeader");
 const boardNavTabs = $("#boardNavTabs");
 const boardTabs = document.getElementById("boardTabs");
 const boardScroll = $("#boardScroll");
@@ -572,7 +579,6 @@ const connectionPanel = $("#connectionPanel");
 const connectionGraph = $("#connectionGraph");
 const connectionSvg = $("#connectionSvg");
 const connectionColumns = $("#connectionColumns");
-const connectionCloseBtn = $("#connectionCloseBtn");
 const connectionBackBtn = $("#connectionBackBtn");
 const viewToggleBtn = $("#viewToggleBtn");
 
@@ -765,31 +771,88 @@ function formatConflictSummary(conflict) {
 
 /* ── Overview ────────────────────────────────────────────── */
 
-function createMetricCard(label, value, note, tone = "default") {
-  const card = document.createElement("section");
-  card.className = "metric-card";
-  card.dataset.tone = tone;
+const OV_ICONS = {
+  memory: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>',
+  recall: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>',
+  reasoning: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>',
+  health: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>',
+};
 
+function createOvGroup(titleKey, iconKey, content) {
+  const group = document.createElement("div");
+  group.className = "ov-group";
+
+  const head = document.createElement("div");
+  head.className = "ov-group-head";
+  const iconSpan = document.createElement("span");
+  iconSpan.className = "ov-group-icon";
+  iconSpan.innerHTML = OV_ICONS[iconKey] || "";
+  const titleSpan = document.createElement("span");
+  titleSpan.className = "ov-group-title";
+  titleSpan.textContent = t(titleKey);
+  head.append(iconSpan, titleSpan);
+
+  group.append(head, content);
+  return group;
+}
+
+function createHeroCell(value, label, note) {
+  const cell = document.createElement("div");
+  cell.className = "ov-hero-cell";
+  const v = document.createElement("div");
+  v.className = "ov-hero-value";
+  v.textContent = String(value ?? 0);
+  const l = document.createElement("div");
+  l.className = "ov-hero-label";
+  l.textContent = label;
+  cell.append(v, l);
+  if (note) {
+    const n = document.createElement("div");
+    n.className = "ov-hero-note";
+    n.textContent = note;
+    cell.append(n);
+  }
+  return cell;
+}
+
+function createMetricCell(label, value, tone, note) {
+  const cell = document.createElement("div");
+  cell.className = "ov-metric-cell";
+
+  const left = document.createElement("div");
+  left.className = "ov-metric-left";
   const lbl = document.createElement("div");
-  lbl.className = "metric-label";
+  lbl.className = "ov-metric-label";
   lbl.textContent = label;
+  left.append(lbl);
+  if (note) {
+    const nt = document.createElement("div");
+    nt.className = "ov-metric-note";
+    nt.textContent = note;
+    left.append(nt);
+  }
 
   const val = document.createElement("div");
-  val.className = "metric-value";
-  val.textContent = String(value ?? 0);
+  val.className = "ov-metric-val";
+  if (tone && tone !== "default") val.dataset.tone = tone;
 
-  const nt = document.createElement("div");
-  nt.className = "metric-note";
-  nt.textContent = note;
+  if (tone === "success" || tone === "danger" || tone === "warning") {
+    const dot = document.createElement("span");
+    dot.className = "ov-status-dot";
+    dot.dataset.tone = tone;
+    val.append(dot);
+  }
+  val.append(document.createTextNode(String(value ?? "")));
 
-  card.append(lbl, val, nt);
-  return card;
+  cell.append(left, val);
+  return cell;
 }
 
 function renderOverview(overview = {}) {
   state.overview = overview || {};
   updateStatusPill(state.overview);
   overviewCards.innerHTML = "";
+
   const runtimeIssues = Array.isArray(overview.runtimeIssues)
     ? overview.runtimeIssues.filter(Boolean)
     : [];
@@ -805,70 +868,86 @@ function renderOverview(overview = {}) {
   const lastRecallBudgetLimited = Boolean(overview.lastRecallBudgetLimited);
   const lastShadowDeepQueued = Boolean(overview.lastShadowDeepQueued);
   const primaryConflict = formatConflictSummary(runtimeIssues[0]);
-  overviewCards.append(
-    createMetricCard("L0", overview.totalL0 ?? 0, t("nav.l0")),
-    createMetricCard(t("status.pending", "", "").split("·")[0].trim() || "Pending", overview.pendingL0 ?? 0, ""),
-    createMetricCard(t("overview.queued"), overview.queuedSessions ?? 0, ""),
-    createMetricCard("L1", overview.totalL1 ?? 0, t("nav.l1")),
-    createMetricCard("L2T", overview.totalL2Time ?? 0, t("nav.l2_time")),
-    createMetricCard("L2P", overview.totalL2Project ?? 0, t("nav.l2_project")),
-    createMetricCard(t("nav.profile"), overview.totalProfiles ?? 0, overview.lastIndexedAt ? "✓" : "–"),
-    createMetricCard(t("overview.reasoningMode"), t(`reasoning.${currentReasoningMode}`), ""),
-    createMetricCard(t("overview.recallMs"), overview.lastRecallMs ?? 0, "ms"),
-    createMetricCard(t("overview.recallMode"), t(`recall.${overview.lastRecallMode || "none"}`), ""),
-    createMetricCard(t("overview.recallPath"), t(`recall.path.${lastRecallPath}`), ""),
-    createMetricCard(
-      t("overview.budgetStop"),
-      lastRecallBudgetLimited ? t("boundary.budgetStopped") : t("boundary.budgetNotStopped"),
-      "",
-      lastRecallBudgetLimited ? "warning" : "default",
-    ),
-    createMetricCard(
-      t("overview.shadowDeep"),
-      lastShadowDeepQueued ? t("boundary.shadowQueued") : t("boundary.shadowNotQueued"),
-      "",
-      lastShadowDeepQueued ? "warning" : "default",
-    ),
-    createMetricCard(t("overview.recallTimeouts"), overview.recallTimeouts ?? 0, ""),
-    createMetricCard(
+
+  const heroRow = document.createElement("div");
+  heroRow.className = "ov-hero-row";
+  heroRow.append(
+    createHeroCell(overview.totalL0 ?? 0, t("nav.l0")),
+    createHeroCell(overview.totalL1 ?? 0, t("nav.l1")),
+    createHeroCell(overview.totalL2Project ?? 0, t("nav.l2_project")),
+    createHeroCell(overview.totalL2Time ?? 0, t("nav.l2_time")),
+    createHeroCell(overview.totalProfiles ?? 0, t("nav.profile"), overview.lastIndexedAt ? "✓" : "–"),
+    createHeroCell(overview.pendingL0 ?? 0, t("overview.pending")),
+  );
+  const g1 = createOvGroup("overview.group.memory", "memory", heroRow);
+
+  const recallGrid = document.createElement("div");
+  recallGrid.className = "ov-metric-grid";
+  recallGrid.append(
+    createMetricCell(t("overview.recallMs"), `${overview.lastRecallMs ?? 0} ms`, "default"),
+    createMetricCell(t("overview.recallMode"), t(`recall.${overview.lastRecallMode || "none"}`), "default"),
+    createMetricCell(t("overview.recallPath"), t(`recall.path.${lastRecallPath}`), "default"),
+    createMetricCell(
       t("overview.recallInjected"),
       lastRecallInjected ? t("boundary.injected") : t("boundary.notInjected"),
-      lastRecallCacheHit ? t("boundary.cacheHit") : t("boundary.cacheMiss"),
       lastRecallInjected ? "success" : "default",
+      lastRecallCacheHit ? t("boundary.cacheHit") : t("boundary.cacheMiss"),
     ),
-    createMetricCard(
-      t("overview.recallEnough"),
-      t(`enough.${lastRecallEnoughAt}`),
-      "",
+    createMetricCell(t("overview.recallEnough"), t(`enough.${lastRecallEnoughAt}`), "default"),
+    createMetricCell(t("overview.recallTimeouts"), overview.recallTimeouts ?? 0, "default"),
+  );
+  const g2 = createOvGroup("overview.group.recall", "recall", recallGrid);
+
+  const reasonGrid = document.createElement("div");
+  reasonGrid.className = "ov-metric-grid";
+  reasonGrid.append(
+    createMetricCell(t("overview.reasoningMode"), t(`reasoning.${currentReasoningMode}`), "default"),
+    createMetricCell(t("overview.queued"), overview.queuedSessions ?? 0, "default"),
+    createMetricCell(
+      t("overview.budgetStop"),
+      lastRecallBudgetLimited ? t("boundary.budgetStopped") : t("boundary.budgetNotStopped"),
+      lastRecallBudgetLimited ? "warning" : "default",
     ),
-    createMetricCard(
-      t("overview.slotOwner"),
-      slotOwner || t("boundary.ownerMissing"),
-      memoryRuntimeHealthy ? t("boundary.healthy") : t("boundary.conflicted"),
-      memoryRuntimeHealthy ? "success" : "danger",
-    ),
-    createMetricCard(
-      t("overview.dynamicRuntime"),
-      dynamicMemoryRuntime || t("boundary.runtimeMisconfigured"),
-      memoryRuntimeHealthy ? t("boundary.runtimeClawXMemory") : primaryConflict,
-      memoryRuntimeHealthy ? "success" : "danger",
-    ),
-    createMetricCard(
-      t("overview.workspaceBootstrap"),
-      workspaceBootstrapPresent ? t("boundary.present") : t("boundary.absent"),
-      workspaceBootstrapPresent ? t("boundary.workspaceBootstrap") : "",
-      "default",
-    ),
-    createMetricCard(
-      t("overview.runtimeIssues"),
-      runtimeIssues.length,
-      primaryConflict,
-      runtimeIssues.length > 0 ? "danger" : "default",
+    createMetricCell(
+      t("overview.shadowDeep"),
+      lastShadowDeepQueued ? t("boundary.shadowQueued") : t("boundary.shadowNotQueued"),
+      lastShadowDeepQueued ? "warning" : "default",
     ),
   );
-  if (overviewScroll) {
-    overviewScroll.scrollTop = 0;
-  }
+  const g3 = createOvGroup("overview.group.reasoning", "reasoning", reasonGrid);
+
+  const healthGrid = document.createElement("div");
+  healthGrid.className = "ov-metric-grid";
+  healthGrid.append(
+    createMetricCell(
+      t("overview.slotOwner"),
+      slotOwner || t("boundary.ownerMissing"),
+      memoryRuntimeHealthy ? "success" : "danger",
+      memoryRuntimeHealthy ? t("boundary.healthy") : t("boundary.conflicted"),
+    ),
+    createMetricCell(
+      t("overview.dynamicRuntime"),
+      dynamicMemoryRuntime || t("boundary.runtimeMisconfigured"),
+      memoryRuntimeHealthy ? "success" : "danger",
+      memoryRuntimeHealthy ? t("boundary.runtimeClawXMemory") : primaryConflict,
+    ),
+    createMetricCell(
+      t("overview.workspaceBootstrap"),
+      workspaceBootstrapPresent ? t("boundary.present") : t("boundary.absent"),
+      "default",
+      workspaceBootstrapPresent ? t("boundary.workspaceBootstrap") : "",
+    ),
+    createMetricCell(
+      t("overview.runtimeIssues"),
+      runtimeIssues.length,
+      runtimeIssues.length > 0 ? "danger" : "default",
+      primaryConflict,
+    ),
+  );
+  const g4 = createOvGroup("overview.group.health", "health", healthGrid);
+
+  overviewCards.append(g1, g2, g3, g4);
+  if (overviewScroll) overviewScroll.scrollTop = 0;
   renderNavCounts();
 }
 
@@ -1402,35 +1481,9 @@ function switchBoard(board) {
 }
 
 function renderCommandCenter() {
-  renderSummaryStats();
   if (state.activeBoard === "project") renderProjectBoard();
   else if (state.activeBoard === "timeline") renderTimelineBoard();
   else if (state.activeBoard === "profile") renderProfileBoard();
-}
-
-function renderSummaryStats() {
-  summaryHeader.innerHTML = "";
-  const activeCount = (state.baseRaw.l2_project || [])
-    .filter((p) => (p.item || p).currentStatus === "in_progress").length;
-  const stats = [
-    { value: activeCount, label: t("board.stats.activeProjects"), stat: "projects" },
-    { value: state.overview.totalL2Time ?? 0, label: t("board.stats.timeRecords"), stat: "time" },
-    { value: state.overview.totalL1 ?? 0, label: t("board.stats.topicWindows"), stat: "windows" },
-    { value: state.overview.totalL0 ?? 0, label: t("board.stats.sessions"), stat: "sessions" },
-  ];
-  stats.forEach((s) => {
-    const card = document.createElement("div");
-    card.className = "stat-card";
-    card.dataset.stat = s.stat;
-    const val = document.createElement("div");
-    val.className = "stat-value";
-    val.textContent = String(s.value);
-    const lbl = document.createElement("div");
-    lbl.className = "stat-label";
-    lbl.textContent = s.label;
-    card.append(val, lbl);
-    summaryHeader.append(card);
-  });
 }
 
 /* ── Project Board ───────────────────────────────────────── */
@@ -1496,7 +1549,7 @@ function createProjectCard(project) {
 
   const body = document.createElement("div");
   body.className = "board-card-body";
-  body.textContent = shortText(project.latestProgress || project.summary || "", 140);
+  body.textContent = shortText(project.summary || project.latestProgress || "", 140);
 
   const meta = document.createElement("div");
   meta.className = "board-card-meta";
@@ -1654,7 +1707,6 @@ async function openConnection(l2Record, type) {
   state.connActiveL1 = null;
   state.connL1Ids = [];
   state.connL0Map = {};
-  summaryHeader.style.display = "none";
   boardScroll.style.display = "none";
   connectionPanel.classList.add("conn-open");
 
@@ -1689,7 +1741,6 @@ function closeConnection() {
   connectionPanel.classList.remove("conn-open");
   connectionSvg.innerHTML = "";
   connectionColumns.innerHTML = "";
-  summaryHeader.style.display = "";
   boardScroll.style.display = "";
 }
 
@@ -2475,7 +2526,6 @@ boardNavTabs.addEventListener("click", (e) => {
   if (board && (board === "project" || board === "timeline" || board === "profile")) switchBoard(board);
 });
 
-connectionCloseBtn.addEventListener("click", () => closeConnection());
 connectionBackBtn.addEventListener("click", () => closeConnection());
 
 window.addEventListener("resize", () => {

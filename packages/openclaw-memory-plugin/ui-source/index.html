@@ -33,35 +33,35 @@
 
         <nav id="boardNavTabs" class="nav-list">
           <button class="nav-item active" data-board="project" type="button">
-            <span class="nav-label" data-i18n="board.project">项目看版</span>
+            <span class="nav-label" data-i18n="board.project">项目记忆</span>
           </button>
           <button class="nav-item" data-board="timeline" type="button">
-            <span class="nav-label" data-i18n="board.timeline">时间线看版</span>
+            <span class="nav-label" data-i18n="board.timeline">记忆时间线</span>
           </button>
           <button class="nav-item" data-board="profile" type="button">
-            <span class="nav-label" data-i18n="board.profile">用户画像</span>
+            <span class="nav-label" data-i18n="board.profile">个人画像</span>
           </button>
         </nav>
 
         <nav id="levelTabs" class="nav-list" style="display:none">
           <button class="nav-item" data-level="profile" type="button">
-            <span class="nav-label" data-i18n="nav.profile">全局画像</span>
+            <span class="nav-label" data-i18n="nav.profile">个人画像</span>
             <span class="nav-count" data-count-for="profile">0</span>
           </button>
           <button class="nav-item" data-level="l2_project" type="button">
-            <span class="nav-label" data-i18n="nav.l2_project">L2 项目</span>
+            <span class="nav-label" data-i18n="nav.l2_project">项目记忆（L2）</span>
             <span class="nav-count" data-count-for="l2_project">0</span>
           </button>
           <button class="nav-item" data-level="l2_time" type="button">
-            <span class="nav-label" data-i18n="nav.l2_time">L2 时间</span>
+            <span class="nav-label" data-i18n="nav.l2_time">时间记忆（L2）</span>
             <span class="nav-count" data-count-for="l2_time">0</span>
           </button>
           <button class="nav-item active" data-level="l1" type="button">
-            <span class="nav-label" data-i18n="nav.l1">L1 窗口</span>
+            <span class="nav-label" data-i18n="nav.l1">记忆片段（L1）</span>
             <span class="nav-count" data-count-for="l1">0</span>
           </button>
           <button class="nav-item" data-level="l0" type="button">
-            <span class="nav-label" data-i18n="nav.l0">L0 会话</span>
+            <span class="nav-label" data-i18n="nav.l0">原始对话（L0）</span>
             <span class="nav-count" data-count-for="l0">0</span>
           </button>
         </nav>
@@ -82,7 +82,7 @@
               <div class="popover-seg popover-seg-wide" id="reasoningModeToggle">
                 <button data-mode="answer_first" type="button" class="popover-seg-btn active">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-                  <span data-i18n="settings.mode.answer_first">回答优先</span>
+                  <span data-i18n="settings.mode.answer_first">效率优先</span>
                 </button>
                 <button data-mode="accuracy_first" type="button" class="popover-seg-btn">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
@@ -104,7 +104,7 @@
             <div class="popover-divider"></div>
 
             <div class="popover-group">
-              <span class="popover-label" data-i18n="settings.theme">显示主题</span>
+              <span class="popover-label" data-i18n="settings.theme">主题</span>
               <div class="popover-seg" id="themeToggle">
                 <button data-theme-value="light" type="button" class="popover-seg-btn active" title="浅色">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
@@ -128,7 +128,7 @@
             </div>
 
             <div class="popover-group">
-              <span class="popover-label" data-i18n="settings.language">界面语言</span>
+              <span class="popover-label" data-i18n="settings.language">语言</span>
               <div class="popover-seg" id="langToggle">
                 <button data-locale="zh" type="button" class="popover-seg-btn active">文</button>
                 <button data-locale="en" type="button" class="popover-seg-btn">A</button>
@@ -147,7 +147,7 @@
             </button>
             <button class="popover-item popover-danger" id="clearMemoryBtn" type="button">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-              <span data-i18n="settings.clear">清除所有记忆</span>
+              <span data-i18n="settings.clear">清除记忆</span>
             </button>
           </div>
           <button class="nav-menu-trigger" id="navMenuTrigger" type="button">
@@ -185,7 +185,6 @@
         </header>
 
         <section class="command-center" id="commandCenter">
-          <div class="summary-header" id="summaryHeader"></div>
           <div class="board-scroll" id="boardScroll">
             <div class="board-content board-active" id="projectBoard"></div>
             <div class="board-content" id="timelineBoard"></div>
@@ -195,7 +194,6 @@
             <div class="connection-header">
               <button id="connectionBackBtn" class="conn-back-btn" type="button">&#8592; 返回</button>
               <h3 data-i18n="connection.title">记忆连线</h3>
-              <button id="connectionCloseBtn" class="drawer-close" type="button" aria-label="Close">&#x2715;</button>
             </div>
             <div class="connection-graph" id="connectionGraph">
               <svg class="connection-svg" id="connectionSvg" xmlns="http://www.w3.org/2000/svg"></svg>
@@ -207,7 +205,7 @@
         <section class="stream-panel">
           <div class="panel-head">
             <div class="panel-title-row">
-              <h3 id="browserTitle">L1 窗口</h3>
+              <h3 id="browserTitle">记忆片段（L1）</h3>
               <span id="browserMeta" class="panel-meta">0</span>
             </div>
 
@@ -234,9 +232,6 @@
       <div class="drawer-header">
         <h3 data-i18n="overview.title">运行概览</h3>
         <button id="overviewCloseBtn" class="drawer-close" type="button" aria-label="Close">&#x2715;</button>
-      </div>
-      <div class="drawer-section">
-        <span class="panel-meta" data-i18n="overview.scrollHint">固定高度 · 可滚动</span>
       </div>
       <div class="drawer-section drawer-fill">
         <div class="overview-scroll" id="overviewScroll">
