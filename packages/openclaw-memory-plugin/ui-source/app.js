@@ -612,6 +612,12 @@ const state = {
   listPageSize: 20,
   isSearching: false,
   searchTotal: 0,
+  connPageSize: 5,
+  connL1Page: 0,
+  connL0Page: 0,
+  connActiveL1: null,
+  connL1Ids: [],
+  connL0Map: {},
 };
 
 /* ── Helpers ──────────────────────────────────────────────── */
@@ -1588,6 +1594,11 @@ async function openConnection(l2Record, type) {
   }
   state.connectionTarget = l2Record;
   state.connectionType = type;
+  state.connL1Page = 0;
+  state.connL0Page = 0;
+  state.connActiveL1 = null;
+  state.connL1Ids = [];
+  state.connL0Map = {};
   summaryHeader.style.display = "none";
   boardScroll.style.display = "none";
   connectionPanel.classList.add("conn-open");
@@ -1631,69 +1642,123 @@ function renderConnectionGraph(l2Record, type) {
   connectionColumns.innerHTML = "";
   connectionSvg.innerHTML = "";
 
+  const allL1Ids = l2Record.l1Source || l2Record.sourceL1Ids || [];
+  state.connL1Ids = allL1Ids;
+
+  const l0Map = {};
+  allL1Ids.forEach((id) => {
+    const l1 = state.l1ById[id];
+    l0Map[id] = l1 ? (l1.l0Source || []) : [];
+  });
+  state.connL0Map = l0Map;
+
+  if (!state.connActiveL1 && allL1Ids.length > 0) {
+    const firstPageIds = allL1Ids.slice(0, state.connPageSize);
+    state.connActiveL1 = firstPageIds[0];
+  }
+
   const colL2 = document.createElement("div");
   colL2.className = "conn-col";
   const l2Header = type === "profile" ? t("entry.globalProfile") : t("connection.l2");
   colL2.innerHTML = `<div class="conn-col-header">${l2Header}</div>`;
+  colL2.append(createConnNode("l2", l2Record, type));
 
   const colL1 = document.createElement("div");
   colL1.className = "conn-col";
+  colL1.dataset.role = "l1";
   colL1.innerHTML = `<div class="conn-col-header">${t("connection.l1")}</div>`;
 
   const colL0 = document.createElement("div");
   colL0.className = "conn-col";
+  colL0.dataset.role = "l0";
   colL0.innerHTML = `<div class="conn-col-header">${t("connection.l0")}</div>`;
 
-  const l2Node = createConnNode("l2", l2Record, type);
-  colL2.append(l2Node);
+  connectionColumns.append(colL2, colL1, colL0);
+  fillConnColumns();
+}
 
-  const l1Ids = l2Record.l1Source || l2Record.sourceL1Ids || [];
+function fillConnColumns() {
+  const colL1 = connectionColumns.querySelector('[data-role="l1"]');
+  const colL0 = connectionColumns.querySelector('[data-role="l0"]');
+  if (!colL1 || !colL0) return;
+
+  const headerL1 = colL1.querySelector(".conn-col-header");
+  const headerL0 = colL0.querySelector(".conn-col-header");
+  colL1.innerHTML = "";
+  colL0.innerHTML = "";
+  if (headerL1) colL1.append(headerL1);
+  if (headerL0) colL0.append(headerL0);
+
+  connectionSvg.innerHTML = "";
+  clearHighlight();
+
+  const ps = state.connPageSize;
+  const allL1 = state.connL1Ids;
+  const l1TotalPages = Math.max(1, Math.ceil(allL1.length / ps));
+  state.connL1Page = Math.min(state.connL1Page, l1TotalPages - 1);
+  const l1Slice = allL1.slice(state.connL1Page * ps, (state.connL1Page + 1) * ps);
+
+  if (l1TotalPages > 1) {
+    colL1.append(createConnPager(state.connL1Page, l1TotalPages,
+      () => { state.connL1Page--; state.connActiveL1 = null; state.connL0Page = 0; fillConnColumns(); },
+      () => { state.connL1Page++; state.connActiveL1 = null; state.connL0Page = 0; fillConnColumns(); },
+    ));
+  }
+
+  if (!state.connActiveL1 && l1Slice.length > 0) {
+    state.connActiveL1 = l1Slice[0];
+  }
+
   let nodeDelay = 0;
-  const matchedL1 = [];
-  l1Ids.forEach((id) => {
+  l1Slice.forEach((id) => {
     const l1 = state.l1ById[id];
+    nodeDelay += 60;
     if (l1) {
-      matchedL1.push(l1);
-      nodeDelay += 60;
       const node = createConnNode("l1", l1, "l1");
       node.style.animationDelay = `${nodeDelay}ms`;
+      if (id === state.connActiveL1) node.classList.add("conn-hl");
       colL1.append(node);
     } else {
-      nodeDelay += 60;
       const ph = createConnNodePlaceholder("l1", id);
       ph.style.animationDelay = `${nodeDelay}ms`;
       colL1.append(ph);
     }
   });
-  if (l1Ids.length === 0) {
+  if (allL1.length === 0) {
     colL1.append(createConnEmpty());
   }
 
-  const l0Set = new Set();
-  matchedL1.forEach((l1) => {
-    (l1.l0Source || []).forEach((l0Id) => {
-      if (l0Set.has(l0Id)) return;
-      l0Set.add(l0Id);
-      nodeDelay += 50;
-      const l0 = state.l0ById[l0Id];
-      if (l0) {
-        const node = createConnNode("l0", l0, "l0");
-        node.dataset.parent = l1.l1IndexId;
-        node.style.animationDelay = `${nodeDelay}ms`;
-        colL0.append(node);
-      } else {
-        const ph = createConnNodePlaceholder("l0", l0Id);
-        ph.dataset.parent = l1.l1IndexId;
-        ph.style.animationDelay = `${nodeDelay}ms`;
-        colL0.append(ph);
-      }
-    });
+  const activeL0Ids = state.connL0Map[state.connActiveL1] || [];
+  const l0TotalPages = Math.max(1, Math.ceil(activeL0Ids.length / ps));
+  state.connL0Page = Math.min(state.connL0Page, l0TotalPages - 1);
+  const l0Slice = activeL0Ids.slice(state.connL0Page * ps, (state.connL0Page + 1) * ps);
+
+  if (l0TotalPages > 1) {
+    colL0.append(createConnPager(state.connL0Page, l0TotalPages,
+      () => { state.connL0Page--; fillConnColumns(); },
+      () => { state.connL0Page++; fillConnColumns(); },
+    ));
+  }
+
+  l0Slice.forEach((l0Id) => {
+    nodeDelay += 50;
+    const l0 = state.l0ById[l0Id];
+    if (l0) {
+      const node = createConnNode("l0", l0, "l0");
+      node.dataset.parent = state.connActiveL1;
+      node.style.animationDelay = `${nodeDelay}ms`;
+      colL0.append(node);
+    } else {
+      const ph = createConnNodePlaceholder("l0", l0Id);
+      ph.dataset.parent = state.connActiveL1;
+      ph.style.animationDelay = `${nodeDelay}ms`;
+      colL0.append(ph);
+    }
   });
-  if (l0Set.size === 0 && matchedL1.length > 0) {
+  if (activeL0Ids.length === 0) {
     colL0.append(createConnEmpty());
   }
 
-  connectionColumns.append(colL2, colL1, colL0);
   requestAnimationFrame(() => requestAnimationFrame(() => drawConnectionLines()));
 }
 
@@ -1766,6 +1831,28 @@ function createConnNodePlaceholder(level, id) {
   return node;
 }
 
+function createConnPager(page, totalPages, onPrev, onNext) {
+  const wrap = document.createElement("div");
+  wrap.className = "conn-pager";
+  const prev = document.createElement("button");
+  prev.type = "button";
+  prev.className = "conn-pager-btn";
+  prev.textContent = "\u2039";
+  prev.disabled = page <= 0;
+  prev.addEventListener("click", (e) => { e.stopPropagation(); onPrev(); });
+  const info = document.createElement("span");
+  info.className = "conn-pager-info";
+  info.textContent = `${page + 1} / ${totalPages}`;
+  const next = document.createElement("button");
+  next.type = "button";
+  next.className = "conn-pager-btn";
+  next.textContent = "\u203A";
+  next.disabled = page >= totalPages - 1;
+  next.addEventListener("click", (e) => { e.stopPropagation(); onNext(); });
+  wrap.append(prev, info, next);
+  return wrap;
+}
+
 function createConnEmpty() {
   const el = document.createElement("div");
   el.className = "empty-state";
@@ -1790,6 +1877,7 @@ function drawConnectionLines() {
   const l0Nodes = connectionGraph.querySelectorAll(".conn-node-l0");
   let delay = 100;
 
+  const activeId = state.connActiveL1;
   l2Nodes.forEach((l2El) => {
     const l2R = l2El.getBoundingClientRect();
     const x1 = l2R.right - graphRect.left;
@@ -1801,6 +1889,7 @@ function drawConnectionLines() {
       const y2 = l1R.top + l1R.height / 2 - graphRect.top;
       const path = createSvgBezier(x1, y1, x2, y2, delay);
       path.dataset.l1 = l1Id;
+      if (activeId && l1Id !== activeId) path.classList.add("conn-line-dim");
       connectionSvg.append(path);
       delay += 80;
     });
@@ -1829,7 +1918,12 @@ function drawConnectionLines() {
       l1El.dataset.hlBound = "1";
       l1El.addEventListener("click", (e) => {
         e.stopPropagation();
-        highlightL1(l1El.dataset.id);
+        const clickedId = l1El.dataset.id;
+        if (state.connActiveL1 !== clickedId) {
+          state.connActiveL1 = clickedId;
+          state.connL0Page = 0;
+          fillConnColumns();
+        }
       });
     }
   });
