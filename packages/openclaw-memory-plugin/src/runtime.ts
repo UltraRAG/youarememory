@@ -14,9 +14,9 @@ import {
   type StartupRepairStatus,
   nowIso,
 } from "./core/index.js";
-import type { InternalHookEvent, PluginHookAgentEndEvent, PluginHookAgentContext, PluginHookBeforeMessageWriteEvent, PluginHookBeforePromptBuildEvent, PluginHookBeforePromptBuildResult, PluginHookBeforeResetEvent, PluginLogger, PluginRuntimeLike } from "./plugin-api.js";
+import type { InternalHookEvent, PluginHookAgentEndEvent, PluginHookAgentContext, PluginHookBeforeMessageWriteEvent, PluginHookBeforeMessageWriteResult, PluginHookBeforePromptBuildEvent, PluginHookBeforePromptBuildResult, PluginHookBeforeResetEvent, PluginLogger, PluginRuntimeLike } from "./plugin-api.js";
 import { buildPluginConfig, type PluginRuntimeConfig } from "./config.js";
-import { isSessionBoundaryMarkerMessage, normalizeMessages, normalizeTranscriptMessage } from "./message-utils.js";
+import { inspectTranscriptMessage, isCommandOnlyUserText, isSessionBoundaryMarkerMessage, isSessionStartupMarkerText, normalizeMessages, normalizeTranscriptMessage } from "./message-utils.js";
 import { buildPluginTools } from "./tools.js";
 import { LocalUiServer } from "./ui-server.js";
 import { existsSync } from "node:fs";
@@ -27,7 +27,10 @@ const MEMORY_REPAIR_VERSION = "2026-03-18-cross-channel-message-normalization-v1
 const INDEXING_SETTINGS_MIGRATION_VERSION = "2026-03-16-reasoning-mode-settings-v1";
 const PLUGIN_ID = "clawxmemory-openclaw";
 const RECENT_INBOUND_TTL_MS = 30_000;
+const COMMAND_REPLY_TTL_MS = 10_000;
+const NON_MEMORY_TURN_TTL_MS = 15_000;
 const STARTUP_REPAIR_SNAPSHOT_LIMIT = 200;
+const STARTUP_FALLBACK_GREETING = "I'm ready. What would you like to do?";
 
 interface MemoryBoundaryDiagnostics {
   slotOwner: string;
@@ -84,7 +87,7 @@ function shouldSkipCapture(event: Record<string, unknown>, ctx: Record<string, u
 }
 
 function isControlCommandText(text: string): boolean {
-  return /^\/(?:new|reset|stop)(?:\s|$)/i.test(text.trim());
+  return isCommandOnlyUserText(text);
 }
 
 function truncateMessageText(text: string, maxMessageChars: number): string {
@@ -181,6 +184,30 @@ function sliceUiSnapshot(snapshot: MemoryUiSnapshot, limit: number): MemoryUiSna
   };
 }
 
+function replaceAssistantMessageText(rawMessage: unknown, text: string): unknown {
+  const replacementContent = [{ type: "text", text }];
+  if (!rawMessage || typeof rawMessage !== "object") {
+    return { role: "assistant", content: replacementContent };
+  }
+
+  const root = { ...(rawMessage as Record<string, unknown>) };
+  const nested = asObject(root.message);
+  if (nested) {
+    root.message = {
+      ...nested,
+      role: "assistant",
+      content: replacementContent,
+    };
+    return root;
+  }
+
+  return {
+    ...root,
+    role: "assistant",
+    content: replacementContent,
+  };
+}
+
 function buildMemoryRuntimeSystemContext(evidenceBlock: string): string {
   return [
     "## ClawXMemory Runtime",
@@ -215,6 +242,9 @@ export class MemoryPluginRuntime {
   private readonly effectiveSessionKeyByRawSession = new Map<string, string>();
   private readonly conversationGenerationByRawSession = new Map<string, number>();
   private readonly recentInboundBySession = new Map<string, number>();
+  private readonly startupGraceByRawSession = new Set<string>();
+  private readonly nonMemoryTurnByRawSession = new Map<string, number>();
+  private readonly pendingCommandReplyByRawSession = new Map<string, number>();
 
   private heartbeatTimer: ReturnType<typeof setInterval> | undefined;
   private uiServer: LocalUiServer | undefined;
@@ -328,6 +358,9 @@ export class MemoryPluginRuntime {
     this.effectiveSessionKeyByRawSession.clear();
     this.conversationGenerationByRawSession.clear();
     this.recentInboundBySession.clear();
+    this.startupGraceByRawSession.clear();
+    this.nonMemoryTurnByRawSession.clear();
+    this.pendingCommandReplyByRawSession.clear();
     this.retriever.resetTransientState();
   }
 
@@ -373,6 +406,9 @@ export class MemoryPluginRuntime {
     this.effectiveSessionKeyByRawSession.clear();
     this.conversationGenerationByRawSession.clear();
     this.recentInboundBySession.clear();
+    this.startupGraceByRawSession.clear();
+    this.nonMemoryTurnByRawSession.clear();
+    this.pendingCommandReplyByRawSession.clear();
     this.uiServer?.stop();
     this.repository.close();
   }
@@ -398,6 +434,71 @@ export class MemoryPluginRuntime {
       return false;
     }
     return true;
+  }
+
+  private markStartupGrace(rawSessionKey: string): void {
+    const trimmed = rawSessionKey.trim();
+    if (!trimmed || trimmed.startsWith("temp:")) return;
+    this.startupGraceByRawSession.add(trimmed);
+  }
+
+  private hasStartupGrace(rawSessionKey: string): boolean {
+    const trimmed = rawSessionKey.trim();
+    return Boolean(trimmed) && this.startupGraceByRawSession.has(trimmed);
+  }
+
+  private clearStartupGrace(rawSessionKey: string): void {
+    const trimmed = rawSessionKey.trim();
+    if (!trimmed) return;
+    this.startupGraceByRawSession.delete(trimmed);
+  }
+
+  private markNonMemoryTurn(rawSessionKey: string): void {
+    const trimmed = rawSessionKey.trim();
+    if (!trimmed || trimmed.startsWith("temp:")) return;
+    this.nonMemoryTurnByRawSession.set(trimmed, Date.now());
+  }
+
+  private hasNonMemoryTurn(rawSessionKey: string): boolean {
+    const trimmed = rawSessionKey.trim();
+    if (!trimmed) return false;
+    const markedAt = this.nonMemoryTurnByRawSession.get(trimmed);
+    if (!markedAt) return false;
+    if (Date.now() - markedAt > NON_MEMORY_TURN_TTL_MS) {
+      this.nonMemoryTurnByRawSession.delete(trimmed);
+      return false;
+    }
+    return true;
+  }
+
+  private clearNonMemoryTurn(rawSessionKey: string): void {
+    const trimmed = rawSessionKey.trim();
+    if (!trimmed) return;
+    this.nonMemoryTurnByRawSession.delete(trimmed);
+  }
+
+  private markPendingCommandReply(rawSessionKey: string): void {
+    const trimmed = rawSessionKey.trim();
+    if (!trimmed || trimmed.startsWith("temp:")) return;
+    this.pendingCommandReplyByRawSession.set(trimmed, Date.now());
+  }
+
+  private hasPendingCommandReply(rawSessionKey: string): boolean {
+    const trimmed = rawSessionKey.trim();
+    if (!trimmed) return false;
+    const markedAt = this.pendingCommandReplyByRawSession.get(trimmed);
+    if (!markedAt) return false;
+    if (Date.now() - markedAt > COMMAND_REPLY_TTL_MS) {
+      this.pendingCommandReplyByRawSession.delete(trimmed);
+      return false;
+    }
+    return true;
+  }
+
+  private clearPendingCommandReply(rawSessionKey: string): void {
+    const trimmed = rawSessionKey.trim();
+    if (!trimmed) return;
+    this.pendingCommandReplyByRawSession.delete(trimmed);
   }
 
   private getEffectiveSessionKey(rawSessionKey: string): string {
@@ -454,7 +555,7 @@ export class MemoryPluginRuntime {
       ? event.context as Record<string, unknown>
       : undefined;
     const rawContent = typeof context?.content === "string" ? context.content.trim() : "";
-    if (!rawContent || isControlCommandText(rawContent)) return;
+    if (!rawContent || isControlCommandText(rawContent) || isSessionStartupMarkerText(rawContent)) return;
 
     const sessionKey = this.getEffectiveSessionKey(rawSessionKey);
     const normalized: MemoryMessage = {
@@ -468,6 +569,24 @@ export class MemoryPluginRuntime {
 
     this.appendPendingMessage(sessionKey, normalized);
     this.markRecentInbound(sessionKey);
+  };
+
+  handleInternalCommandEvent = (event: InternalHookEvent): void => {
+    if (event.type !== "command") return;
+    const rawSessionKey = typeof event.sessionKey === "string" ? event.sessionKey.trim() : "";
+    if (!rawSessionKey || rawSessionKey.startsWith("temp:")) return;
+
+    const action = typeof event.action === "string" ? event.action.trim().toLowerCase() : "";
+    if (!action) return;
+
+    if (action === "new" || action === "reset") {
+      this.markStartupGrace(rawSessionKey);
+      this.markNonMemoryTurn(rawSessionKey);
+      this.clearPendingCommandReply(rawSessionKey);
+      return;
+    }
+
+    this.markPendingCommandReply(rawSessionKey);
   };
 
   handleBeforePromptBuild = async (
@@ -508,12 +627,53 @@ export class MemoryPluginRuntime {
   handleBeforeMessageWrite = (
     event: PluginHookBeforeMessageWriteEvent,
     ctx: { agentId?: string; sessionKey?: string },
-  ): void => {
+  ): PluginHookBeforeMessageWriteResult | void => {
     const rawSessionKey = typeof ctx.sessionKey === "string" ? ctx.sessionKey.trim() : "";
     if (!rawSessionKey || rawSessionKey.startsWith("temp:")) return;
-    if (isSessionBoundaryMarkerMessage(event.message)) {
+    const messageInfo = inspectTranscriptMessage(event.message);
+
+    if (messageInfo.role === "user" && isSessionBoundaryMarkerMessage(event.message)) {
+      this.markStartupGrace(rawSessionKey);
+      this.markNonMemoryTurn(rawSessionKey);
       this.rotateConversationWindow(rawSessionKey, "session_boundary_marker");
+      this.logger.info?.(`[clawxmemory] blocked startup marker session=${rawSessionKey}`);
+      return { block: true };
+    }
+
+    if (messageInfo.role === "user" && isCommandOnlyUserText(messageInfo.content)) {
+      this.markNonMemoryTurn(rawSessionKey);
+      this.markPendingCommandReply(rawSessionKey);
       return;
+    }
+
+    if (messageInfo.role === "assistant" && !messageInfo.content && !messageInfo.hasToolCalls) {
+      if (this.hasStartupGrace(rawSessionKey)) {
+        this.clearStartupGrace(rawSessionKey);
+        this.logger.warn?.(`[clawxmemory] replaced empty startup assistant session=${rawSessionKey}`);
+        return {
+          message: replaceAssistantMessageText(event.message, STARTUP_FALLBACK_GREETING),
+        };
+      }
+      this.logger.warn?.(`[clawxmemory] blocked empty assistant message session=${rawSessionKey}`);
+      return { block: true };
+    }
+
+    if (messageInfo.role === "assistant" && this.hasPendingCommandReply(rawSessionKey)) {
+      this.clearPendingCommandReply(rawSessionKey);
+      this.logger.info?.(`[clawxmemory] skipped command reply from memory session=${rawSessionKey}`);
+      return;
+    }
+
+    if (messageInfo.role === "assistant" && messageInfo.content && this.hasStartupGrace(rawSessionKey)) {
+      this.clearStartupGrace(rawSessionKey);
+    }
+
+    if (
+      messageInfo.role === "user"
+      && !this.hasStartupGrace(rawSessionKey)
+      && !this.hasPendingCommandReply(rawSessionKey)
+    ) {
+      this.clearNonMemoryTurn(rawSessionKey);
     }
 
     const sessionKey = this.getEffectiveSessionKey(rawSessionKey);
@@ -535,36 +695,49 @@ export class MemoryPluginRuntime {
     if (!this.config.addEnabled) return;
     if (shouldSkipCapture(event as unknown as Record<string, unknown>, ctx as Record<string, unknown>)) return;
 
-    const rawSessionKey = resolveSessionKey(ctx as Record<string, unknown>);
+    const rawSessionKey = typeof ctx.sessionKey === "string" && ctx.sessionKey.trim()
+      ? ctx.sessionKey.trim()
+      : resolveSessionKey(ctx as Record<string, unknown>);
     const sessionKey = this.getEffectiveSessionKey(rawSessionKey);
-    if (this.activeSessionKey && this.activeSessionKey !== sessionKey) {
-      void this.flushSessionNow(this.activeSessionKey, "session_boundary").catch((error) => {
-        this.logger.warn?.(`[clawxmemory] session_boundary failed: ${String(error)}`);
+    try {
+      if (this.hasNonMemoryTurn(rawSessionKey)) {
+        this.pendingBySession.delete(sessionKey);
+        this.recentInboundBySession.delete(sessionKey);
+        return;
+      }
+
+      if (this.activeSessionKey && this.activeSessionKey !== sessionKey) {
+        void this.flushSessionNow(this.activeSessionKey, "session_boundary").catch((error) => {
+          this.logger.warn?.(`[clawxmemory] session_boundary failed: ${String(error)}`);
+        });
+      }
+      this.activeSessionKey = sessionKey;
+
+      const pending = this.pendingBySession.get(sessionKey) ?? [];
+      this.pendingBySession.delete(sessionKey);
+      this.recentInboundBySession.delete(sessionKey);
+      let messages = sanitizeStoredMessages(pending);
+      if (messages.length === 0) {
+        const rawMessages = Array.isArray(event.messages) ? event.messages : [];
+        messages = sanitizeL0Record({ sessionKey, messages: rawMessages }, this.config);
+      }
+      if (messages.length === 0) return;
+      if (!messages.some((message) => message.role === "user")) return;
+
+      const captured = this.indexer.captureL0Session({
+        sessionKey,
+        timestamp: typeof event.timestamp === "string" ? event.timestamp : nowIso(),
+        messages,
       });
-    }
-    this.activeSessionKey = sessionKey;
-
-    const pending = this.pendingBySession.get(sessionKey) ?? [];
-    this.pendingBySession.delete(sessionKey);
-    this.recentInboundBySession.delete(sessionKey);
-    let messages = sanitizeStoredMessages(pending);
-    if (messages.length === 0) {
-      const rawMessages = Array.isArray(event.messages) ? event.messages : [];
-      messages = sanitizeL0Record({ sessionKey, messages: rawMessages }, this.config);
-    }
-    if (messages.length === 0) return;
-    if (!messages.some((message) => message.role === "user")) return;
-
-    const captured = this.indexer.captureL0Session({
-      sessionKey,
-      timestamp: typeof event.timestamp === "string" ? event.timestamp : nowIso(),
-      messages,
-    });
-    if (captured) {
-      this.logger.info?.(
-        `[clawxmemory] captured l0 session=${sessionKey} indexed=pending trigger=idle|timer|session_boundary|manual`,
-      );
-      this.scheduleIdleIndex(sessionKey);
+      if (captured) {
+        this.logger.info?.(
+          `[clawxmemory] captured l0 session=${sessionKey} indexed=pending trigger=idle|timer|session_boundary|manual`,
+        );
+        this.scheduleIdleIndex(sessionKey);
+      }
+    } finally {
+      this.clearNonMemoryTurn(rawSessionKey);
+      this.clearPendingCommandReply(rawSessionKey);
     }
   };
 

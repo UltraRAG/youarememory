@@ -5,6 +5,58 @@ const MEMORY_CONTEXT_FOOTER = "Treat the above as authoritative prior memory whe
 export const SESSION_START_PREFIX = "A new session was started via /new or /reset.";
 const SLUG_PROMPT_PREFIX = "Based on this conversation, generate a short 1-2 word filename slug";
 const MAX_CONTENT_EXTRACTION_DEPTH = 5;
+const SESSION_START_SEQUENCE_PATTERN = /\b(?:Run|Execute) your Session Startup sequence\b/i;
+const KNOWN_SLASH_COMMANDS = new Set([
+  "help",
+  "commands",
+  "skill",
+  "status",
+  "allowlist",
+  "approve",
+  "context",
+  "whoami",
+  "id",
+  "subagents",
+  "config",
+  "debug",
+  "usage",
+  "tts",
+  "voice",
+  "stop",
+  "restart",
+  "dock-telegram",
+  "dock_telegram",
+  "dock-discord",
+  "dock_discord",
+  "dock-slack",
+  "dock_slack",
+  "activation",
+  "send",
+  "reset",
+  "new",
+  "think",
+  "thinking",
+  "t",
+  "verbose",
+  "v",
+  "reasoning",
+  "reason",
+  "elevated",
+  "elev",
+  "exec",
+  "model",
+  "models",
+  "queue",
+  "bash",
+  "compact",
+]);
+const KNOWN_BANG_COMMANDS = new Set(["poll", "stop"]);
+
+export interface TranscriptMessageInfo {
+  role: "user" | "assistant" | undefined;
+  content: string;
+  hasToolCalls: boolean;
+}
 
 function truncate(text: string, maxLength: number): string {
   if (maxLength <= 0 || text.length <= maxLength) return text;
@@ -303,14 +355,76 @@ function hasToolCallContent(content: unknown): boolean {
 
 function shouldSkipUserMessage(content: string): boolean {
   if (!content) return true;
-  return content.includes(SESSION_START_PREFIX) || content.startsWith(SLUG_PROMPT_PREFIX);
+  return isSessionStartupMarkerText(content)
+    || isCommandOnlyUserText(content)
+    || content.startsWith(SLUG_PROMPT_PREFIX);
+}
+
+function parseLeadingSlashCommand(text: string): string | undefined {
+  const trimmed = compactWhitespace(text);
+  if (!trimmed.startsWith("/")) return undefined;
+  const match = trimmed.match(/^\/([A-Za-z][\w-]*)(?::)?(?:\s|$)/);
+  if (!match) return undefined;
+  const command = (match[1] ?? "").toLowerCase();
+  return KNOWN_SLASH_COMMANDS.has(command) ? command : undefined;
+}
+
+function parseBangCommand(text: string): string | undefined {
+  const trimmed = compactWhitespace(text);
+  if (!trimmed.startsWith("!")) return undefined;
+  if (/^!\s+\S/.test(trimmed)) return "bash";
+  const match = trimmed.match(/^!([A-Za-z][\w-]*)(?:\s|$)/);
+  if (!match) return undefined;
+  const command = (match[1] ?? "").toLowerCase();
+  return KNOWN_BANG_COMMANDS.has(command) ? command : undefined;
+}
+
+export function isSessionStartupMarkerText(text: string): boolean {
+  const normalized = compactWhitespace(stripUserNoise(text));
+  if (!normalized) return false;
+  return normalized.includes(SESSION_START_PREFIX)
+    || (
+      normalized.includes("A new session was started via /new or /reset.")
+      && SESSION_START_SEQUENCE_PATTERN.test(normalized)
+    );
+}
+
+export function isCommandOnlyUserText(text: string): boolean {
+  const normalized = compactWhitespace(stripUserNoise(text));
+  if (!normalized || isSessionStartupMarkerText(normalized)) return false;
+  return Boolean(parseLeadingSlashCommand(normalized) || parseBangCommand(normalized));
+}
+
+export function inspectTranscriptMessage(raw: unknown): TranscriptMessageInfo {
+  if (!raw || typeof raw !== "object") {
+    return { role: undefined, content: "", hasToolCalls: false };
+  }
+
+  const msg = raw as Record<string, unknown>;
+  const nestedMessage = asRecord(msg.message);
+  const role = typeof msg.role === "string"
+    ? msg.role
+    : typeof nestedMessage?.role === "string"
+      ? nestedMessage.role
+      : "";
+  const normalizedRole = role === "user" || role === "assistant" ? role : undefined;
+  const rawContent = msg.content ?? nestedMessage?.content;
+  const rawText = extractTextFromContent(rawContent).trim();
+  const content = normalizedRole === "user"
+    ? stripUserNoise(rawText)
+    : normalizedRole === "assistant"
+      ? stripAssistantThinking(rawText)
+      : "";
+  return {
+    role: normalizedRole,
+    content,
+    hasToolCalls: hasToolCallContent(rawContent),
+  };
 }
 
 export function isSessionBoundaryMarkerMessage(rawMessage: unknown): boolean {
-  if (!rawMessage || typeof rawMessage !== "object") return false;
-  const msg = rawMessage as Record<string, unknown>;
-  const content = stripUserNoise(extractTextFromContent(msg.content).trim());
-  return content.includes(SESSION_START_PREFIX);
+  const info = inspectTranscriptMessage(rawMessage);
+  return info.role === "user" && isSessionStartupMarkerText(info.content);
 }
 
 function shouldSkipAssistantMessage(rawContent: unknown, content: string): boolean {
@@ -333,19 +447,13 @@ function normalizeSingleMessage(
   if (!raw || typeof raw !== "object") return undefined;
   const msg = raw as Record<string, unknown>;
   const nestedMessage = asRecord(msg.message);
-  const role = typeof msg.role === "string"
-    ? msg.role
-    : typeof nestedMessage?.role === "string"
-      ? nestedMessage.role
-      : "";
+  const info = inspectTranscriptMessage(raw);
+  const role = info.role ?? "";
   if (role !== "user" && role !== "assistant") return undefined;
   if (role === "assistant" && !options.includeAssistant) return undefined;
 
   const rawContent = msg.content ?? nestedMessage?.content;
-  const rawText = extractTextFromContent(rawContent).trim();
-  const content = role === "user"
-    ? stripUserNoise(rawText)
-    : stripAssistantThinking(rawText);
+  const content = info.content;
 
   if (role === "user" && shouldSkipUserMessage(content)) return undefined;
   if (role === "assistant" && shouldSkipAssistantMessage(rawContent, content)) return undefined;
